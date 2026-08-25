@@ -382,6 +382,20 @@ function Canvas({
     setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
   }, [selected])
 
+  /**
+   * How many issues wait on something, and how many hold something up. Both are counted from the
+   * edges actually drawn, so they describe this picture rather than GitHub's own summary.
+   */
+  const counts = useMemo(() => {
+    const dependent = new Set<string>()
+    const blocking = new Set<string>()
+    for (const edge of graph.edges) {
+      dependent.add(edge.target)
+      blocking.add(edge.source)
+    }
+    return { dependent: dependent.size, blocking: blocking.size }
+  }, [graph])
+
   /** Every label in the graph, alphabetically: what the highlight picker offers. */
   const labelCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -558,8 +572,8 @@ function Canvas({
         </button>
         <span className="bar__divider" />
         <span className="bar__counts">
-          <strong>{graph.nodes.length}</strong> issues · <strong>{graph.edges.length}</strong> deps
-          · <strong>{graph.groups.length}</strong> groups
+          <strong>{graph.nodes.length}</strong> issues · <strong>{counts.dependent}</strong> depend
+          on others · <strong>{counts.blocking}</strong> block others
         </span>
       </Panel>
 
