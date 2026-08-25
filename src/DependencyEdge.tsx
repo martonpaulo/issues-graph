@@ -1,48 +1,14 @@
-import { BaseEdge, getSmoothStepPath, type Edge, type EdgeProps } from '@xyflow/react'
+import { BaseEdge, type Edge, type EdgeProps } from '@xyflow/react'
 
 import type { Point } from './graph'
 
-/** Orthogonal segments with rounded corners: a route the eye can follow, not a loose curve. */
+/** How far a corner is rounded off: enough to read as a turn, not enough to become a curve. */
 export const EDGE_RADIUS = 12
 
-export type DependencyEdgeType = Edge<
-  { centerY?: number; points?: Point[]; sourceOffset?: number; targetOffset?: number },
-  'dependency'
->
-
-/**
- * Turns waypoints into an orthogonal route: down, across, down again.
- *
- * dagre's own points are a slanted polyline through the space it reserved between cards. Keeping
- * the x of each one and travelling between them at right angles gives a path that stays inside
- * that reserved space while reading as a diagram rather than as a thread.
- */
-function orthogonalise(points: Point[]): Point[] {
-  const route: Point[] = [points[0]]
-
-  for (let index = 1; index < points.length; index += 1) {
-    const from = route[route.length - 1]
-    const to = points[index]
-    if (Math.abs(from.x - to.x) > 0.5) {
-      const turn = (from.y + to.y) / 2
-      route.push({ x: from.x, y: turn }, { x: to.x, y: turn })
-    }
-    route.push(to)
-  }
-
-  // Drop anything that does not change direction; a corner radius needs real corners.
-  return route.filter((point, index) => {
-    if (index === 0 || index === route.length - 1) return true
-    const previous = route[index - 1]
-    const next = route[index + 1]
-    const straightX = Math.abs(previous.x - point.x) < 0.5 && Math.abs(point.x - next.x) < 0.5
-    const straightY = Math.abs(previous.y - point.y) < 0.5 && Math.abs(point.y - next.y) < 0.5
-    return !(straightX || straightY)
-  })
-}
+export type DependencyEdgeType = Edge<{ points?: Point[] }, 'dependency'>
 
 /** An SVG path through the points, with each corner rounded to at most `radius`. */
-function roundedPath(points: Point[], radius: number): string {
+export function roundedPath(points: Point[], radius: number): string {
   if (points.length < 2) return ''
 
   let path = `M ${points[0].x},${points[0].y}`
@@ -55,7 +21,7 @@ function roundedPath(points: Point[], radius: number): string {
     const inLength = Math.hypot(corner.x - previous.x, corner.y - previous.y)
     const outLength = Math.hypot(next.x - corner.x, next.y - corner.y)
     const r = Math.min(radius, inLength / 2, outLength / 2)
-    if (r < 1) {
+    if (r < 1 || inLength === 0 || outLength === 0) {
       path += ` L ${corner.x},${corner.y}`
       continue
     }
@@ -78,54 +44,27 @@ function roundedPath(points: Point[], radius: number): string {
 /**
  * A dependency arrow.
  *
- * React Flow's own smoothstep always turns at the midpoint between two cards, so every edge
- * arriving at one row runs along the same line and they merge into one, and an edge spanning
- * several ranks cuts straight through whatever sits between them. `graph.ts` gives each edge either
- * a channel to turn in or the waypoints to follow; this edge honours whichever it got.
+ * The route is the one the layout reserved: already orthogonal, already given its own point on
+ * each card, and already taken around whatever sits between the two ends. All this draws is the
+ * polyline, with the corners rounded off. The straight fallback only exists so an edge whose route
+ * went missing is still visible rather than silently absent.
  */
 export function DependencyEdge({
   id,
   sourceX,
   sourceY,
-  sourcePosition,
   targetX,
   targetY,
-  targetPosition,
   markerEnd,
   data,
 }: EdgeProps<DependencyEdgeType>) {
-  // Every edge of a card leaves and arrives at its own point along the card's edge, so a fan of
-  // four does not become one line with four heads.
-  const fromX = sourceX + (data?.sourceOffset ?? 0)
-  const toX = targetX + (data?.targetOffset ?? 0)
+  const points =
+    data?.points && data.points.length >= 2
+      ? data.points
+      : [
+          { x: sourceX, y: sourceY },
+          { x: targetX, y: targetY },
+        ]
 
-  if (data?.points && data.points.length > 2) {
-    // The ends come from the handles, which is where the arrow has to start and stop; the middle
-    // waypoints are dagre's.
-    const waypoints = [
-      { x: fromX, y: sourceY },
-      ...data.points.slice(1, -1),
-      { x: toX, y: targetY },
-    ]
-    return (
-      <BaseEdge
-        id={id}
-        path={roundedPath(orthogonalise(waypoints), EDGE_RADIUS)}
-        markerEnd={markerEnd}
-      />
-    )
-  }
-
-  const [path] = getSmoothStepPath({
-    sourceX: fromX,
-    sourceY,
-    sourcePosition,
-    targetX: toX,
-    targetY,
-    targetPosition,
-    borderRadius: EDGE_RADIUS,
-    centerY: data?.centerY,
-  })
-
-  return <BaseEdge id={id} path={path} markerEnd={markerEnd} />
+  return <BaseEdge id={id} path={roundedPath(points, EDGE_RADIUS)} markerEnd={markerEnd} />
 }

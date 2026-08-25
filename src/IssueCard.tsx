@@ -3,6 +3,7 @@ import { useRef } from 'react'
 
 import type { GraphNode, IssueState } from './graph'
 import { Icon } from './icons'
+import { chipText } from './labels'
 
 export interface IssueCardData extends Record<string, unknown> {
   node: GraphNode
@@ -37,7 +38,7 @@ const STATE_TEXT: Record<IssueState, string> = {
 export function IssueCard({ data }: NodeProps<IssueNode>) {
   const { node, selected, hidden, highlighted, faded, onToggleSelect, onToggleHidden, onOpen } =
     data
-  const label = `#${node.number}`
+  const label = node.external ? `${node.repo}#${node.number}` : `#${node.number}`
   const pressedAt = useRef<{ x: number; y: number } | null>(null)
 
   const classes = [
@@ -82,7 +83,12 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
         }}
       >
         <span className="card__head">
-          <span className="card__id">{label}</span>
+          {/* The repository belongs with the number: on its own the number means nothing, since
+              it belongs to somebody else's numbering. */}
+          <span className="card__id">
+            {node.external && <span className="card__repo">{node.repoLabel}</span>}
+            <span className="card__number">#{node.number}</span>
+          </span>
           <span className="card__state">{STATE_TEXT[node.state]}</span>
         </span>
 
@@ -93,20 +99,16 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
           {node.title}
         </span>
 
-        {(node.external || node.labels.length > 0) && (
-          <span className="card__labels">
-            {/* The repository comes first and is never dropped: without it the number means
-                nothing, since it belongs to somebody else's numbering. */}
-            {node.external && (
-              <span className="chip chip--repo">{node.repoLabel}</span>
-            )}
-            {node.labels.map((chip) => (
-              <span key={chip.raw} className="chip">
-                {chip.namespace ? `${chip.namespace}: ${chip.value}` : chip.value}
-              </span>
-            ))}
-          </span>
-        )}
+        <span className="card__labels">
+          {node.labels.map((chip) => (
+            <span
+              key={chip.namespace}
+              className={`chip${chip.value === null ? ' chip--empty' : ''}`}
+            >
+              {chipText(chip)}
+            </span>
+          ))}
+        </span>
       </button>
 
       <span className="card__actions nodrag nopan">
@@ -114,7 +116,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
           type="button"
           className="iconbutton"
           aria-label={`Open ${node.external ? node.repo : ''}${label} on GitHub`}
-          data-tip="Open on GitHub"
+          data-tip="Open on GitHub · Enter"
           onClick={() => onOpen(node.url, `${label} · ${node.title}`)}
         >
           <Icon name="external" size={12} />
@@ -124,7 +126,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
           className="iconbutton"
           aria-label={hidden ? `Show ${label}` : `Hide ${label}`}
           aria-pressed={hidden}
-          data-tip={hidden ? 'Show this issue' : 'Hide this issue'}
+          data-tip={hidden ? 'Show this issue · S' : 'Hide this issue · H'}
           onClick={() => onToggleHidden(node.id)}
         >
           <Icon name={hidden ? 'eye-off' : 'eye'} size={12} />

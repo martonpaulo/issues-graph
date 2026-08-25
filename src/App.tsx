@@ -470,12 +470,7 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
           source: edge.source,
           target: edge.target,
           type: 'dependency' as const,
-          data: {
-            centerY: edge.centerY,
-            points: edge.points,
-            sourceOffset: edge.sourceOffset,
-            targetOffset: edge.targetOffset,
-          },
+          data: { points: edge.points },
           // A lit edge is drawn last so it crosses over the ones it shares a channel with.
           zIndex: lit ? 5 : 0,
           className: dimmed ? 'edge--dim' : lit ? 'edge--lit' : undefined,
@@ -526,6 +521,44 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
     // zoom, which would leave the graph unable to open at all.
     return Math.min(1, Math.max(ABSOLUTE_MIN_ZOOM, fits * ZOOM_OUT_ALLOWANCE))
   }, [bounds, viewport])
+
+  /**
+   * The few keys worth having on a canvas: leave a selection, take all of it, put the graph back
+   * on screen, hide what is selected, and open the one issue that is.
+   */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      // Never steal a key from a field or from a dialog that is waiting on an answer.
+      if (target?.closest('input, textarea, [contenteditable="true"], .overlay')) return
+      if (event.altKey || event.ctrlKey) return
+
+      if (event.key === 'Escape') {
+        setSelected(new Set())
+        return
+      }
+      if (event.key.toLowerCase() === 'a' && (event.metaKey || event.shiftKey)) {
+        event.preventDefault()
+        setSelected(new Set(graph.nodes.map((node) => node.id)))
+        return
+      }
+      if (event.metaKey) return
+
+      if (event.key.toLowerCase() === 'f') {
+        void fitView()
+      } else if (event.key.toLowerCase() === 'h') {
+        setHidden((current) => new Set([...current, ...selected]))
+      } else if (event.key.toLowerCase() === 's') {
+        setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+      } else if (event.key === 'Enter' && selected.size === 1) {
+        const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
+        if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [graph, selected, fitView, openExternal])
 
   const selectedCount = selected.size
   // Offering "hide" for a selection that is already hidden, or the reverse, is a control that does
@@ -586,7 +619,7 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
           className="iconbutton"
           type="button"
           aria-label="Centre and fit the graph on screen"
-          data-tip="Centre and fit"
+          data-tip="Centre and fit · F"
           onClick={() => void fitView()}
         >
           <Icon name="fit" />
@@ -601,7 +634,7 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
               className="iconbutton"
               type="button"
               aria-label="Hide the selected issues"
-              data-tip="Hide the selected issues"
+              data-tip="Hide the selected issues · H"
               onClick={hideSelected}
             >
               <Icon name="eye-off" />
@@ -612,7 +645,7 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
               className="iconbutton"
               type="button"
               aria-label="Show the selected issues"
-              data-tip="Show the selected issues"
+              data-tip="Show the selected issues · S"
               onClick={showSelected}
             >
               <Icon name="eye" />
@@ -622,7 +655,7 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
             className="iconbutton"
             type="button"
             aria-label="Clear the selection"
-            data-tip="Clear the selection"
+            data-tip="Clear the selection · Esc"
             onClick={() => setSelected(new Set())}
           >
             <Icon name="close" />
@@ -654,8 +687,10 @@ type Phase =
   | { kind: 'listing' }
   | { kind: 'confirm'; cost: number; status: RateLimitStatus | null; decide: (ok: boolean) => void }
   | { kind: 'resolving'; done: number; total: number }
+  /** The layout runs off the main path of the load, and on a large graph it is not instant. */
+  | { kind: 'drawing' }
   | { kind: 'failed'; failure: LoadFailure }
-  | { kind: 'ready'; data: RepositoryGraphData }
+  | { kind: 'ready'; graph: IssueGraph }
 
 function GraphView({
   target,
@@ -749,12 +784,14 @@ function GraphLoad({
           })
         },
       })
-        .then((result) => {
+        .then(async (result) => {
           if (controller.signal.aborted) return
           if (result.ok) {
             rememberTarget(target)
             writeCache(slug, result.data)
-            setPhase({ kind: 'ready', data: result.data })
+            setPhase({ kind: 'drawing' })
+            const graph = await buildGraph(result.data, target, { showClosed: includeClosed })
+            if (!controller.signal.aborted) setPhase({ kind: 'ready', graph })
           } else if (result.failure.kind === 'cancelled') {
             onReload(null)
           } else {
@@ -775,15 +812,20 @@ function GraphLoad({
     [target, slug, onReload],
   )
 
-  const graph = useMemo(
-    () => (phase.kind === 'ready' ? buildGraph(phase.data, target, { showClosed }) : null),
-    [phase, target, showClosed],
+  const draw = useCallback(
+    (data: RepositoryGraphData) => {
+      setPhase({ kind: 'drawing' })
+      void buildGraph(data, target, { showClosed }).then((graph) =>
+        setPhase({ kind: 'ready', graph }),
+      )
+    },
+    [target, showClosed],
   )
 
-  if (phase.kind === 'ready' && graph && graph.nodes.length > 0) {
+  if (phase.kind === 'ready' && phase.graph.nodes.length > 0) {
     return (
       <ReactFlowProvider>
-        <Canvas key={`${slug}:${showClosed}`} graph={graph} slug={slug} />
+        <Canvas key={`${slug}:${showClosed}`} graph={phase.graph} slug={slug} />
       </ReactFlowProvider>
     )
   }
@@ -832,9 +874,7 @@ function GraphLoad({
               <button
                 className="button button--primary"
                 type="button"
-                onClick={() =>
-                  setPhase({ kind: 'ready', data: cached.data })
-                }
+                onClick={() => draw(cached.data)}
               >
                 <Icon name="clock" size={12} /> Open saved copy
               </button>
@@ -883,11 +923,12 @@ function GraphLoad({
         </>
       )}
 
-      {(phase.kind === 'listing' || phase.kind === 'resolving') && (
+      {(phase.kind === 'listing' || phase.kind === 'resolving' || phase.kind === 'drawing') && (
         <p className="stage__note stage__note--busy">
-          {phase.kind === 'listing'
-            ? 'Listing open issues…'
-            : `Reading dependencies, ${phase.done} of ${phase.total}…`}
+          {phase.kind === 'listing' && 'Listing open issues…'}
+          {phase.kind === 'resolving' &&
+            `Reading dependencies, ${phase.done} of ${phase.total}…`}
+          {phase.kind === 'drawing' && 'Laying out the graph…'}
         </p>
       )}
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { cardLabels, hasNamespace, MAX_CARD_LABELS, parseLabel, valueOf } from './labels'
+import { cardLabels, chipText, hasNamespace, parseLabel, parseLabels, valueOf } from './labels'
 
 const label = (name: string) => ({ name, color: 'cccccc' })
 
@@ -27,7 +27,7 @@ describe('parseLabel', () => {
 })
 
 describe('cardLabels', () => {
-  it('shows the meaningful namespaces in reading order and drops the noisy ones', () => {
+  it('always returns the same three slots, in reading order', () => {
     const chips = cardLabels([
       label('area: grid'),
       label('effort: M'),
@@ -35,31 +35,22 @@ describe('cardLabels', () => {
       label('type: bug'),
       label('priority: P0'),
     ])
-    // area and evidence are useful in the issue list and only crowd a card.
-    expect(chips.map((chip) => chip.raw)).toEqual(['type: bug', 'priority: P0', 'effort: M'])
+    expect(chips.map(chipText)).toEqual(['type: bug', 'priority: P0', 'effort: M'])
   })
 
-  it('keeps a card compact', () => {
-    const chips = cardLabels(
-      ['type: bug', 'priority: P0', 'effort: M', 'status: blocked', 'area: grid', 'extra'].map(
-        label,
-      ),
-    )
-    expect(chips).toHaveLength(MAX_CARD_LABELS)
-    expect(chips.every((chip) => chip.namespace !== 'area')).toBe(true)
-  })
-
-  it('falls back to plain labels so a repository using no namespaces still shows something', () => {
-    expect(cardLabels([label('enhancement'), label('bug')]).map((chip) => chip.value)).toEqual([
-      'enhancement',
-      'bug',
-    ])
-  })
-
-  it('hides plain labels once namespaced ones are present', () => {
-    expect(cardLabels([label('enhancement'), label('type: bug')]).map((chip) => chip.raw)).toEqual([
+  it('marks a slot the issue has no label for, rather than leaving it out', () => {
+    expect(cardLabels([label('type: bug')]).map(chipText)).toEqual([
       'type: bug',
+      'priority',
+      'effort',
     ])
+    expect(cardLabels([]).map(chipText)).toEqual(['type', 'priority', 'effort'])
+  })
+
+  it('keeps everything else off the card', () => {
+    const chips = cardLabels([label('enhancement'), label('area: grid'), label('type: bug')])
+    expect(chips).toHaveLength(3)
+    expect(chips.some((chip) => chip.value === 'enhancement')).toBe(false)
   })
 })
 
@@ -70,7 +61,7 @@ describe('hasNamespace and valueOf', () => {
   })
 
   it('reads a namespace value back', () => {
-    expect(valueOf(cardLabels([label('effort: L')]), 'effort')).toBe('L')
-    expect(valueOf(cardLabels([label('effort: L')]), 'priority')).toBeNull()
+    expect(valueOf(parseLabels([label('effort: L')]), 'effort')).toBe('L')
+    expect(valueOf(parseLabels([label('effort: L')]), 'priority')).toBeNull()
   })
 })

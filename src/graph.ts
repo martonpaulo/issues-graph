@@ -1,7 +1,5 @@
-import dagre from '@dagrejs/dagre'
-
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
-import { cardLabels, hasNamespace, type ParsedLabel } from './labels'
+import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
 import type { RepoTarget } from './route'
 
 /**
@@ -27,8 +25,14 @@ const TITLE_LINE_HEIGHT = 17
 const TITLE_CHARS_PER_LINE = 33
 /** Border, padding, the number/state row, and the gap under it. Mirrors `.card` in styles.css. */
 const CARD_CHROME = 38
-/** Comfortable gap under the title, plus the row of label chips. */
-const LABELS_BLOCK = 28
+/** Comfortable gap between the title and the chips under it. */
+const LABELS_GAP = 11
+/** One row of label chips, and the space between two rows. */
+const CHIP_ROW_HEIGHT = 17
+const CHIP_GAP = 4
+/** Rough per-character width of chip text at 10px, plus its padding. */
+const CHIP_CHAR_WIDTH = 5.4
+const CHIP_PADDING = 12
 
 export function titleLineCount(title: string, perLine = TITLE_CHARS_PER_LINE): number {
   const words = title.trim().split(/\s+/).filter((word) => word.length > 0)
@@ -54,12 +58,35 @@ export function titleLineCount(title: string, perLine = TITLE_CHARS_PER_LINE): n
   return Math.min(MAX_TITLE_LINES, Math.max(1, lines))
 }
 
-export function cardHeight(titleLines: number, hasLabels: boolean): number {
-  return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + (hasLabels ? LABELS_BLOCK : 0)
+/**
+ * How many rows a card's chips wrap onto. Estimated from the text for the same reason the title's
+ * lines are: this module is pure, and the layout has to agree with what the browser will draw.
+ */
+export function chipRows(texts: string[], width = NODE_WIDTH - 20): number {
+  if (texts.length === 0) return 0
+
+  let rows = 1
+  let used = 0
+  for (const text of texts) {
+    const chip = Math.min(width, text.length * CHIP_CHAR_WIDTH + CHIP_PADDING)
+    const needed = used === 0 ? chip : used + CHIP_GAP + chip
+    if (used > 0 && needed > width) {
+      rows += 1
+      used = chip
+    } else {
+      used = needed
+    }
+  }
+  return rows
 }
 
-/** The tallest a card can get, which is what a bounding estimate has to assume. */
-export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, true)
+export function cardHeight(titleLines: number, rows: number): number {
+  const chips = rows > 0 ? LABELS_GAP + rows * CHIP_ROW_HEIGHT + (rows - 1) * CHIP_GAP : 0
+  return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + chips
+}
+
+/** The tallest a card is expected to get, which is what a bounding estimate has to assume. */
+export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, 2)
 
 export type IssueState = 'ready' | 'blocked' | 'attention' | 'completed' | 'not-planned'
 
@@ -77,8 +104,8 @@ export interface GraphNode {
    * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
    */
   repoLabel: string
-  /** The few labels the card has room to show. */
-  labels: ParsedLabel[]
+  /** The three slots the card shows, filled or not. */
+  labels: CardChip[]
   /** Every label on the issue, which is what the highlight picker offers. */
   allLabels: string[]
   /** Lines the title is allowed, and the height that leaves the card. */
@@ -92,20 +119,8 @@ export interface GraphEdge {
   /** The blocker: it has to land first. */
   source: string
   target: string
-  /**
-   * The y this edge runs its horizontal leg along, for an edge between neighbouring rows. Every
-   * edge arriving at one row would otherwise turn at the same height, and a dozen of them merge
-   * into a single line nobody can follow back to its blocker.
-   */
-  centerY?: number
-  /**
-   * The waypoints dagre reserved for an edge that spans more than one rank. Following them is what
-   * keeps such an edge from cutting through the cards it passes.
-   */
+  /** The orthogonal route the layout reserved for this edge, in canvas coordinates. */
   points?: Point[]
-  /** How far from the centre of each card this edge leaves and arrives. */
-  sourceOffset?: number
-  targetOffset?: number
 }
 
 /**
@@ -173,6 +188,7 @@ function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
   const repoLabel = external ? (owner === target.owner ? name : repo) : ''
   const labels = cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
+  const rows = chipRows(labels.map(chipText))
   return {
     id: nodeId(repo, issue.number),
     number: issue.number,
@@ -185,21 +201,21 @@ function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
     labels,
     allLabels: issue.labels.map((label) => label.name),
     titleLines,
-    // An external card always spends the chip row: it has to name the repository it came from.
-    height: cardHeight(titleLines, labels.length > 0 || external),
+    height: cardHeight(titleLines, rows),
     position: { x: 0, y: 0 },
   }
 }
 
-/** Space between cards in the grid, and between packed components. */
+/** Space between cards in the block of issues that depend on nothing. */
 const GRID_GAP = 20
-const COMPONENT_GAP = 76
+/** Space between that block and the drawn dependencies above it. */
+const BLOCK_GAP = 80
 
 /** Breathing room inside a group frame, and the strip its label sits in above the cards. */
 export const GROUP_PADDING = 14
 export const GROUP_LABEL_HEIGHT = 24
 
-/** Roughly 16:9. Layout aims for this so the whole graph fits a screen after fit-to-view. */
+/** Roughly 16:9, so a whole graph lands on a screen after fit-to-view. */
 const TARGET_ASPECT = 1.9
 
 export interface Point {
@@ -207,12 +223,69 @@ export interface Point {
   y: number
 }
 
-interface Box {
-  width: number
-  height: number
-  positions: Map<string, Point>
-  /** dagre's own route for an edge, when its ranking was kept. Empty when the ranks were wrapped. */
-  points: Map<string, Point[]>
+/**
+ * How the dependencies are drawn.
+ *
+ * ELK's `layered` algorithm is the same family of algorithm as dagre — assign ranks, order within
+ * a rank to reduce crossings, then place — but it also routes the edges, which is the part that
+ * decides whether a dense graph can be read at all. `ORTHOGONAL` routing reserves lanes between
+ * the rows, gives each edge of a card its own point on that card's border, and takes an edge that
+ * spans several ranks around the cards it passes instead of through them.
+ *
+ * https://eclipse.dev/elk/reference/options.html
+ */
+const ELK_OPTIONS: Record<string, string> = {
+  'elk.algorithm': 'layered',
+  'elk.direction': 'DOWN',
+  'elk.edgeRouting': 'ORTHOGONAL',
+  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
+  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
+  'elk.spacing.nodeNode': '28',
+  'elk.layered.spacing.nodeNodeBetweenLayers': '76',
+  'elk.spacing.edgeNode': '20',
+  'elk.spacing.edgeEdge': '16',
+  'elk.layered.spacing.edgeNodeBetweenLayers': '20',
+  'elk.layered.spacing.edgeEdgeBetweenLayers': '16',
+  // Each connected piece of work is laid out on its own and the pieces are packed to a screen
+  // shape, so a backlog of small chains does not open as one enormous row.
+  'elk.separateConnectedComponents': 'true',
+  'elk.spacing.componentComponent': '76',
+  'elk.aspectRatio': String(TARGET_ASPECT),
+}
+
+interface ElkNode {
+  id: string
+  width?: number
+  height?: number
+  x?: number
+  y?: number
+  children?: ElkNode[]
+  edges?: ElkEdge[]
+  layoutOptions?: Record<string, string>
+}
+
+interface ElkEdge {
+  id: string
+  sources: string[]
+  targets: string[]
+  sections?: { startPoint: Point; bendPoints?: Point[]; endPoint: Point }[]
+}
+
+interface ElkEngine {
+  layout(graph: ElkNode): Promise<ElkNode>
+}
+
+let engine: Promise<ElkEngine> | null = null
+
+/**
+ * ELK is a megabyte of compiled Java, so it is fetched only when a graph is actually drawn and
+ * kept for the rest of the session.
+ */
+async function elk(): Promise<ElkEngine> {
+  engine ??= import('elkjs/lib/elk.bundled.js').then(
+    (module) => new (module.default as unknown as new () => ElkEngine)(),
+  )
+  return engine
 }
 
 /** Weakly-connected components: edge direction does not matter for grouping. */
@@ -246,159 +319,6 @@ function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
   return [...groups.values()]
 }
 
-/**
- * Wide enough to hold a stack of horizontal edge channels between two rows. Generous on purpose:
- * a row that eight edges arrive at needs eight lines far enough apart to be told apart.
- */
-const RANK_GAP = 108
-const SUBROW_GAP = 22
-
-/** Clearance kept between a card and the nearest edge channel. */
-const CHANNEL_INSET = 14
-/** Beyond this the channels are too close together to tell apart, so they repeat. */
-const MAX_CHANNELS = 7
-
-/** Space between two edges leaving or arriving at the same card, and the room they may use. */
-const PORT_SPACING = 22
-const PORT_MARGIN = 44
-
-/**
- * Ranks one component with dagre and keeps its answer whenever it fits.
- *
- * dagre does two things worth keeping: it places each node near the ones it connects to, and it
- * routes an edge that spans several ranks around the cards between them rather than through them.
- * Rebuilding the ranks on an even grid throws both away — every edge then travels the full width
- * of the block and crosses whatever is in the way.
- *
- * The grid is only worth it when a rank is too wide to show: one martonpaulo/tabelo component fans
- * 31 issues off their blockers, nearly 8000px across. Only then is the rank wrapped into sub-rows,
- * which keeps blockers above what they block at the cost of dagre's routing.
- */
-function layoutComponent(nodes: GraphNode[], edges: GraphEdge[], maxWidth: number): Box {
-  const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'TB', ranksep: RANK_GAP, nodesep: 26, edgesep: 18, marginx: 0, marginy: 0 })
-  g.setDefaultEdgeLabel(() => ({}))
-
-  const ids = new Set(nodes.map((node) => node.id))
-  const own = edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target))
-  for (const node of nodes) g.setNode(node.id, { width: NODE_WIDTH, height: node.height })
-  for (const edge of own) g.setEdge(edge.source, edge.target)
-
-  dagre.layout(g)
-
-  const laidOut = nodes.map((node) => ({ node, laid: g.node(node.id) }))
-  const left = Math.min(...laidOut.map(({ laid }) => (laid?.x ?? 0) - NODE_WIDTH / 2))
-  const right = Math.max(...laidOut.map(({ laid }) => (laid?.x ?? 0) + NODE_WIDTH / 2))
-  const top = Math.min(...laidOut.map(({ node, laid }) => (laid?.y ?? 0) - node.height / 2))
-  const bottom = Math.max(...laidOut.map(({ node, laid }) => (laid?.y ?? 0) + node.height / 2))
-
-  if (right - left <= maxWidth) {
-    const positions = new Map<string, Point>()
-    for (const { node, laid } of laidOut) {
-      positions.set(node.id, {
-        x: (laid?.x ?? 0) - NODE_WIDTH / 2 - left,
-        y: (laid?.y ?? 0) - node.height / 2 - top,
-      })
-    }
-
-    const points = new Map<string, Point[]>()
-    for (const edge of own) {
-      const route = g.edge(edge.source, edge.target)?.points
-      if (route && route.length > 0) {
-        points.set(
-          edge.id,
-          route.map((point: Point) => ({ x: point.x - left, y: point.y - top })),
-        )
-      }
-    }
-
-    return { width: right - left, height: bottom - top, positions, points }
-  }
-
-  return wrapRanks(laidOut, maxWidth)
-}
-
-/**
- * The fallback for a component too wide to show: keep dagre's ranking and its left-to-right order
- * inside each rank, but fold every rank that does not fit into sub-rows.
- */
-function wrapRanks(
-  laidOut: { node: GraphNode; laid: { x?: number; y?: number } | undefined }[],
-  maxWidth: number,
-): Box {
-  const ranks = new Map<number, { id: string; x: number; height: number }[]>()
-  for (const { node, laid } of laidOut) {
-    const rank = Math.round(laid?.y ?? 0)
-    const entry = { id: node.id, x: laid?.x ?? 0, height: node.height }
-    const row = ranks.get(rank)
-    if (row) row.push(entry)
-    else ranks.set(rank, [entry])
-  }
-
-  const columns = Math.max(1, Math.floor((maxWidth + 24) / (NODE_WIDTH + 24)))
-  const positions = new Map<string, Point>()
-  let cursorY = 0
-  let width = 0
-
-  for (const rank of [...ranks.keys()].sort((a, b) => a - b)) {
-    const row = ranks.get(rank)!.sort((a, b) => a.x - b.x)
-    const perRow = Math.min(columns, row.length)
-    let y = cursorY
-
-    for (let start = 0; start < row.length; start += perRow) {
-      const sub = row.slice(start, start + perRow)
-      // Centre each sub-row so a wrapped fan still reads as one group under its blocker.
-      const rowWidth = sub.length * NODE_WIDTH + (sub.length - 1) * 24
-      const offset = (perRow * NODE_WIDTH + (perRow - 1) * 24 - rowWidth) / 2
-      let tallest = 0
-
-      sub.forEach((entry, index) => {
-        const x = offset + index * (NODE_WIDTH + 24)
-        positions.set(entry.id, { x, y })
-        width = Math.max(width, x + NODE_WIDTH)
-        tallest = Math.max(tallest, entry.height)
-      })
-
-      y += tallest + SUBROW_GAP
-    }
-
-    cursorY = y - SUBROW_GAP + RANK_GAP
-  }
-
-  return { width, height: Math.max(0, cursorY - RANK_GAP), positions, points: new Map() }
-}
-
-/**
- * Packs every dependency-free issue into one block instead of one very long rank.
- *
- * Cards vary in height, so this fills the shortest column each time rather than laying out a rigid
- * grid: a strict grid would leave a ragged gap under every short card in a row.
- */
-function gridBox(nodes: GraphNode[], columns: number): Box {
-  const used = Math.max(1, Math.min(columns, nodes.length))
-  const columnHeights = new Array<number>(used).fill(0)
-  const positions = new Map<string, { x: number; y: number }>()
-
-  for (const node of nodes) {
-    let column = 0
-    for (let index = 1; index < used; index += 1) {
-      if (columnHeights[index] < columnHeights[column]) column = index
-    }
-    positions.set(node.id, {
-      x: column * (NODE_WIDTH + GRID_GAP),
-      y: columnHeights[column],
-    })
-    columnHeights[column] += node.height + GRID_GAP
-  }
-
-  return {
-    width: used * NODE_WIDTH + (used - 1) * GRID_GAP,
-    height: Math.max(0, Math.max(...columnHeights) - GRID_GAP),
-    positions,
-    points: new Map(),
-  }
-}
-
 function groupLabel(kind: GraphGroup['kind'], count: number): string {
   const issues = `${count} issue${count === 1 ? '' : 's'}`
   // The two frames mean opposite things, so each says which it is rather than leaving the reader
@@ -406,123 +326,134 @@ function groupLabel(kind: GraphGroup['kind'], count: number): string {
   return kind === 'chain' ? `Chain · ${issues}` : `Independent · ${issues}`
 }
 
+/** Frames a set of cards from where they actually landed. */
+function frameOf(members: GraphNode[], kind: GraphGroup['kind']): GraphGroup {
+  let left = Infinity
+  let top = Infinity
+  let right = -Infinity
+  let bottom = -Infinity
+  for (const node of members) {
+    left = Math.min(left, node.position.x)
+    top = Math.min(top, node.position.y)
+    right = Math.max(right, node.position.x + NODE_WIDTH)
+    bottom = Math.max(bottom, node.position.y + node.height)
+  }
+
+  const ids = members.map((node) => node.id).sort()
+  return {
+    id: `group:${ids[0]}`,
+    kind,
+    label: groupLabel(kind, members.length),
+    members: ids,
+    position: { x: left - GROUP_PADDING, y: top - GROUP_PADDING - GROUP_LABEL_HEIGHT },
+    width: right - left + GROUP_PADDING * 2,
+    height: bottom - top + GROUP_PADDING * 2 + GROUP_LABEL_HEIGHT,
+  }
+}
+
+/**
+ * Packs the issues that depend on nothing into their own block.
+ *
+ * They have no edges, so a layered algorithm has nothing to say about them and would only spread
+ * them across the canvas. Filling the shortest column each time keeps the block dense even though
+ * the cards differ in height.
+ */
+function packLoose(nodes: GraphNode[], columns: number, originY: number): void {
+  const used = Math.max(1, Math.min(columns, nodes.length))
+  const heights = new Array<number>(used).fill(originY)
+
+  for (const node of nodes) {
+    let column = 0
+    for (let index = 1; index < used; index += 1) {
+      if (heights[index] < heights[column]) column = index
+    }
+    node.position = { x: column * (NODE_WIDTH + GRID_GAP), y: heights[column] }
+    heights[column] += node.height + GRID_GAP
+  }
+}
+
 export interface Layout {
   nodes: GraphNode[]
   groups: GraphGroup[]
-  /** Edge id to the route the layout chose for it, when it has one. */
+  /** Edge id to the orthogonal route ELK reserved for it. */
   routes: Map<string, Point[]>
 }
 
 /**
- * Lays the graph out as packed components rather than as one dagre run, and frames each one.
- *
- * dagre places every weakly-connected component on the same rank line, so a backlog of many small
- * independent chains opens as one enormous row: martonpaulo/tabelo measured 10112x592, an aspect of
- * 17:1, with 31 cards on a single rank. Ranking each component on its own and then shelf-packing
- * the results turns the same graph into something close to a screen shape, and every dependency
- * chain stays intact and readable inside its own block.
- *
- * The frames are the answer to "what can be picked up together": one frame is one connected piece
- * of work, and the last frame holds everything that depends on nothing.
+ * Lays the graph out: ELK draws everything that has a dependency, and the rest is packed beneath
+ * it as one block, because an issue that blocks nothing and waits for nothing has no place in a
+ * layered drawing beyond taking up room in it.
  */
-export function layout(nodes: GraphNode[], edges: GraphEdge[]): Layout {
+export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<Layout> {
   if (nodes.length === 0) return { nodes, groups: [], routes: new Map() }
 
   const components = componentsOf(nodes, edges)
-  const structured = components.filter((group) => group.length > 1)
-  const singles = components.filter((group) => group.length === 1).flat()
-
-  // First pass: how big is each component when nothing is wrapped? A deep chain is naturally tall
-  // and a wide fan naturally broad, and a target guessed from the node count alone gets both wrong.
-  const natural = structured.map((group) => layoutComponent(group, edges, Infinity))
-  const naturalArea = natural.reduce((sum, box) => sum + box.width * box.height, 0)
-  const singlesArea = singles.reduce(
-    (sum, node) => sum + (NODE_WIDTH + GRID_GAP) * (node.height + GRID_GAP),
-    0,
+  const connected = components.filter((group) => group.length > 1)
+  const loose = components.filter((group) => group.length === 1).flat()
+  const placed = new Map<string, GraphNode>(
+    nodes.map((node) => [node.id, { ...node, position: { x: 0, y: 0 } }]),
   )
-  const target = Math.max(
-    NODE_WIDTH * 4,
-    Math.sqrt(Math.max(naturalArea + singlesArea, 1) * TARGET_ASPECT),
-  )
-
-  // Second pass: re-rank anything wider than the target so it folds into the canvas shape.
-  const boxes = structured
-    .map((group, index) => ({
-      group,
-      box: natural[index].width <= target ? natural[index] : layoutComponent(group, edges, target),
-    }))
-    .sort((a, b) => b.group.length - a.group.length || b.box.height - a.box.height)
-
-  const placed = new Map<string, Point>()
   const routes = new Map<string, Point[]>()
   const groups: GraphGroup[] = []
-  let cursorX = 0
-  let cursorY = 0
-  let rowHeight = 0
+  let drawnHeight = 0
+  let drawnWidth = NODE_WIDTH * 4
 
-  const place = (box: Box, members: GraphNode[], kind: GraphGroup['kind']) => {
-    if (cursorX > 0 && cursorX + box.width > target) {
-      cursorX = 0
-      cursorY += rowHeight + COMPONENT_GAP
-      rowHeight = 0
-    }
-    for (const [id, position] of box.positions) {
-      placed.set(id, { x: cursorX + position.x, y: cursorY + position.y })
-    }
-    for (const [id, route] of box.points) {
-      routes.set(
-        id,
-        route.map((point) => ({ x: cursorX + point.x, y: cursorY + point.y })),
-      )
-    }
-
-    // The frame is measured from where the cards actually landed, so a ragged block is enclosed
-    // exactly rather than by the box the packer reserved for it.
-    let left = Infinity
-    let top = Infinity
-    let right = -Infinity
-    let bottom = -Infinity
-    for (const node of members) {
-      const position = placed.get(node.id)!
-      left = Math.min(left, position.x)
-      top = Math.min(top, position.y)
-      right = Math.max(right, position.x + NODE_WIDTH)
-      bottom = Math.max(bottom, position.y + node.height)
-    }
-
-    const ids = members.map((node) => node.id).sort()
-    groups.push({
-      id: `group:${ids[0]}`,
-      kind,
-      label: groupLabel(kind, members.length),
-      members: ids,
-      position: { x: left - GROUP_PADDING, y: top - GROUP_PADDING - GROUP_LABEL_HEIGHT },
-      width: right - left + GROUP_PADDING * 2,
-      height: bottom - top + GROUP_PADDING * 2 + GROUP_LABEL_HEIGHT,
+  if (connected.length > 0) {
+    const members = connected.flat()
+    const ids = new Set(members.map((node) => node.id))
+    const result = await (
+      await elk()
+    ).layout({
+      id: 'root',
+      layoutOptions: ELK_OPTIONS,
+      children: members.map((node) => ({
+        id: node.id,
+        width: NODE_WIDTH,
+        height: node.height,
+      })),
+      edges: edges
+        .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
+        .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
     })
 
-    cursorX += box.width + COMPONENT_GAP
-    rowHeight = Math.max(rowHeight, box.height)
-  }
-
-  for (const { box, group } of boxes) place(box, group, 'chain')
-
-  if (singles.length > 0) {
-    const columns = Math.max(1, Math.floor((target + GRID_GAP) / (NODE_WIDTH + GRID_GAP)))
-    // The dependency-free block starts its own row, so it reads as a separate group.
-    if (cursorX > 0) {
-      cursorX = 0
-      cursorY += rowHeight + COMPONENT_GAP
-      rowHeight = 0
+    for (const child of result.children ?? []) {
+      const node = placed.get(child.id)
+      if (node) node.position = { x: child.x ?? 0, y: child.y ?? 0 }
     }
-    place(gridBox(singles, columns), singles, 'free')
+
+    for (const edge of result.edges ?? []) {
+      const section = edge.sections?.[0]
+      if (!section) continue
+      routes.set(edge.id, [
+        section.startPoint,
+        ...(section.bendPoints ?? []),
+        section.endPoint,
+      ])
+    }
+
+    for (const component of connected) {
+      groups.push(frameOf(component.map((node) => placed.get(node.id)!), 'chain'))
+    }
+
+    drawnWidth = Math.max(drawnWidth, ...groups.map((group) => group.position.x + group.width))
+    drawnHeight = Math.max(...groups.map((group) => group.position.y + group.height))
   }
 
-  return {
-    nodes: nodes.map((node) => ({ ...node, position: placed.get(node.id) ?? node.position })),
-    groups,
-    routes,
+  if (loose.length > 0) {
+    // The block is shaped for the screen in its own right: taking the drawn width alone would
+    // leave a repository with two small chains and forty loose issues as one tall column.
+    const area = loose.reduce(
+      (sum, node) => sum + (NODE_WIDTH + GRID_GAP) * (node.height + GRID_GAP),
+      0,
+    )
+    const wanted = Math.max(drawnWidth, Math.sqrt(area * TARGET_ASPECT))
+    const columns = Math.max(1, Math.round(wanted / (NODE_WIDTH + GRID_GAP)))
+    const block = loose.map((node) => placed.get(node.id)!)
+    packLoose(block, columns, connected.length > 0 ? drawnHeight + BLOCK_GAP : 0)
+    groups.push(frameOf(block, 'free'))
   }
+
+  return { nodes: nodes.map((node) => placed.get(node.id)!), groups, routes }
 }
 
 export interface BuildOptions {
@@ -534,131 +465,11 @@ export interface BuildOptions {
   showClosed?: boolean
 }
 
-/**
- * Gives each edge its own horizontal channel in the gap above the row it arrives at.
- *
- * `smoothstep` turns at the midpoint between the two cards, so every edge into one row shares a
- * single line. Spreading them across the gap keeps each one traceable, and ordering by span puts
- * the long travellers furthest from the cards they pass.
- */
-export function routeEdges(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
-  routes: Map<string, Point[]> = new Map(),
-): GraphEdge[] {
-  const byId = new Map(nodes.map((node) => [node.id, node]))
-  const bands = new Map<number, GraphEdge[]>()
-
-  for (const edge of edges) {
-    const target = byId.get(edge.target)
-    // An edge dagre routed already has its waypoints; only the rest need a channel.
-    if (!target || (routes.get(edge.id)?.length ?? 0) > 2) continue
-    const key = Math.round(target.position.y)
-    const band = bands.get(key)
-    if (band) band.push(edge)
-    else bands.set(key, [edge])
-  }
-
-  const centres = new Map<string, number>()
-
-  for (const [targetTop, band] of bands) {
-    let highest = -Infinity
-    for (const edge of band) {
-      const source = byId.get(edge.source)
-      if (source) highest = Math.max(highest, source.position.y + source.height)
-    }
-
-    const top = highest + CHANNEL_INSET
-    const bottom = targetTop - CHANNEL_INSET
-    if (!Number.isFinite(top) || bottom <= top) continue
-
-    const span = (edge: GraphEdge) => {
-      const source = byId.get(edge.source)
-      const target = byId.get(edge.target)
-      if (!source || !target) return 0
-      return Math.abs(source.position.x - target.position.x)
-    }
-
-    // Longest first, so a wide run takes the channel furthest from the row it arrives at.
-    const ordered = [...band].sort((a, b) => span(b) - span(a) || a.id.localeCompare(b.id))
-    const channels = Math.min(MAX_CHANNELS, ordered.length)
-    const step = (bottom - top) / (channels + 1)
-
-    ordered.forEach((edge, index) => {
-      centres.set(edge.id, top + ((index % channels) + 1) * step)
-    })
-  }
-
-  const ports = spreadPorts(nodes, edges)
-
-  return edges.map((edge) => {
-    const route = routes.get(edge.id)
-    const port = ports.get(edge.id)
-    const base = route && route.length > 2 ? { points: route } : { centerY: centres.get(edge.id) }
-    return { ...edge, ...base, ...port }
-  })
-}
-
-/**
- * Spreads the edges of a card across its width instead of running them all through its centre.
- *
- * Four arrows landing on one point overlap for their last stretch and become one thick line with
- * four heads. Fanning them out — in the order of where they come from, so they do not cross on the
- * way in — is what makes each one traceable back to its blocker.
- */
-function spreadPorts(
-  nodes: GraphNode[],
-  edges: GraphEdge[],
-): Map<string, { sourceOffset: number; targetOffset: number }> {
-  const byId = new Map(nodes.map((node) => [node.id, node]))
-  const incoming = new Map<string, GraphEdge[]>()
-  const outgoing = new Map<string, GraphEdge[]>()
-
-  for (const edge of edges) {
-    incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge])
-    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge])
-  }
-
-  const ports = new Map<string, { sourceOffset: number; targetOffset: number }>()
-  const offsetsFor = (count: number) => {
-    const spacing = Math.min(PORT_SPACING, (NODE_WIDTH - PORT_MARGIN) / Math.max(1, count - 1))
-    return (index: number) => (index - (count - 1) / 2) * spacing
-  }
-
-  const read = (id: string) => ports.get(id) ?? { sourceOffset: 0, targetOffset: 0 }
-  const centreX = (id: string) => {
-    const node = byId.get(id)
-    return node ? node.position.x + NODE_WIDTH / 2 : 0
-  }
-
-  for (const [, group] of incoming) {
-    const ordered = [...group].sort(
-      (a, b) => centreX(a.source) - centreX(b.source) || a.id.localeCompare(b.id),
-    )
-    const offset = offsetsFor(ordered.length)
-    ordered.forEach((edge, index) => {
-      ports.set(edge.id, { ...read(edge.id), targetOffset: offset(index) })
-    })
-  }
-
-  for (const [, group] of outgoing) {
-    const ordered = [...group].sort(
-      (a, b) => centreX(a.target) - centreX(b.target) || a.id.localeCompare(b.id),
-    )
-    const offset = offsetsFor(ordered.length)
-    ordered.forEach((edge, index) => {
-      ports.set(edge.id, { ...read(edge.id), sourceOffset: offset(index) })
-    })
-  }
-
-  return ports
-}
-
-export function buildGraph(
+export async function buildGraph(
   data: RepositoryGraphData,
   target: RepoTarget,
   options: BuildOptions = {},
-): IssueGraph {
+): Promise<IssueGraph> {
   const showClosed = options.showClosed === true
   const nodes = new Map<string, GraphNode>()
   // The list is of open issues; this guards the invariant rather than expecting to drop anything.
@@ -689,11 +500,11 @@ export function buildGraph(
     }
   }
 
-  const laid = layout([...nodes.values()], edges)
+  const laid = await layout([...nodes.values()], edges)
 
   return {
     nodes: laid.nodes,
-    edges: routeEdges(laid.nodes, edges, laid.routes),
+    edges: edges.map((edge) => ({ ...edge, points: laid.routes.get(edge.id) })),
     groups: laid.groups,
     complete: data.complete,
     unresolved: data.unresolved,

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- The same glyph the page uses for itself: three issues and the order between them. -->
+  <rect width="32" height="32" rx="7" fill="#f3f5f8"/>
+  <g fill="none" stroke="#1f2a37" stroke-width="2" stroke-linecap="round">
+    <path d="M13.4 10.8 8.8 21.2M18.6 10.8l4.6 10.4M10.8 24.8h10.4"/>
+  </g>
+  <g fill="#1f2a37">
+    <circle cx="16" cy="8.4" r="3.6"/>
+    <circle cx="7.2" cy="24.8" r="3.6"/>
+    <circle cx="24.8" cy="24.8" r="3.6"/>
+  </g>
+</svg>

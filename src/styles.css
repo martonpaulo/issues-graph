@@ -478,62 +478,19 @@ code {
   border-style: dashed;
 }
 
-/* An issue from another repository, reached because it blocks something here: a dotted edge, a
-   bar down its leading side, and a chip naming where it came from. */
+/* An issue from another repository, reached because it blocks something here.
+   It carries no state colour at all: the colours say what is ready and what is blocked *here*, and
+   this issue's state is another backlog's business. A dashed edge and a bar down its leading side
+   are what mark it; the state is still written on it in words. */
 .card--external {
+  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
+  border-color: var(--line-strong);
   border-style: dashed;
-  box-shadow: inset 7px 0 0 color-mix(in srgb, var(--muted) 70%, transparent), var(--shadow);
+  box-shadow: inset 7px 0 0 color-mix(in srgb, var(--muted) 45%, transparent), var(--shadow);
 }
 
 .card--external .card__body {
   padding-left: 16px;
-}
-
-/* Names the repository the issue came from. Deliberately not blue and not underlined: it is a
-   label, and nothing on a card is a link except the icon that says so. */
-.chip--repo {
-  display: inline-block;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: color-mix(in srgb, var(--muted) 16%, transparent);
-  color: var(--muted);
-  opacity: 1;
-}
-
-/* Selection has to be obvious across every state colour, so it is a solid ring drawn outside the
-   card rather than a change of border: a 1px tint disappears on a filled pastel card, and growing
-   the border would eat the height the layout already allotted. */
-.card--selected {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 2px var(--accent),
-    0 0 0 6px color-mix(in srgb, var(--accent) 24%, transparent),
-    0 6px 18px rgba(31, 42, 55, 0.16);
-}
-
-/* A label the reader picked out. Amber, so it never reads as selection. */
-.card--highlight {
-  border-color: var(--highlight);
-  box-shadow:
-    0 0 0 2px var(--highlight),
-    0 0 0 6px color-mix(in srgb, var(--highlight) 22%, transparent),
-    var(--shadow);
-}
-
-.card--faded {
-  opacity: 0.45;
-}
-
-/* Hidden is a reading aid: the card stays where it is, drained of colour and attention. */
-.card--hidden {
-  opacity: 0.32;
-  filter: grayscale(1);
-}
-
-.card--hidden:hover {
-  opacity: 0.7;
 }
 
 /* Every strip in the card has a fixed height, because `graph.ts` computed the card's own height
@@ -564,16 +521,31 @@ code {
 }
 
 .card__id {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 12px;
   line-height: 16px;
-  opacity: 0.75;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* The repository gives way first: the number is the part that must stay readable. */
+.card__repo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.55;
+}
+
+.card__number {
+  flex: none;
+  opacity: 0.75;
+}
+
 .card__state {
+  flex: none;
   font-size: 10px;
   line-height: 16px;
   letter-spacing: 0.03em;
@@ -591,26 +563,33 @@ code {
   overflow: hidden;
 }
 
-/* A fixed, comfortable gap under the title rather than `margin-top: auto`, which would drift as
-   the card's height follows the title. */
+/* Wraps onto as many rows as the chips need; `graph.ts` sized the card for exactly those rows. */
 .card__labels {
   display: flex;
   flex: none;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
   margin-top: 11px;
-  height: 17px;
-  overflow: hidden;
 }
 
 .chip {
   font-size: 10px;
-  line-height: 1.6;
+  line-height: 15px;
+  height: 17px;
   padding: 0 5px;
+  border: 1px solid transparent;
   border-radius: 4px;
   background: color-mix(in srgb, currentColor 10%, transparent);
   opacity: 0.8;
   white-space: nowrap;
+}
+
+/* A slot the issue has no label for. Outlined and empty, because the gap is the point. */
+.chip--empty {
+  background: none;
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+  border-style: dashed;
+  opacity: 0.5;
 }
 
 /* The two icons sit where the state word is and take its place on hover, so a resting card stays

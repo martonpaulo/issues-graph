@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Absolute, not relative: a real route such as /dependencies/owner/repo is served by the
+         same document, and a relative icon would be looked for beside that path. -->
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
     <meta name="description" content="Dependency graph for GitHub Issues, built from native issue relationships." />
     <title>Issue dependency graph</title>
   </head>

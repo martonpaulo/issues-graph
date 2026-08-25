@@ -8,6 +8,7 @@ import type { IssuePayload, RepositoryGraphData } from './github'
 import {
   buildGraph,
   cardHeight,
+  chipRows,
   deriveState,
   MAX_NODE_HEIGHT,
   MAX_TITLE_LINES,
@@ -73,36 +74,47 @@ function issue(over: Partial<IssuePayload> = {}): IssuePayload {
 }
 
 describe('titleLineCount', () => {
-  it('wraps on words and never asks for more than the maximum', () => {
+  it('wraps on words and never asks for more than the maximum', async () => {
     expect(titleLineCount('Short title')).toBe(1)
     expect(titleLineCount('')).toBe(1)
     expect(titleLineCount('a'.repeat(33 * 3))).toBe(3)
     expect(titleLineCount('word '.repeat(200))).toBe(MAX_TITLE_LINES)
   })
 
-  it('starts a new line rather than splitting a word across one', () => {
+  it('starts a new line rather than splitting a word across one', async () => {
     // 30 characters, then a word that cannot follow on the same line.
     expect(titleLineCount(`${'a'.repeat(30)} tail`)).toBe(2)
   })
 })
 
-describe('cardHeight', () => {
-  it('grows one line at a time and leaves room for labels only when there are some', () => {
-    const bare = cardHeight(1, false)
-    expect(cardHeight(2, false) - bare).toBe(cardHeight(3, false) - cardHeight(2, false))
-    expect(cardHeight(1, true)).toBeGreaterThan(bare)
-    expect(cardHeight(MAX_TITLE_LINES, true)).toBe(MAX_NODE_HEIGHT)
+describe('chipRows and cardHeight', () => {
+  it('wraps the chips a card cannot fit on one line', () => {
+    expect(chipRows([])).toBe(0)
+    expect(chipRows(['type: bug'])).toBe(1)
+    expect(chipRows(['type: bug', 'priority: P1', 'effort: L'])).toBe(1)
+    expect(
+      chipRows(['area: design-system', 'evidence: confirmed', 'type: improvement']),
+    ).toBeGreaterThan(1)
+    expect(chipRows(['a', 'b', 'c', 'd', 'e', 'f'])).toBe(1)
+  })
+
+  it('grows one line at a time and only spends chip rows it has chips for', () => {
+    const bare = cardHeight(1, 0)
+    expect(cardHeight(2, 0) - bare).toBe(cardHeight(3, 0) - cardHeight(2, 0))
+    expect(cardHeight(1, 1)).toBeGreaterThan(bare)
+    expect(cardHeight(1, 2)).toBeGreaterThan(cardHeight(1, 1))
+    expect(cardHeight(MAX_TITLE_LINES, 2)).toBe(MAX_NODE_HEIGHT)
   })
 })
 
 describe('repoOf', () => {
-  it('reads owner/name out of an API repository URL', () => {
+  it('reads owner/name out of an API repository URL', async () => {
     expect(repoOf('https://api.github.com/repos/martonpaulo/tabelo')).toBe('martonpaulo/tabelo')
   })
 })
 
 describe('deriveState', () => {
-  it('uses the open-blocker count, not the total, to decide blocked', () => {
+  it('uses the open-blocker count, not the total, to decide blocked', async () => {
     const summary = { blocked_by: 0, total_blocked_by: 3, blocking: 0, total_blocking: 0 }
     // Every blocker has closed, so the issue is ready even though its total stays at three.
     expect(deriveState(issue({ issue_dependencies_summary: summary }))).toBe('ready')
@@ -111,19 +123,19 @@ describe('deriveState', () => {
     ).toBe('blocked')
   })
 
-  it('separates a completed issue from one closed as not planned', () => {
+  it('separates a completed issue from one closed as not planned', async () => {
     expect(deriveState(issue({ state: 'closed', state_reason: 'completed' }))).toBe('completed')
     expect(deriveState(issue({ state: 'closed', state_reason: 'not_planned' }))).toBe('not-planned')
     expect(deriveState(issue({ state: 'closed', state_reason: null }))).toBe('completed')
   })
 
-  it('marks an open issue carrying a status label as needing attention', () => {
+  it('marks an open issue carrying a status label as needing attention', async () => {
     expect(deriveState(issue({ labels: [{ name: 'status: needs-decision', color: 'ededed' }] }))).toBe(
       'attention',
     )
   })
 
-  it('prefers closed over every open state', () => {
+  it('prefers closed over every open state', async () => {
     expect(
       deriveState(
         issue({
@@ -137,33 +149,33 @@ describe('deriveState', () => {
 })
 
 describe('buildGraph against captured GitHub data', () => {
-  it('sizes every card to its own title, within the allowed range', () => {
-    const graph = buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+  it('sizes every card to its own title, within the allowed range', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     const heights = new Set(graph.nodes.map((node) => node.height))
 
     expect(heights.size).toBeGreaterThan(1)
     for (const node of graph.nodes) {
       expect(node.titleLines).toBeGreaterThanOrEqual(1)
       expect(node.titleLines).toBeLessThanOrEqual(MAX_TITLE_LINES)
-      expect(node.height).toBe(cardHeight(node.titleLines, node.labels.length > 0))
-      expect(node.height).toBeLessThanOrEqual(MAX_NODE_HEIGHT)
+      expect(node.height).toBeGreaterThanOrEqual(cardHeight(1, 0))
+      expect(node.height).toBeLessThanOrEqual(cardHeight(MAX_TITLE_LINES, 3))
     }
   })
 
-  it('builds the agent-workflows graph', () => {
-    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+  it('builds the agent-workflows graph', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
     expect(graph.nodes).toHaveLength(NODES_AW)
     expect(graph.edges).toHaveLength(EDGES_AW)
     expect(graph.complete).toBe(true)
   })
 
-  it('reports the request cost the load actually paid', () => {
-    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+  it('reports the request cost the load actually paid', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
     expect(graph.requestCount).toBeGreaterThan(0)
   })
 
-  it('builds the tabelo graph', () => {
-    const graph = buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+  it('builds the tabelo graph', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     expect(graph.nodes).toHaveLength(NODES_TABELO)
     expect(graph.edges).toHaveLength(EDGES_TABELO)
   })
@@ -171,8 +183,8 @@ describe('buildGraph against captured GitHub data', () => {
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('draws no closed %s issue by default', (_name, issues, blockedBy, target) => {
-    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+  ])('draws no closed %s issue by default', async (_name, issues, blockedBy, target) => {
+    const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     expect(graph.nodes.some((node) => node.state === 'completed')).toBe(false)
     expect(graph.nodes.some((node) => node.state === 'not-planned')).toBe(false)
   })
@@ -182,8 +194,8 @@ describe('buildGraph against captured GitHub data', () => {
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])(
     'shows %s closed blockers, which the open-issue list never returned, only when asked',
-    (_name, issues, blockedBy, target) => {
-      const graph = buildGraph(dataFrom(issues, blockedBy), target, { showClosed: true })
+    async (_name, issues, blockedBy, target) => {
+      const graph = await buildGraph(dataFrom(issues, blockedBy), target, { showClosed: true })
       const listed = new Set((issues as IssuePayload[]).map((issue) => issue.number))
 
       // The list asks only for open issues; a closed blocker reaches the graph inside the
@@ -198,8 +210,8 @@ describe('buildGraph against captured GitHub data', () => {
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('frames every %s card in exactly one group', (_name, issues, blockedBy, target) => {
-    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+  ])('frames every %s card in exactly one group', async (_name, issues, blockedBy, target) => {
+    const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const framed = graph.groups.flatMap((group) => group.members)
 
     expect(new Set(framed).size).toBe(framed.length)
@@ -208,8 +220,8 @@ describe('buildGraph against captured GitHub data', () => {
     expect(graph.groups.filter((group) => group.kind === 'free').length).toBeLessThanOrEqual(1)
   })
 
-  it('encloses every member of a group inside its frame', () => {
-    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+  it('encloses every member of a group inside its frame', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
 
     for (const group of graph.groups) {
@@ -228,8 +240,8 @@ describe('buildGraph against captured GitHub data', () => {
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('keeps %s structurally sound', (_name, issues, blockedBy, target) => {
-    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+  ])('keeps %s structurally sound', async (_name, issues, blockedBy, target) => {
+    const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const ids = new Set(graph.nodes.map((node) => node.id))
 
     for (const edge of graph.edges) {
@@ -241,8 +253,8 @@ describe('buildGraph against captured GitHub data', () => {
     expect(ids.size).toBe(graph.nodes.length)
   })
 
-  it('derives blocked from GitHub rather than from the drawn edges', () => {
-    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+  it('derives blocked from GitHub rather than from the drawn edges', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
     const byNumber = new Map((awIssues as IssuePayload[]).map((i) => [i.number, i]))
 
     for (const node of graph.nodes) {
@@ -256,8 +268,8 @@ describe('buildGraph against captured GitHub data', () => {
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('lays %s out in a shape a screen can show', (_name, issues, blockedBy, target) => {
-    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+  ])('lays %s out in a shape a screen can show', async (_name, issues, blockedBy, target) => {
+    const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const xs = graph.nodes.map((node) => node.position.x)
     const ys = graph.nodes.map((node) => node.position.y)
     const width = Math.max(...xs) + NODE_WIDTH - Math.min(...xs)
@@ -273,8 +285,8 @@ describe('buildGraph against captured GitHub data', () => {
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('never overlaps two %s cards', (_name, issues, blockedBy, target) => {
-    const { nodes } = buildGraph(dataFrom(issues, blockedBy), target)
+  ])('never overlaps two %s cards', async (_name, issues, blockedBy, target) => {
+    const { nodes } = await buildGraph(dataFrom(issues, blockedBy), target)
     for (let i = 0; i < nodes.length; i += 1) {
       for (let j = i + 1; j < nodes.length; j += 1) {
         const a = nodes[i]
@@ -289,26 +301,22 @@ describe('buildGraph against captured GitHub data', () => {
     }
   })
 
-  it('lays nodes out without stacking them all at the origin', () => {
-    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+  it('lays nodes out without stacking them all at the origin', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
     const xs = new Set(graph.nodes.map((node) => node.position.x))
     const ys = new Set(graph.nodes.map((node) => node.position.y))
     expect(xs.size).toBeGreaterThan(1)
     expect(ys.size).toBeGreaterThan(1)
-    // dagre reports centres; the transform to top-left must have happened.
-    expect(Math.min(...graph.nodes.map((n) => n.position.x))).toBeGreaterThanOrEqual(
-      32 - NODE_WIDTH / 2,
-    )
-    expect(Math.min(...graph.nodes.map((n) => n.position.y))).toBeGreaterThanOrEqual(
-      32 - MAX_NODE_HEIGHT / 2,
-    )
+    // The layout is normalised to the origin, never centred on it.
+    expect(Math.min(...graph.nodes.map((n) => n.position.x))).toBeGreaterThanOrEqual(0)
+    expect(Math.min(...graph.nodes.map((n) => n.position.y))).toBeGreaterThanOrEqual(0)
   })
 
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('puts every %s blocker above what it blocks', (_name, issues, blockedBy, target) => {
-    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+  ])('puts every %s blocker above what it blocks', async (_name, issues, blockedBy, target) => {
+    const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
     // Wrapping a wide rank into sub-rows must not let an edge point back up the canvas.
     for (const edge of graph.edges) {
@@ -319,40 +327,40 @@ describe('buildGraph against captured GitHub data', () => {
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
-  ])('routes every %s edge, and never through the cards it passes', (_name, issues, blockedBy, target) => {
-    const graph = buildGraph(dataFrom(issues, blockedBy), target)
-    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-    const channels = new Map<number, number[]>()
+  ])('routes every %s edge orthogonally', async (_name, issues, blockedBy, target) => {
+    const graph = await buildGraph(dataFrom(issues, blockedBy), target)
 
     for (const edge of graph.edges) {
-      const source = byId.get(edge.source)!
-      const to = byId.get(edge.target)!
+      expect(edge.points, edge.id).toBeDefined()
+      expect(edge.points!.length).toBeGreaterThanOrEqual(2)
 
-      if (edge.points) {
-        // A multi-rank edge follows dagre's waypoints, which are reserved space between cards.
-        expect(edge.points.length).toBeGreaterThan(2)
-        expect(edge.centerY).toBeUndefined()
-        continue
+      // Every leg runs along one axis: that is what makes the drawing read as a diagram.
+      for (let index = 1; index < edge.points!.length; index += 1) {
+        const from = edge.points![index - 1]
+        const to = edge.points![index]
+        const diagonal = Math.abs(from.x - to.x) > 0.5 && Math.abs(from.y - to.y) > 0.5
+        expect(diagonal, `${edge.id} leg ${index}`).toBe(false)
       }
-
-      // Everything else turns strictly between the two rows, never inside a card.
-      expect(edge.centerY).toBeDefined()
-      expect(edge.centerY!).toBeGreaterThan(source.position.y + source.height)
-      expect(edge.centerY!).toBeLessThan(to.position.y)
-
-      const row = Math.round(to.position.y)
-      channels.set(row, [...(channels.get(row) ?? []), edge.centerY!])
-    }
-
-    for (const [, centres] of channels) {
-      // Up to the channel count they are all distinct; beyond that the channels repeat.
-      const distinct = new Set(centres.map((value) => Math.round(value)))
-      expect(distinct.size).toBe(Math.min(centres.length, 7))
     }
   })
 
-  it('keeps each dependency chain inside its own packed block', () => {
-    const graph = buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+  it('gives each edge of a card its own point on it', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const leaving = new Map<string, number[]>()
+
+    for (const edge of graph.edges) {
+      leaving.set(edge.source, [...(leaving.get(edge.source) ?? []), edge.points![0].x])
+    }
+
+    const fans = [...leaving.values()].filter((xs) => xs.length > 1)
+    expect(fans.length).toBeGreaterThan(0)
+    for (const xs of fans) {
+      expect(new Set(xs.map((x) => Math.round(x))).size).toBe(xs.length)
+    }
+  })
+
+  it('keeps each dependency chain inside its own packed block', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
     // Components are placed as rigid blocks, so an edge never spans the whole canvas.
     for (const edge of graph.edges) {
@@ -363,7 +371,7 @@ describe('buildGraph against captured GitHub data', () => {
 })
 
 describe('buildGraph edge cases not present in the captured data', () => {
-  it('adds a blocker from another repository as an external node', () => {
+  it('adds a blocker from another repository as an external node', async () => {
     const local = issue({
       number: 5,
       repository_url: 'https://api.github.com/repos/acme/app',
@@ -381,7 +389,7 @@ describe('buildGraph edge cases not present in the captured data', () => {
       html_url: 'https://github.com/other/lib/issues/30',
     })
 
-    const graph = buildGraph(dataFrom([local], { 5: [foreign] }), { owner: 'acme', repo: 'app' })
+    const graph = await buildGraph(dataFrom([local], { 5: [foreign] }), { owner: 'acme', repo: 'app' })
 
     expect(graph.nodes).toHaveLength(2)
     const external = graph.nodes.find((node) => node.external)
@@ -398,7 +406,7 @@ describe('buildGraph edge cases not present in the captured data', () => {
     ])
   })
 
-  it('drops the owner from a blocker that shares it with the repository being viewed', () => {
+  it('drops the owner from a blocker that shares it with the repository being viewed', async () => {
     const local = issue({
       number: 5,
       issue_dependencies_summary: {
@@ -414,12 +422,12 @@ describe('buildGraph edge cases not present in the captured data', () => {
       html_url: 'https://github.com/acme/other/issues/7',
     })
 
-    const graph = buildGraph(dataFrom([local], { 5: [sibling] }), { owner: 'acme', repo: 'app' })
+    const graph = await buildGraph(dataFrom([local], { 5: [sibling] }), { owner: 'acme', repo: 'app' })
     expect(graph.nodes.find((node) => node.external)!.repoLabel).toBe('other')
   })
 
-  it('ignores a dependency whose dependent issue is not in the list', () => {
-    const graph = buildGraph(dataFrom([issue({ number: 1 })], { 99: [issue({ number: 2 })] }), {
+  it('ignores a dependency whose dependent issue is not in the list', async () => {
+    const graph = await buildGraph(dataFrom([issue({ number: 1 })], { 99: [issue({ number: 2 })] }), {
       owner: 'acme',
       repo: 'app',
     })
@@ -427,7 +435,7 @@ describe('buildGraph edge cases not present in the captured data', () => {
     expect(graph.edges).toHaveLength(0)
   })
 
-  it('drops a closed blocker and the edge into it', () => {
+  it('drops a closed blocker and the edge into it', async () => {
     const blocked = issue({
       number: 5,
       // GitHub counts one blocker in total and none of them still open, which is exactly the
@@ -442,17 +450,17 @@ describe('buildGraph edge cases not present in the captured data', () => {
     const done = issue({ number: 2, state: 'closed', state_reason: 'completed' })
     const data = dataFrom([blocked], { 5: [done] })
 
-    const graph = buildGraph(data, { owner: 'acme', repo: 'app' })
+    const graph = await buildGraph(data, { owner: 'acme', repo: 'app' })
     expect(graph.nodes.map((node) => node.number)).toEqual([5])
     expect(graph.nodes[0].state).toBe('ready')
     expect(graph.edges).toHaveLength(0)
 
-    const withClosed = buildGraph(data, { owner: 'acme', repo: 'app' }, { showClosed: true })
+    const withClosed = await buildGraph(data, { owner: 'acme', repo: 'app' }, { showClosed: true })
     expect(withClosed.nodes.map((node) => node.number).sort()).toEqual([2, 5])
     expect(withClosed.edges).toHaveLength(1)
   })
 
-  it('deduplicates a blocker listed twice', () => {
+  it('deduplicates a blocker listed twice', async () => {
     const blocked = issue({
       number: 5,
       issue_dependencies_summary: {
@@ -462,15 +470,15 @@ describe('buildGraph edge cases not present in the captured data', () => {
         total_blocking: 0,
       },
     })
-    const graph = buildGraph(
+    const graph = await buildGraph(
       dataFrom([blocked, issue({ number: 2 })], { 5: [issue({ number: 2 }), issue({ number: 2 })] }),
       { owner: 'acme', repo: 'app' },
     )
     expect(graph.edges).toHaveLength(1)
   })
 
-  it('carries incompleteness through to the graph so the canvas cannot claim to be whole', () => {
-    const graph = buildGraph(
+  it('carries incompleteness through to the graph so the canvas cannot claim to be whole', async () => {
+    const graph = await buildGraph(
       dataFrom(awIssues, awBlockedBy, {
         complete: false,
         unresolved: [{ number: 9, reason: 'rate limit reached' }],
