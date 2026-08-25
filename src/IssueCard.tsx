@@ -37,7 +37,7 @@ const STATE_TEXT: Record<IssueState, string> = {
 export function IssueCard({ data }: NodeProps<IssueNode>) {
   const { node, selected, hidden, highlighted, faded, onToggleSelect, onToggleHidden, onOpen } =
     data
-  const label = node.external ? `${node.repo}#${node.number}` : `#${node.number}`
+  const label = `#${node.number}`
   const pressedAt = useRef<{ x: number; y: number } | null>(null)
 
   const classes = [
@@ -93,8 +93,16 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
           {node.title}
         </span>
 
-        {node.labels.length > 0 && (
+        {(node.external || node.labels.length > 0) && (
           <span className="card__labels">
+            {/* The repository comes first and is never dropped: without it the number means
+                nothing, since it belongs to somebody else's numbering. */}
+            {node.external && (
+              <span className="chip chip--repo">
+                <Icon name="external" size={9} />
+                {node.repoLabel}
+              </span>
+            )}
             {node.labels.map((chip) => (
               <span key={chip.raw} className="chip">
                 {chip.namespace ? `${chip.namespace}: ${chip.value}` : chip.value}
@@ -108,7 +116,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
         <button
           type="button"
           className="iconbutton"
-          aria-label={`Open ${label} on GitHub`}
+          aria-label={`Open ${node.external ? node.repo : ''}${label} on GitHub`}
           data-tip="Open on GitHub"
           onClick={() => onOpen(node.url, `${label} · ${node.title}`)}
         >

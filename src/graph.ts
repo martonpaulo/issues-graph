@@ -72,6 +72,11 @@ export interface GraphNode {
   state: IssueState
   /** True when the issue lives in another repository and was reached as a blocker. */
   external: boolean
+  /**
+   * How that other repository is named on the card: the bare repository when the owner is the one
+   * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
+   */
+  repoLabel: string
   /** The few labels the card has room to show. */
   labels: ParsedLabel[]
   /** Every label on the issue, which is what the highlight picker offers. */
@@ -87,6 +92,17 @@ export interface GraphEdge {
   /** The blocker: it has to land first. */
   source: string
   target: string
+  /**
+   * The y this edge runs its horizontal leg along, for an edge between neighbouring rows. Every
+   * edge arriving at one row would otherwise turn at the same height, and a dozen of them merge
+   * into a single line nobody can follow back to its blocker.
+   */
+  centerY?: number
+  /**
+   * The waypoints dagre reserved for an edge that spans more than one rank. Following them is what
+   * keeps such an edge from cutting through the cards it passes.
+   */
+  points?: Point[]
 }
 
 /**
@@ -149,6 +165,9 @@ export function deriveState(issue: IssuePayload): IssueState {
 
 function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
   const repo = repoOf(issue.repository_url)
+  const external = repo !== `${target.owner}/${target.repo}`
+  const [owner, name] = repo.split('/')
+  const repoLabel = external ? (owner === target.owner ? name : repo) : ''
   const labels = cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
   return {
@@ -158,11 +177,13 @@ function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
     url: issue.html_url,
     repo,
     state: deriveState(issue),
-    external: repo !== `${target.owner}/${target.repo}`,
+    external,
+    repoLabel,
     labels,
     allLabels: issue.labels.map((label) => label.name),
     titleLines,
-    height: cardHeight(titleLines, labels.length > 0),
+    // An external card always spends the chip row: it has to name the repository it came from.
+    height: cardHeight(titleLines, labels.length > 0 || external),
     position: { x: 0, y: 0 },
   }
 }
@@ -178,10 +199,17 @@ export const GROUP_LABEL_HEIGHT = 24
 /** Roughly 16:9. Layout aims for this so the whole graph fits a screen after fit-to-view. */
 const TARGET_ASPECT = 1.9
 
+export interface Point {
+  x: number
+  y: number
+}
+
 interface Box {
   width: number
   height: number
-  positions: Map<string, { x: number; y: number }>
+  positions: Map<string, Point>
+  /** dagre's own route for an edge, when its ranking was kept. Empty when the ranks were wrapped. */
+  points: Map<string, Point[]>
 }
 
 /** Weakly-connected components: edge direction does not matter for grouping. */
@@ -215,45 +243,93 @@ function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
   return [...groups.values()]
 }
 
-const RANK_GAP = 56
+/**
+ * Wide enough to hold a stack of horizontal edge channels between two rows. Generous on purpose:
+ * a row that eight edges arrive at needs eight lines far enough apart to be told apart.
+ */
+const RANK_GAP = 108
 const SUBROW_GAP = 22
 
+/** Clearance kept between a card and the nearest edge channel. */
+const CHANNEL_INSET = 14
+/** Beyond this the channels are too close together to tell apart, so they repeat. */
+const MAX_CHANNELS = 7
+
 /**
- * Ranks one component with dagre, then wraps any rank too wide for the target.
+ * Ranks one component with dagre and keeps its answer whenever it fits.
  *
- * dagre puts every sibling on one rank, which is correct and unreadable: one martonpaulo/tabelo
- * component fans 31 issues off their blockers, nearly 8000px across. Wrapping that rank into
- * sub-rows keeps the ranking — blockers stay above what they block — while bringing the component
- * back to a shape that fits a screen. dagre's within-rank ordering is preserved, so the crossing
- * minimisation it computed is not thrown away.
+ * dagre does two things worth keeping: it places each node near the ones it connects to, and it
+ * routes an edge that spans several ranks around the cards between them rather than through them.
+ * Rebuilding the ranks on an even grid throws both away — every edge then travels the full width
+ * of the block and crosses whatever is in the way.
+ *
+ * The grid is only worth it when a rank is too wide to show: one martonpaulo/tabelo component fans
+ * 31 issues off their blockers, nearly 8000px across. Only then is the rank wrapped into sub-rows,
+ * which keeps blockers above what they block at the cost of dagre's routing.
  */
 function layoutComponent(nodes: GraphNode[], edges: GraphEdge[], maxWidth: number): Box {
   const g = new dagre.graphlib.Graph()
-  g.setGraph({ rankdir: 'TB', ranksep: RANK_GAP, nodesep: 24, marginx: 0, marginy: 0 })
+  g.setGraph({ rankdir: 'TB', ranksep: RANK_GAP, nodesep: 26, edgesep: 18, marginx: 0, marginy: 0 })
   g.setDefaultEdgeLabel(() => ({}))
 
   const ids = new Set(nodes.map((node) => node.id))
+  const own = edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target))
   for (const node of nodes) g.setNode(node.id, { width: NODE_WIDTH, height: node.height })
-  for (const edge of edges) {
-    if (ids.has(edge.source) && ids.has(edge.target)) g.setEdge(edge.source, edge.target)
-  }
+  for (const edge of own) g.setEdge(edge.source, edge.target)
 
   dagre.layout(g)
 
-  // Group by rank, keeping dagre's left-to-right order inside each one. dagre centres every node
-  // of a rank on the same line, so the rounded centre is the rank key even with mixed heights.
+  const laidOut = nodes.map((node) => ({ node, laid: g.node(node.id) }))
+  const left = Math.min(...laidOut.map(({ laid }) => (laid?.x ?? 0) - NODE_WIDTH / 2))
+  const right = Math.max(...laidOut.map(({ laid }) => (laid?.x ?? 0) + NODE_WIDTH / 2))
+  const top = Math.min(...laidOut.map(({ node, laid }) => (laid?.y ?? 0) - node.height / 2))
+  const bottom = Math.max(...laidOut.map(({ node, laid }) => (laid?.y ?? 0) + node.height / 2))
+
+  if (right - left <= maxWidth) {
+    const positions = new Map<string, Point>()
+    for (const { node, laid } of laidOut) {
+      positions.set(node.id, {
+        x: (laid?.x ?? 0) - NODE_WIDTH / 2 - left,
+        y: (laid?.y ?? 0) - node.height / 2 - top,
+      })
+    }
+
+    const points = new Map<string, Point[]>()
+    for (const edge of own) {
+      const route = g.edge(edge.source, edge.target)?.points
+      if (route && route.length > 0) {
+        points.set(
+          edge.id,
+          route.map((point: Point) => ({ x: point.x - left, y: point.y - top })),
+        )
+      }
+    }
+
+    return { width: right - left, height: bottom - top, positions, points }
+  }
+
+  return wrapRanks(laidOut, maxWidth)
+}
+
+/**
+ * The fallback for a component too wide to show: keep dagre's ranking and its left-to-right order
+ * inside each rank, but fold every rank that does not fit into sub-rows.
+ */
+function wrapRanks(
+  laidOut: { node: GraphNode; laid: { x?: number; y?: number } | undefined }[],
+  maxWidth: number,
+): Box {
   const ranks = new Map<number, { id: string; x: number; height: number }[]>()
-  for (const node of nodes) {
-    const laid = g.node(node.id)
+  for (const { node, laid } of laidOut) {
     const rank = Math.round(laid?.y ?? 0)
-    const row = ranks.get(rank)
     const entry = { id: node.id, x: laid?.x ?? 0, height: node.height }
+    const row = ranks.get(rank)
     if (row) row.push(entry)
     else ranks.set(rank, [entry])
   }
 
   const columns = Math.max(1, Math.floor((maxWidth + 24) / (NODE_WIDTH + 24)))
-  const positions = new Map<string, { x: number; y: number }>()
+  const positions = new Map<string, Point>()
   let cursorY = 0
   let width = 0
 
@@ -282,7 +358,7 @@ function layoutComponent(nodes: GraphNode[], edges: GraphEdge[], maxWidth: numbe
     cursorY = y - SUBROW_GAP + RANK_GAP
   }
 
-  return { width, height: Math.max(0, cursorY - RANK_GAP), positions }
+  return { width, height: Math.max(0, cursorY - RANK_GAP), positions, points: new Map() }
 }
 
 /**
@@ -312,6 +388,7 @@ function gridBox(nodes: GraphNode[], columns: number): Box {
     width: used * NODE_WIDTH + (used - 1) * GRID_GAP,
     height: Math.max(0, Math.max(...columnHeights) - GRID_GAP),
     positions,
+    points: new Map(),
   }
 }
 
@@ -327,6 +404,8 @@ function groupLabel(kind: GraphGroup['kind'], count: number): string {
 export interface Layout {
   nodes: GraphNode[]
   groups: GraphGroup[]
+  /** Edge id to the route the layout chose for it, when it has one. */
+  routes: Map<string, Point[]>
 }
 
 /**
@@ -342,7 +421,7 @@ export interface Layout {
  * of work, and the last frame holds everything that depends on nothing.
  */
 export function layout(nodes: GraphNode[], edges: GraphEdge[]): Layout {
-  if (nodes.length === 0) return { nodes, groups: [] }
+  if (nodes.length === 0) return { nodes, groups: [], routes: new Map() }
 
   const components = componentsOf(nodes, edges)
   const structured = components.filter((group) => group.length > 1)
@@ -369,7 +448,8 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): Layout {
     }))
     .sort((a, b) => b.group.length - a.group.length || b.box.height - a.box.height)
 
-  const placed = new Map<string, { x: number; y: number }>()
+  const placed = new Map<string, Point>()
+  const routes = new Map<string, Point[]>()
   const groups: GraphGroup[] = []
   let cursorX = 0
   let cursorY = 0
@@ -383,6 +463,12 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): Layout {
     }
     for (const [id, position] of box.positions) {
       placed.set(id, { x: cursorX + position.x, y: cursorY + position.y })
+    }
+    for (const [id, route] of box.points) {
+      routes.set(
+        id,
+        route.map((point) => ({ x: cursorX + point.x, y: cursorY + point.y })),
+      )
     }
 
     // The frame is measured from where the cards actually landed, so a ragged block is enclosed
@@ -430,6 +516,7 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): Layout {
   return {
     nodes: nodes.map((node) => ({ ...node, position: placed.get(node.id) ?? node.position })),
     groups,
+    routes,
   }
 }
 
@@ -440,6 +527,68 @@ export interface BuildOptions {
    * backlog reads as what is left to do rather than as what has already happened.
    */
   showClosed?: boolean
+}
+
+/**
+ * Gives each edge its own horizontal channel in the gap above the row it arrives at.
+ *
+ * `smoothstep` turns at the midpoint between the two cards, so every edge into one row shares a
+ * single line. Spreading them across the gap keeps each one traceable, and ordering by span puts
+ * the long travellers furthest from the cards they pass.
+ */
+export function routeEdges(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+  routes: Map<string, Point[]> = new Map(),
+): GraphEdge[] {
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const bands = new Map<number, GraphEdge[]>()
+
+  for (const edge of edges) {
+    const target = byId.get(edge.target)
+    // An edge dagre routed already has its waypoints; only the rest need a channel.
+    if (!target || (routes.get(edge.id)?.length ?? 0) > 2) continue
+    const key = Math.round(target.position.y)
+    const band = bands.get(key)
+    if (band) band.push(edge)
+    else bands.set(key, [edge])
+  }
+
+  const centres = new Map<string, number>()
+
+  for (const [targetTop, band] of bands) {
+    let highest = -Infinity
+    for (const edge of band) {
+      const source = byId.get(edge.source)
+      if (source) highest = Math.max(highest, source.position.y + source.height)
+    }
+
+    const top = highest + CHANNEL_INSET
+    const bottom = targetTop - CHANNEL_INSET
+    if (!Number.isFinite(top) || bottom <= top) continue
+
+    const span = (edge: GraphEdge) => {
+      const source = byId.get(edge.source)
+      const target = byId.get(edge.target)
+      if (!source || !target) return 0
+      return Math.abs(source.position.x - target.position.x)
+    }
+
+    // Longest first, so a wide run takes the channel furthest from the row it arrives at.
+    const ordered = [...band].sort((a, b) => span(b) - span(a) || a.id.localeCompare(b.id))
+    const channels = Math.min(MAX_CHANNELS, ordered.length)
+    const step = (bottom - top) / (channels + 1)
+
+    ordered.forEach((edge, index) => {
+      centres.set(edge.id, top + ((index % channels) + 1) * step)
+    })
+  }
+
+  return edges.map((edge) => {
+    const route = routes.get(edge.id)
+    if (route && route.length > 2) return { ...edge, points: route }
+    return centres.has(edge.id) ? { ...edge, centerY: centres.get(edge.id) } : edge
+  })
 }
 
 export function buildGraph(
@@ -481,7 +630,7 @@ export function buildGraph(
 
   return {
     nodes: laid.nodes,
-    edges,
+    edges: routeEdges(laid.nodes, edges, laid.routes),
     groups: laid.groups,
     complete: data.complete,
     unresolved: data.unresolved,

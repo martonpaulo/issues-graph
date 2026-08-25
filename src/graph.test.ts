@@ -316,6 +316,41 @@ describe('buildGraph against captured GitHub data', () => {
     }
   })
 
+  it.each([
+    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
+  ])('routes every %s edge, and never through the cards it passes', (_name, issues, blockedBy, target) => {
+    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+    const channels = new Map<number, number[]>()
+
+    for (const edge of graph.edges) {
+      const source = byId.get(edge.source)!
+      const to = byId.get(edge.target)!
+
+      if (edge.points) {
+        // A multi-rank edge follows dagre's waypoints, which are reserved space between cards.
+        expect(edge.points.length).toBeGreaterThan(2)
+        expect(edge.centerY).toBeUndefined()
+        continue
+      }
+
+      // Everything else turns strictly between the two rows, never inside a card.
+      expect(edge.centerY).toBeDefined()
+      expect(edge.centerY!).toBeGreaterThan(source.position.y + source.height)
+      expect(edge.centerY!).toBeLessThan(to.position.y)
+
+      const row = Math.round(to.position.y)
+      channels.set(row, [...(channels.get(row) ?? []), edge.centerY!])
+    }
+
+    for (const [, centres] of channels) {
+      // Up to the channel count they are all distinct; beyond that the channels repeat.
+      const distinct = new Set(centres.map((value) => Math.round(value)))
+      expect(distinct.size).toBe(Math.min(centres.length, 7))
+    }
+  })
+
   it('keeps each dependency chain inside its own packed block', () => {
     const graph = buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
@@ -350,11 +385,37 @@ describe('buildGraph edge cases not present in the captured data', () => {
 
     expect(graph.nodes).toHaveLength(2)
     const external = graph.nodes.find((node) => node.external)
-    expect(external).toMatchObject({ number: 30, repo: 'other/lib', external: true })
+    // A different owner keeps the whole slug; the same owner would show only the repository.
+    expect(external).toMatchObject({
+      number: 30,
+      repo: 'other/lib',
+      external: true,
+      repoLabel: 'other/lib',
+    })
     expect(graph.nodes.find((node) => node.number === 5)!.external).toBe(false)
-    expect(graph.edges).toEqual([
+    expect(graph.edges).toMatchObject([
       { id: 'other/lib#30->acme/app#5', source: 'other/lib#30', target: 'acme/app#5' },
     ])
+  })
+
+  it('drops the owner from a blocker that shares it with the repository being viewed', () => {
+    const local = issue({
+      number: 5,
+      issue_dependencies_summary: {
+        blocked_by: 1,
+        total_blocked_by: 1,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    })
+    const sibling = issue({
+      number: 7,
+      repository_url: 'https://api.github.com/repos/acme/other',
+      html_url: 'https://github.com/acme/other/issues/7',
+    })
+
+    const graph = buildGraph(dataFrom([local], { 5: [sibling] }), { owner: 'acme', repo: 'app' })
+    expect(graph.nodes.find((node) => node.external)!.repoLabel).toBe('other')
   })
 
   it('ignores a dependency whose dependent issue is not in the list', () => {

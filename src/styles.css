@@ -156,12 +156,6 @@ code {
   color: var(--accent);
 }
 
-/* A toggle that is currently on. */
-.iconbutton.is-on {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
 /* The label picker carries the highlight colour rather than the accent, so the control reads as
    the same thing as the ring it puts on the cards. */
 .iconbutton.is-highlighting {
@@ -260,7 +254,6 @@ code {
   box-shadow: var(--shadow);
 }
 
-.bar__link,
 .bar__slug {
   display: inline-flex;
   align-items: center;
@@ -275,16 +268,10 @@ code {
   cursor: pointer;
 }
 
-.bar__link {
-  color: var(--muted);
-  font-weight: 500;
-}
-
 .bar__slug {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.bar__link:hover,
 .bar__slug:hover {
   color: var(--accent);
   background: var(--accent-soft);
@@ -296,30 +283,6 @@ code {
   background: var(--line);
 }
 
-.bar__toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font: inherit;
-  padding: 3px 9px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.bar__toggle:hover {
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.bar__toggle.is-on {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
 /* The one informational corner: totals, what the load cost, the key, and any gap in the data. */
 .info {
   flex-direction: column;
@@ -329,6 +292,11 @@ code {
   text-align: right;
 }
 
+.bar__counts {
+  white-space: nowrap;
+}
+
+.bar__counts strong,
 .info__row strong {
   color: var(--text);
   font-weight: 600;
@@ -344,10 +312,14 @@ code {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 3px 10px;
+  width: 100%;
+}
+
+/* The saved-copy note sits above the key, so it needs the rule between them. */
+.info__row + .info__legend {
   margin-top: 3px;
   padding-top: 3px;
   border-top: 1px solid var(--line);
-  width: 100%;
 }
 
 .info__warn {
@@ -404,12 +376,12 @@ code {
 
 /* The panels float over the canvas, so on a narrow screen the optional ones step aside rather
    than colliding with the repository name and the actions. */
-@media (max-width: 760px) {
+@media (max-width: 900px) {
   .info__legend {
     display: none;
   }
 
-  .bar__link span {
+  .bar__counts {
     display: none;
   }
 }
@@ -434,9 +406,17 @@ code {
   outline: none;
 }
 
+/* Thin and slightly transparent: on a dense graph a dozen crossings read as texture rather than
+   as a wall, and the one edge under the pointer or attached to a selection still stands out. */
 .react-flow__edge-path {
   stroke: var(--edge);
-  stroke-width: 1.5;
+  stroke-width: 1.3;
+  opacity: 0.75;
+}
+
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: var(--text);
+  opacity: 1;
 }
 
 .react-flow__arrowhead polyline,
@@ -448,6 +428,7 @@ code {
 .edge--lit .react-flow__edge-path {
   stroke: var(--accent);
   stroke-width: 2;
+  opacity: 1;
 }
 
 .edge--dim {
@@ -553,10 +534,28 @@ code {
   border-style: dashed;
 }
 
-/* An issue from another repository, reached because it blocks something here. */
+/* An issue from another repository, reached because it blocks something here: a dotted edge, a
+   bar down its leading side, and a chip naming where it came from. */
 .card--external {
-  border-style: dotted;
-  border-width: 2px;
+  border-style: dashed;
+  box-shadow: inset 4px 0 0 color-mix(in srgb, var(--muted) 45%, transparent), var(--shadow);
+}
+
+.card--external .card__body {
+  padding-left: 13px;
+}
+
+.chip--repo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  opacity: 1;
 }
 
 /* Selection has to be obvious across every state colour, so it is a solid ring drawn outside the
@@ -653,7 +652,7 @@ code {
 .card__labels {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   margin-top: 11px;
   height: 17px;

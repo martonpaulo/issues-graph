@@ -6,7 +6,6 @@ import {
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
-  type Edge,
   type Node,
 } from '@xyflow/react'
 import {
@@ -29,6 +28,7 @@ import {
   type RateLimitStatus,
   type RepositoryGraphData,
 } from './github'
+import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
@@ -39,10 +39,7 @@ import { describeAge, describeUntil } from './time'
 
 const BASE = import.meta.env.BASE_URL
 const NODE_TYPES = { issue: IssueCard, frame: GroupFrame }
-
-/** Orthogonal segments with rounded corners: a route the eye can follow, not a loose curve. */
-const EDGE_TYPE = 'smoothstep'
-const EDGE_RADIUS = 14
+const EDGE_TYPES = { dependency: DependencyEdge }
 
 /**
  * How far past the outermost card panning may go. Generous enough that a card at the edge can be
@@ -84,12 +81,6 @@ function budgetParts(status: RateLimitStatus | null): { main: string; sub: strin
     main: `${status.remaining}/${status.limit} left`,
     sub: `refills ${describeUntil(status.reset)}`,
   }
-}
-
-/** The same facts on one line, for the corner of the canvas. */
-function budgetText(status: RateLimitStatus | null): string {
-  const { main, sub } = budgetParts(status)
-  return `${main} · ${sub}`
 }
 
 /** A right-aligned fact: a label, its value, and a smaller note under it. */
@@ -334,18 +325,15 @@ function LabelPicker({
 function Canvas({
   graph,
   slug,
-  data,
   savedAt,
   showClosed,
-  onToggleClosed,
   onReload,
 }: {
   graph: IssueGraph
   slug: string
-  data: RepositoryGraphData
   savedAt: Date | null
+  /** Only decides whether the key names the closed states; the switch lives on the way in. */
   showClosed: boolean
-  onToggleClosed: () => void
   onReload: () => void
 }) {
   const { fitView } = useReactFlow()
@@ -482,7 +470,7 @@ function Canvas({
     openExternal,
   ])
 
-  const edges = useMemo<Edge[]>(
+  const edges = useMemo<DependencyEdgeType[]>(
     () =>
       graph.edges.map((edge) => {
         const dimmed = hidden.has(edge.source) || hidden.has(edge.target)
@@ -491,8 +479,10 @@ function Canvas({
           id: edge.id,
           source: edge.source,
           target: edge.target,
-          type: EDGE_TYPE,
-          pathOptions: { borderRadius: EDGE_RADIUS },
+          type: 'dependency' as const,
+          data: { centerY: edge.centerY, points: edge.points },
+          // A lit edge is drawn last so it crosses over the ones it shares a channel with.
+          zIndex: lit ? 5 : 0,
           className: dimmed ? 'edge--dim' : lit ? 'edge--lit' : undefined,
           markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
         }
@@ -553,6 +543,7 @@ function Canvas({
       nodes={nodes}
       edges={edges}
       nodeTypes={NODE_TYPES}
+      edgeTypes={EDGE_TYPES}
       fitView
       minZoom={minZoom}
       maxZoom={2}
@@ -569,11 +560,10 @@ function Canvas({
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
       <Panel position="top-left" className="bar">
-        <a className="bar__link" href={BASE}>
+        {/* The wordmark is not worth the width here: the icon alone is the way back. */}
+        <a className="iconbutton" href={BASE} data-tip="Choose another repository">
           <Icon name="graph" />
-          <span>Issue dependencies</span>
         </a>
-        <span className="bar__divider" />
         <button
           className="bar__slug"
           type="button"
@@ -582,6 +572,11 @@ function Canvas({
           {slug}
           <Icon name="external" size={11} />
         </button>
+        <span className="bar__divider" />
+        <span className="bar__counts">
+          <strong>{graph.nodes.length}</strong> issues · <strong>{graph.edges.length}</strong> deps
+          · <strong>{graph.groups.length}</strong> groups
+        </span>
       </Panel>
 
       <Panel position="top-right" className="bar">
@@ -591,21 +586,6 @@ function Canvas({
           onToggle={toggleHighlight}
           onClear={() => setHighlight(new Set())}
         />
-        <span className="bar__divider" />
-        <button
-          className={`iconbutton${showClosed ? ' is-on' : ''}`}
-          type="button"
-          aria-pressed={showClosed}
-          aria-label={showClosed ? 'Hide closed blockers' : 'Show closed blockers'}
-          data-tip={
-            showClosed
-              ? 'Hide closed blockers'
-              : 'Show closed blockers · costs more requests the first time'
-          }
-          onClick={onToggleClosed}
-        >
-          <Icon name="issue-closed" />
-        </button>
         <span className="bar__divider" />
         <button
           className="iconbutton"
@@ -665,15 +645,9 @@ function Canvas({
       )}
 
       <Panel position="bottom-right" className="info">
-        <div className="info__row">
-          <strong>{graph.nodes.length}</strong> issues · <strong>{graph.edges.length}</strong> deps ·{' '}
-          <strong>{graph.groups.length}</strong> groups
-        </div>
-        <div className="info__row info__row--muted">
-          {savedAt
-            ? `saved copy · ${describeAge(savedAt)}`
-            : `${data.requestCount} requests · ${budgetText(data.rateLimit)}`}
-        </div>
+        {savedAt && (
+          <div className="info__row info__row--muted">saved copy · {describeAge(savedAt)}</div>
+        )}
         <div className="info__legend">
           {[...OPEN_LEGEND, ...(showClosed ? CLOSED_LEGEND : [])].map(([state, text]) => (
             <span key={state} className="key">
@@ -830,15 +804,6 @@ function GraphLoad({
     [phase, target, showClosed],
   )
 
-  const toggleClosed = useCallback(() => {
-    const next = !showClosed
-    onShowClosed(next)
-    // Drawing closed blockers needs the wider dependency read; hiding them never does.
-    if (next && phase.kind === 'ready' && !phase.data.includedClosed) {
-      onReload('Closed blockers were not read yet, so showing them needs another read.')
-    }
-  }, [showClosed, phase, onShowClosed, onReload])
-
   if (phase.kind === 'ready' && graph && graph.nodes.length > 0) {
     return (
       <ReactFlowProvider>
@@ -846,10 +811,8 @@ function GraphLoad({
           key={`${slug}:${showClosed}`}
           graph={graph}
           slug={slug}
-          data={phase.data}
           savedAt={phase.savedAt}
           showClosed={showClosed}
-          onToggleClosed={toggleClosed}
           onReload={() => onReload()}
         />
       </ReactFlowProvider>
