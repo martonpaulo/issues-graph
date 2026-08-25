@@ -1,0 +1,138 @@
+{
+ "url": "https://api.github.com/repos/martonpaulo/tabelo/issues/311",
+ "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+ "labels_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/311/labels{/name}",
+ "comments_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/311/comments",
+ "events_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/311/events",
+ "html_url": "https://github.com/martonpaulo/tabelo/issues/311",
+ "id": 5236381740,
+ "node_id": "I_kwDOTlAt-s8AAAABOBzYLA",
+ "number": 311,
+ "title": "Limit shortcuts to three keys and normalize insert bindings",
+ "user": {
+  "login": "martonpaulo",
+  "id": 23281486,
+  "node_id": "MDQ6VXNlcjIzMjgxNDg2",
+  "avatar_url": "https://avatars.githubusercontent.com/u/23281486?v=4",
+  "gravatar_id": "",
+  "url": "https://api.github.com/users/martonpaulo",
+  "html_url": "https://github.com/martonpaulo",
+  "followers_url": "https://api.github.com/users/martonpaulo/followers",
+  "following_url": "https://api.github.com/users/martonpaulo/following{/other_user}",
+  "gists_url": "https://api.github.com/users/martonpaulo/gists{/gist_id}",
+  "starred_url": "https://api.github.com/users/martonpaulo/starred{/owner}{/repo}",
+  "subscriptions_url": "https://api.github.com/users/martonpaulo/subscriptions",
+  "organizations_url": "https://api.github.com/users/martonpaulo/orgs",
+  "repos_url": "https://api.github.com/users/martonpaulo/repos",
+  "events_url": "https://api.github.com/users/martonpaulo/events{/privacy}",
+  "received_events_url": "https://api.github.com/users/martonpaulo/received_events",
+  "type": "User",
+  "user_view_type": "public",
+  "site_admin": false
+ },
+ "labels": [
+  {
+   "id": 11644194203,
+   "node_id": "LA_kwDOTlAt-s8AAAACtgxNmw",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/type:%20improvement",
+   "name": "type: improvement",
+   "color": "a2eeef",
+   "default": false,
+   "description": "New feature or request"
+  },
+  {
+   "id": 11645476388,
+   "node_id": "LA_kwDOTlAt-s8AAAACth_eJA",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/priority:%20P1",
+   "name": "priority: P1",
+   "color": "D93F0B",
+   "default": false,
+   "description": "Important follow-up after P0 reliability work"
+  },
+  {
+   "id": 11645476535,
+   "node_id": "LA_kwDOTlAt-s8AAAACth_etw",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/evidence:%20confirmed",
+   "name": "evidence: confirmed",
+   "color": "0E8A16",
+   "default": false,
+   "description": "Confirmed through source inspection and/or runtime reproduction"
+  },
+  {
+   "id": 11645477222,
+   "node_id": "LA_kwDOTlAt-s8AAAACth_hZg",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/area:%20accessibility",
+   "name": "area: accessibility",
+   "color": "6F42C1",
+   "default": false,
+   "description": "Keyboard, focus, assistive technology, and cognitive accessibility"
+  },
+  {
+   "id": 11645477384,
+   "node_id": "LA_kwDOTlAt-s8AAAACth_iCA",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/area:%20design-system",
+   "name": "area: design-system",
+   "color": "F9D0C4",
+   "default": false,
+   "description": "Visual hierarchy, tokens, interaction patterns, and copy"
+  },
+  {
+   "id": 11645477648,
+   "node_id": "LA_kwDOTlAt-s8AAAACth_jEA",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/area:%20grid",
+   "name": "area: grid",
+   "color": "006B75",
+   "default": false,
+   "description": "Visual grid behavior and interaction"
+  },
+  {
+   "id": 11662376775,
+   "node_id": "LA_kwDOTlAt-s8AAAACtyG_Rw",
+   "url": "https://api.github.com/repos/martonpaulo/tabelo/labels/effort:%20M",
+   "name": "effort: M",
+   "color": "A9BFD0",
+   "default": false,
+   "description": "Several files, or a verification pass before coding; needs new tests"
+  }
+ ],
+ "state": "open",
+ "locked": false,
+ "assignees": [],
+ "milestone": null,
+ "comments": 0,
+ "created_at": "2026-08-24T15:14:09Z",
+ "updated_at": "2026-08-24T15:14:09Z",
+ "closed_at": null,
+ "assignee": null,
+ "author_association": "OWNER",
+ "active_lock_reason": null,
+ "sub_issues_summary": {
+  "total": 0,
+  "completed": 0,
+  "percent_completed": 0
+ },
+ "issue_dependencies_summary": {
+  "blocked_by": 0,
+  "total_blocked_by": 0,
+  "blocking": 0,
+  "total_blocking": 0
+ },
+ "body": null,
+ "closed_by": null,
+ "reactions": {
+  "url": "https://api.github.com/repos/martonpaulo/tabelo/issues/311/reactions",
+  "total_count": 0,
+  "+1": 0,
+  "-1": 0,
+  "laugh": 0,
+  "hooray": 0,
+  "confused": 0,
+  "heart": 0,
+  "rocket": 0,
+  "eyes": 0
+ },
+ "timeline_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/311/timeline",
+ "performed_via_github_app": null,
+ "state_reason": null,
+ "pinned_comment": null
+}

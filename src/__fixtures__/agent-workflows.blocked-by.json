@@ -1,0 +1,1082 @@
+{
+ "1": [
+  {
+   "number": 25,
+   "title": "Evaluate github/gh-aw before implementing the engine",
+   "state": "closed",
+   "state_reason": "completed",
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/25",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 27,
+   "title": "Evaluate Hermes Agent orchestration primitives under zero-host constraints",
+   "state": "closed",
+   "state_reason": "completed",
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/27",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  }
+ ],
+ "2": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "3": [
+  {
+   "number": 2,
+   "title": "Provider capability and transport registry with an adapter interface",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/2",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 6,
+    "total_blocking": 6
+   }
+  }
+ ],
+ "4": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  },
+  {
+   "number": 26,
+   "title": "Split the agent job from the write job (safe-outputs pattern)",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/26",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 1,
+    "blocking": 4,
+    "total_blocking": 4
+   }
+  }
+ ],
+ "5": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "6": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  },
+  {
+   "number": 5,
+   "title": "GitHub Projects lifecycle engine",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/5",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 3,
+    "total_blocking": 3
+   }
+  }
+ ],
+ "7": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "8": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "9": [
+  {
+   "number": 2,
+   "title": "Provider capability and transport registry with an adapter interface",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/2",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 6,
+    "total_blocking": 6
+   }
+  },
+  {
+   "number": 3,
+   "title": "Subscription-backed authentication with per-provider smoke tests",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/3",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 3,
+    "total_blocking": 3
+   }
+  },
+  {
+   "number": 4,
+   "title": "GitHub write identity for unattended pull request creation",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/4",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 2,
+    "total_blocked_by": 2,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 7,
+   "title": "Effort-based execution profiles",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/7",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  },
+  {
+   "number": 26,
+   "title": "Split the agent job from the write job (safe-outputs pattern)",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/26",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 1,
+    "blocking": 4,
+    "total_blocking": 4
+   }
+  }
+ ],
+ "10": [
+  {
+   "number": 2,
+   "title": "Provider capability and transport registry with an adapter interface",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/2",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 6,
+    "total_blocking": 6
+   }
+  },
+  {
+   "number": 3,
+   "title": "Subscription-backed authentication with per-provider smoke tests",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/3",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 3,
+    "total_blocking": 3
+   }
+  },
+  {
+   "number": 26,
+   "title": "Split the agent job from the write job (safe-outputs pattern)",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/26",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 1,
+    "blocking": 4,
+    "total_blocking": 4
+   }
+  }
+ ],
+ "11": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  },
+  {
+   "number": 5,
+   "title": "GitHub Projects lifecycle engine",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/5",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 3,
+    "total_blocking": 3
+   }
+  }
+ ],
+ "12": [
+  {
+   "number": 9,
+   "title": "Claude implementer adapter",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/9",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 5,
+    "total_blocked_by": 5,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 11,
+   "title": "CI result handling with a deterministic failure classifier",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/11",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 2,
+    "total_blocked_by": 2,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  }
+ ],
+ "13": [
+  {
+   "number": 10,
+   "title": "Antigravity reviewer adapter",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/10",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 3,
+    "total_blocked_by": 3,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 12,
+   "title": "Repair loop after a real CI failure",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/12",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 2,
+    "total_blocked_by": 2,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  }
+ ],
+ "14": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "15": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  },
+  {
+   "number": 26,
+   "title": "Split the agent job from the write job (safe-outputs pattern)",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/26",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 1,
+    "blocking": 4,
+    "total_blocking": 4
+   }
+  }
+ ],
+ "16": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  },
+  {
+   "number": 14,
+   "title": "Concurrency, deduplication, stale-run cancellation and latest-push preference",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/14",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  }
+ ],
+ "17": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  },
+  {
+   "number": 18,
+   "title": "Integration and acceptance tests against a disposable fixture repository",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/18",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 5,
+    "total_blocked_by": 5,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  }
+ ],
+ "18": [
+  {
+   "number": 9,
+   "title": "Claude implementer adapter",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/9",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 5,
+    "total_blocked_by": 5,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 10,
+   "title": "Antigravity reviewer adapter",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/10",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 3,
+    "total_blocked_by": 3,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 12,
+   "title": "Repair loop after a real CI failure",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/12",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 2,
+    "total_blocked_by": 2,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  },
+  {
+   "number": 13,
+   "title": "Repair loop after changes_requested",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/13",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 2,
+    "total_blocked_by": 2,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  },
+  {
+   "number": 15,
+   "title": "Security boundaries and least-privilege permissions",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/15",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 2,
+    "total_blocked_by": 2,
+    "blocking": 1,
+    "total_blocking": 1
+   }
+  }
+ ],
+ "19": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "20": [
+  {
+   "number": 2,
+   "title": "Provider capability and transport registry with an adapter interface",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/2",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 6,
+    "total_blocking": 6
+   }
+  }
+ ],
+ "21": [
+  {
+   "number": 2,
+   "title": "Provider capability and transport registry with an adapter interface",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/2",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 6,
+    "total_blocking": 6
+   }
+  }
+ ],
+ "22": [
+  {
+   "number": 2,
+   "title": "Provider capability and transport registry with an adapter interface",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/2",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 1,
+    "total_blocked_by": 1,
+    "blocking": 6,
+    "total_blocking": 6
+   }
+  }
+ ],
+ "23": [
+  {
+   "number": 1,
+   "title": "Define the reusable workflow contract",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/1",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: L",
+     "color": "3D7EA6"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 2,
+    "blocking": 16,
+    "total_blocking": 16
+   }
+  }
+ ],
+ "26": [
+  {
+   "number": 25,
+   "title": "Evaluate github/gh-aw before implementing the engine",
+   "state": "closed",
+   "state_reason": "completed",
+   "html_url": "https://github.com/martonpaulo/agent-workflows/issues/25",
+   "repository_url": "https://api.github.com/repos/martonpaulo/agent-workflows",
+   "labels": [
+    {
+     "name": "enhancement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "effort: M",
+     "color": "6BA4C9"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 2,
+    "total_blocking": 2
+   }
+  }
+ ]
+}

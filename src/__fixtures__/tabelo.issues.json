@@ -1,0 +1,1750 @@
+[
+ {
+  "number": 311,
+  "title": "Limit shortcuts to three keys and normalize insert bindings",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/311",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: accessibility",
+    "color": "6F42C1"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 310,
+  "title": "Require an all-view applicability audit for view-scoped work",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/310",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "d4c5f9"
+   },
+   {
+    "name": "area: documentation",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 308,
+  "title": "Cannot simultaneously drag-select data cells and header cells",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/308",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 307,
+  "title": "Bug: Favicon has blue background, inconsistent with FAB icon",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/307",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 306,
+  "title": "Feature: Structured inline formatting across visual and source views",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/306",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   },
+   {
+    "name": "effort: XL",
+    "color": "4C5B63"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 297,
+  "title": "Automatically maintain the Markdown alignment divider",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/297",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 296,
+  "title": "Add semantic row separators to source editors",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/296",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 294,
+  "title": "Product direction: rich table-editing affordances inside text source views",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/294",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  }
+ },
+ {
+  "number": 293,
+  "title": "Visual hierarchy and typography are inconsistent in Settings dialog",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/293",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 291,
+  "title": "Visual indicator on metadata headers (A, B, C / 1, 2, 3) for the active selection",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/291",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 288,
+  "title": "Drop the grid's axis affordance icons and shrink the row gutter",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/288",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: accessibility",
+    "color": "6F42C1"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 280,
+  "title": "Find and replace in every view, not only the visual table",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/280",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: workspace",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 277,
+  "title": "An icon-only action must explain itself on hover and focus",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/277",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: accessibility",
+    "color": "6F42C1"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 276,
+  "title": "Source display settings get a global default and a per-pane override",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/276",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: persistence",
+    "color": "0052CC"
+   },
+   {
+    "name": "area: workspace",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: XL",
+    "color": "4C5B63"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  }
+ },
+ {
+  "number": 275,
+  "title": "Severe scroll lag in source views when displaying many drawn space indicators",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/275",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: likely",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "area: performance",
+    "color": "5319E7"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 274,
+  "title": "Source indicators (tabs, spaces, empty values) are not displayed in all supported formats",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/274",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 273,
+  "title": "Prevent horizontal scrolling in the Settings dialog",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/273",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 270,
+  "title": "Audit and refactor project file structure and documentation for scalability",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/270",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: research",
+    "color": "fef2c0"
+   },
+   {
+    "name": "area: documentation",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 268,
+  "title": "Source view text selection feels non-native and has irregular padding",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/268",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 266,
+  "title": "Reverse the Firefox-driven compromises in product code, starting with the clipboard payload transport",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/266",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: likely",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: clipboard",
+    "color": "5319E7"
+   },
+   {
+    "name": "area: testing",
+    "color": "BFD4F2"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "area: performance",
+    "color": "5319E7"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 255,
+  "title": "Feature: Expose structural table operations as commands in source views",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/255",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 253,
+  "title": "Show visual truncation indicator (ellipsis) for cropped text in the grid",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/253",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: likely",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 252,
+  "title": "Pin the header line in source views while the document scrolls",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/252",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 246,
+  "title": "Improve visual alignment and layout of the App Menu identity header",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/246",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: likely",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 241,
+  "title": "Move and Insert actions are disabled for adjacent multi-area selections without a visible explanation",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/241",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 235,
+  "title": "Transpose the table and delete empty rows and columns",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/235",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 234,
+  "title": "Implement custom context menu for app-specific actions",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/234",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 233,
+  "title": "Revert preview top alignment (pt-grid-strip) to fix visual gap",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/233",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 232,
+  "title": "Mod+D occurrence selection conflicts with browser bookmark shortcut",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/232",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 228,
+  "title": "Centralize magic numbers and standard sizes/spacings into tokens",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/228",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 223,
+  "title": "Copied cell indicator is obscured by selection outline",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/223",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 219,
+  "title": "Responsive maximum pane limits and layout preset constraints",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/219",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: workspace",
+    "color": "1D76DB"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 218,
+  "title": "HTML round trips do not normalize carriage returns",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/218",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P0",
+    "color": "B60205"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: data-integrity",
+    "color": "E11D48"
+   },
+   {
+    "name": "area: import-export",
+    "color": "0E8A16"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  }
+ },
+ {
+  "number": 195,
+  "title": "Add the Knip dead-code check to CI once its baseline holds",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/195",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "d4c5f9"
+   },
+   {
+    "name": "area: tooling",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 190,
+  "title": "Make the critical module boundaries executable with Biome noRestrictedImports",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/190",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "d4c5f9"
+   },
+   {
+    "name": "area: documentation",
+    "color": "d4c5f9"
+   },
+   {
+    "name": "area: tooling",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 187,
+  "title": "Add automated axe accessibility checks to representative Playwright states",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/187",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: accessibility",
+    "color": "6F42C1"
+   },
+   {
+    "name": "area: testing",
+    "color": "BFD4F2"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 148,
+  "title": "CSV always includes the header row",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/148",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: data-integrity",
+    "color": "E11D48"
+   },
+   {
+    "name": "area: import-export",
+    "color": "0E8A16"
+   },
+   {
+    "name": "effort: S",
+    "color": "DDE7EE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 143,
+  "title": "Sort rows by a column, as a document operation",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/143",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "area: grid",
+    "color": "006B75"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 85,
+  "title": "Coordinate the final design-system amendment pass",
+  "state": "open",
+  "state_reason": "reopened",
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/85",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: documentation",
+    "color": "0075ca"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 4,
+   "total_blocked_by": 33,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 80,
+  "title": "Historical index of product and interaction decisions",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/80",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: documentation",
+    "color": "0075ca"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "area: documentation",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 78,
+  "title": "Full copy review once the interface has settled",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/78",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: improvement",
+    "color": "a2eeef"
+   },
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: judgment",
+    "color": "C5DEF5"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "area: documentation",
+    "color": "d4c5f9"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 10,
+   "blocking": 1,
+   "total_blocking": 1
+  }
+ },
+ {
+  "number": 63,
+  "title": "Resize handles span the whole workspace instead of the boundary they control",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/63",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: workspace",
+    "color": "1D76DB"
+   },
+   {
+    "name": "area: accessibility",
+    "color": "6F42C1"
+   },
+   {
+    "name": "area: design-system",
+    "color": "F9D0C4"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 56,
+  "title": "Give parse errors a pane-header affordance with quick fixes",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/56",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P2",
+    "color": "FBCA04"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  }
+ },
+ {
+  "number": 54,
+  "title": "Give source editors per-format Tab behaviour and auto-indent",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/54",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: accessibility",
+    "color": "6F42C1"
+   },
+   {
+    "name": "area: source-editor",
+    "color": "D4C5F9"
+   },
+   {
+    "name": "effort: L",
+    "color": "6E8CA0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  }
+ },
+ {
+  "number": 49,
+  "title": "Open the detected format beside the visual table on first import",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/49",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: import-export",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: workspace",
+    "color": "1D76DB"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   },
+   {
+    "name": "type: feature",
+    "color": "c5def5"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ },
+ {
+  "number": 32,
+  "title": "Make unreadable-storage recovery specific and actionable",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/tabelo/issues/32",
+  "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "d73a4a"
+   },
+   {
+    "name": "priority: P1",
+    "color": "D93F0B"
+   },
+   {
+    "name": "evidence: confirmed",
+    "color": "0E8A16"
+   },
+   {
+    "name": "area: data-integrity",
+    "color": "E11D48"
+   },
+   {
+    "name": "area: persistence",
+    "color": "0052CC"
+   },
+   {
+    "name": "effort: M",
+    "color": "A9BFD0"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  }
+ }
+]
