@@ -307,80 +307,14 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
-.info__legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 3px 10px;
-  width: 100%;
-}
-
-/* The saved-copy note sits above the key, so it needs the rule between them. */
-.info__row + .info__legend {
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 1px solid var(--line);
-}
-
-.info__warn {
-  width: 100%;
-  margin-top: 2px;
-  padding: 5px 8px;
-  border-radius: 7px;
-  color: var(--text);
-  background: var(--blocked-fill);
-  border: 1px solid var(--blocked-line);
-  text-align: left;
-}
-
 .actions__count {
   font-weight: 500;
   color: var(--text);
 }
 
-.key {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  white-space: nowrap;
-}
-
-.key__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 3px;
-  border: 1px solid;
-}
-
-.key__dot--ready {
-  background: var(--ready-fill);
-  border-color: var(--ready-line);
-}
-.key__dot--blocked {
-  background: var(--blocked-fill);
-  border-color: var(--blocked-line);
-}
-.key__dot--attention {
-  background: var(--attention-fill);
-  border-color: var(--attention-line);
-}
-.key__dot--completed {
-  background: var(--completed-fill);
-  border-color: var(--completed-line);
-}
-.key__dot--not-planned {
-  background: var(--not-planned-fill);
-  border-color: var(--not-planned-line);
-  border-style: dashed;
-}
-
 /* The panels float over the canvas, so on a narrow screen the optional ones step aside rather
    than colliding with the repository name and the actions. */
 @media (max-width: 900px) {
-  .info__legend {
-    display: none;
-  }
-
   .bar__counts {
     display: none;
   }

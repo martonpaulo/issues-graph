@@ -58,17 +58,6 @@ const ABSOLUTE_MIN_ZOOM = 0.05
 const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
 const hiddenKey = (slug: string) => `issue-graph:hidden:${slug}`
 
-const OPEN_LEGEND = [
-  ['ready', 'ready'],
-  ['blocked', 'blocked'],
-  ['attention', 'needs attention'],
-] as const
-
-const CLOSED_LEGEND = [
-  ['completed', 'closed'],
-  ['not-planned', 'not planned'],
-] as const
-
 /**
  * The budget as a headline and a footnote. The count is what a decision turns on; when it refills
  * only matters once it has run out, so it is written smaller and underneath.
@@ -325,15 +314,10 @@ function LabelPicker({
 function Canvas({
   graph,
   slug,
-  savedAt,
-  showClosed,
   onReload,
 }: {
   graph: IssueGraph
   slug: string
-  savedAt: Date | null
-  /** Only decides whether the key names the closed states; the switch lives on the way in. */
-  showClosed: boolean
   onReload: () => void
 }) {
   const { fitView } = useReactFlow()
@@ -644,19 +628,10 @@ function Canvas({
         </Panel>
       )}
 
-      <Panel position="bottom-right" className="info">
-        {savedAt && (
-          <div className="info__row info__row--muted">saved copy · {describeAge(savedAt)}</div>
-        )}
-        <div className="info__legend">
-          {[...OPEN_LEGEND, ...(showClosed ? CLOSED_LEGEND : [])].map(([state, text]) => (
-            <span key={state} className="key">
-              <i className={`key__dot key__dot--${state}`} />
-              {text}
-            </span>
-          ))}
-        </div>
-        {!graph.complete && (
+      {/* Nothing floats here unless something is actually missing: every card names its own
+          state, and how the data was obtained was settled on the way in. */}
+      {!graph.complete && (
+        <Panel position="bottom-right" className="info">
           <div className="info__warn" role="status">
             Could not read the blockers of{' '}
             {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
@@ -664,8 +639,8 @@ function Canvas({
               ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
               : (graph.unresolved[0]?.reason ?? 'the request failed')}
           </div>
-        )}
-      </Panel>
+        </Panel>
+      )}
     </ReactFlow>
   )
 }
@@ -678,8 +653,7 @@ type Phase =
   | { kind: 'confirm'; cost: number; status: RateLimitStatus | null; decide: (ok: boolean) => void }
   | { kind: 'resolving'; done: number; total: number }
   | { kind: 'failed'; failure: LoadFailure }
-  /** `savedAt` is set when the data came from the local copy rather than from GitHub just now. */
-  | { kind: 'ready'; data: RepositoryGraphData; savedAt: Date | null }
+  | { kind: 'ready'; data: RepositoryGraphData }
 
 function GraphView({
   target,
@@ -778,7 +752,7 @@ function GraphLoad({
           if (result.ok) {
             rememberTarget(target)
             writeCache(slug, result.data)
-            setPhase({ kind: 'ready', data: result.data, savedAt: null })
+            setPhase({ kind: 'ready', data: result.data })
           } else if (result.failure.kind === 'cancelled') {
             onReload(null)
           } else {
@@ -811,8 +785,6 @@ function GraphLoad({
           key={`${slug}:${showClosed}`}
           graph={graph}
           slug={slug}
-          savedAt={phase.savedAt}
-          showClosed={showClosed}
           onReload={() => onReload()}
         />
       </ReactFlowProvider>
@@ -864,7 +836,7 @@ function GraphLoad({
                 className="button button--primary"
                 type="button"
                 onClick={() =>
-                  setPhase({ kind: 'ready', data: cached.data, savedAt: cached.savedAt })
+                  setPhase({ kind: 'ready', data: cached.data })
                 }
               >
                 <Icon name="clock" size={12} /> Open saved copy
