@@ -311,15 +311,7 @@ function LabelPicker({
   )
 }
 
-function Canvas({
-  graph,
-  slug,
-  onReload,
-}: {
-  graph: IssueGraph
-  slug: string
-  onReload: () => void
-}) {
+function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
   const { fitView } = useReactFlow()
   const openExternal = useOpenExternal()
 
@@ -593,20 +585,11 @@ function Canvas({
         <button
           className="iconbutton"
           type="button"
-          aria-label="Fit the graph to the screen"
-          data-tip="Fit to screen"
+          aria-label="Centre and fit the graph on screen"
+          data-tip="Centre and fit"
           onClick={() => void fitView()}
         >
           <Icon name="fit" />
-        </button>
-        <button
-          className="iconbutton"
-          type="button"
-          aria-label="Read this repository from GitHub again"
-          data-tip="Reload from GitHub"
-          onClick={onReload}
-        >
-          <Icon name="reload" />
         </button>
       </Panel>
 
@@ -800,12 +783,7 @@ function GraphLoad({
   if (phase.kind === 'ready' && graph && graph.nodes.length > 0) {
     return (
       <ReactFlowProvider>
-        <Canvas
-          key={`${slug}:${showClosed}`}
-          graph={graph}
-          slug={slug}
-          onReload={() => onReload()}
-        />
+        <Canvas key={`${slug}:${showClosed}`} graph={graph} slug={slug} />
       </ReactFlowProvider>
     )
   }
