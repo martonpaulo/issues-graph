@@ -118,10 +118,17 @@ code {
   color: #ffffff;
 }
 
+.button:disabled {
+  color: var(--muted);
+  border-color: var(--line);
+  background: var(--surface);
+  cursor: not-allowed;
+}
+
 .button--primary:disabled {
+  color: #ffffff;
   background: var(--line-strong);
   border-color: var(--line-strong);
-  cursor: progress;
 }
 
 .button--small {
@@ -778,6 +785,12 @@ code {
 /* Whatever the chosen repository still needs before it can be drawn. Only this part changes. */
 .stage {
   margin-top: 18px;
+}
+
+.stage__for {
+  margin: 0 0 2px;
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .stage__note {

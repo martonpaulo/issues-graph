@@ -207,7 +207,14 @@ function Start({
         <RepoInput initial={initial} onOpen={onOpen} />
 
         {children ? (
-          <section className="stage">{children}</section>
+          <section className="stage">
+            {/* Every fact below is about the repository the page is on, which is not necessarily
+                the one being typed into the field above it. */}
+            <p className="stage__for">
+              <code>{initial}</code>
+            </p>
+            {children}
+          </section>
         ) : (
           <p className="start__url">
             <code>{BASE}dependencies/owner/repo</code>

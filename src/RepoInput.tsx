@@ -44,6 +44,8 @@ export function RepoInput({
   useEffect(() => () => window.clearTimeout(blurTimer.current), [])
 
   const typed = value.trim()
+  // Opening the repository already open does nothing, so the control that would do it is off.
+  const unchanged = initial.length > 0 && typed.toLowerCase() === initial.toLowerCase()
 
   const suggestions = useMemo(() => {
     const merged = recentTargets().filter((slug) =>
@@ -94,6 +96,7 @@ export function RepoInput({
         role="search"
         onSubmit={(event) => {
           event.preventDefault()
+          if (unchanged && !(active >= 0 && visible)) return
           submit(active >= 0 && visible ? suggestions[active] : value)
         }}
       >
@@ -139,7 +142,12 @@ export function RepoInput({
             }}
           />
         </span>
-        <button className="button button--primary" type="submit">
+        <button
+          className="button button--primary"
+          type="submit"
+          disabled={typed.length === 0 || unchanged}
+          data-tip={unchanged ? 'This repository is already open' : 'Open this repository'}
+        >
           Open
         </button>
       </form>
