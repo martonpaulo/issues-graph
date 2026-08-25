@@ -311,7 +311,16 @@ function LabelPicker({
   )
 }
 
-function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
+function Canvas({
+  graph,
+  slug,
+  onAskAgain,
+}: {
+  graph: IssueGraph
+  slug: string
+  /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
+  onAskAgain: () => void
+}) {
   const { fitView } = useReactFlow()
   const openExternal = useOpenExternal()
 
@@ -624,6 +633,15 @@ function Canvas({ graph, slug }: { graph: IssueGraph; slug: string }) {
         >
           <Icon name="fit" />
         </button>
+        <button
+          className="iconbutton"
+          type="button"
+          aria-label="Read this repository from GitHub again"
+          data-tip="Read again from GitHub"
+          onClick={onAskAgain}
+        >
+          <Icon name="reload" />
+        </button>
       </Panel>
 
       {selectedCount > 0 && (
@@ -701,6 +719,9 @@ function GraphView({
 }) {
   const [attempt, setAttempt] = useState(0)
   const [note, setNote] = useState<string | null>(null)
+  // Opening a repository draws the saved copy straight away; asking again is what brings the
+  // budget page back, and only an explicit request does that.
+  const [askFirst, setAskFirst] = useState(false)
   const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, false))
 
   useEffect(() => {
@@ -709,6 +730,7 @@ function GraphView({
 
   const reload = useCallback((why: string | null = null) => {
     setNote(why)
+    setAskFirst(true)
     setAttempt((value) => value + 1)
   }, [])
 
@@ -719,6 +741,7 @@ function GraphView({
       key={attempt}
       target={target}
       note={note}
+      askFirst={askFirst}
       showClosed={showClosed}
       onShowClosed={setShowClosed}
       onReload={reload}
@@ -730,6 +753,7 @@ function GraphView({
 function GraphLoad({
   target,
   note,
+  askFirst,
   showClosed,
   onShowClosed,
   onReload,
@@ -737,16 +761,28 @@ function GraphLoad({
 }: {
   target: RepoTarget
   note: string | null
+  askFirst: boolean
   showClosed: boolean
   onShowClosed: (value: boolean) => void
   onReload: (why?: string | null) => void
   onOpen: (target: RepoTarget) => void
 }) {
   const slug = slugOf(target)
-  const [phase, setPhase] = useState<Phase>({ kind: 'gate', status: null, checking: true })
   // Read once per mount: the gate has to describe a copy that does not change under it.
   const [cached] = useState<CachedGraph | null>(() => readCache(slug))
+  const [phase, setPhase] = useState<Phase>(() =>
+    cached && !askFirst ? { kind: 'drawing' } : { kind: 'gate', status: null, checking: true },
+  )
   const abort = useRef<AbortController | null>(null)
+
+  // A copy already in the browser costs nothing, so opening a link to a repository that has one
+  // draws it rather than asking a question whose answer is obvious.
+  useEffect(() => {
+    if (!cached || askFirst) return
+    void buildGraph(cached.data, target, { showClosed }).then((graph) => {
+      setPhase((current) => (current.kind === 'drawing' ? { kind: 'ready', graph } : current))
+    })
+  }, [cached, askFirst, target, showClosed])
 
   // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
   // can always open with real numbers instead of an assumption about what is left.
@@ -825,7 +861,12 @@ function GraphLoad({
   if (phase.kind === 'ready' && phase.graph.nodes.length > 0) {
     return (
       <ReactFlowProvider>
-        <Canvas key={`${slug}:${showClosed}`} graph={phase.graph} slug={slug} />
+        <Canvas
+          key={`${slug}:${showClosed}`}
+          graph={phase.graph}
+          slug={slug}
+          onAskAgain={() => onReload()}
+        />
       </ReactFlowProvider>
     )
   }
