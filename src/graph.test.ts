@@ -5,7 +5,16 @@ import awIssues from './__fixtures__/agent-workflows.issues.json'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { buildGraph, deriveState, NODE_HEIGHT, NODE_WIDTH, repoOf } from './graph'
+import {
+  buildGraph,
+  cardHeight,
+  deriveState,
+  MAX_NODE_HEIGHT,
+  MAX_TITLE_LINES,
+  NODE_WIDTH,
+  repoOf,
+  titleLineCount,
+} from './graph'
 
 function dataFrom(
   issues: unknown,
@@ -26,12 +35,23 @@ function dataFrom(
     rateLimited: false,
     rateLimitReset: null,
     requestCount: 1 + blockers.size,
+    rateLimit: null,
+    includedClosed: true,
     ...overrides,
   }
 }
 
 const AW = { owner: 'martonpaulo', repo: 'agent-workflows' }
 const TABELO = { owner: 'martonpaulo', repo: 'tabelo' }
+
+/**
+ * Sizes of the default view — open issues, closed blockers dropped. They are written down rather
+ * than derived so a change in what the graph decides to draw has to be acknowledged here.
+ */
+const NODES_AW = 25
+const EDGES_AW = 40
+const NODES_TABELO = 46
+const EDGES_TABELO = 5
 
 function issue(over: Partial<IssuePayload> = {}): IssuePayload {
   return {
@@ -51,6 +71,29 @@ function issue(over: Partial<IssuePayload> = {}): IssuePayload {
     ...over,
   }
 }
+
+describe('titleLineCount', () => {
+  it('wraps on words and never asks for more than the maximum', () => {
+    expect(titleLineCount('Short title')).toBe(1)
+    expect(titleLineCount('')).toBe(1)
+    expect(titleLineCount('a'.repeat(33 * 3))).toBe(3)
+    expect(titleLineCount('word '.repeat(200))).toBe(MAX_TITLE_LINES)
+  })
+
+  it('starts a new line rather than splitting a word across one', () => {
+    // 30 characters, then a word that cannot follow on the same line.
+    expect(titleLineCount(`${'a'.repeat(30)} tail`)).toBe(2)
+  })
+})
+
+describe('cardHeight', () => {
+  it('grows one line at a time and leaves room for labels only when there are some', () => {
+    const bare = cardHeight(1, false)
+    expect(cardHeight(2, false) - bare).toBe(cardHeight(3, false) - cardHeight(2, false))
+    expect(cardHeight(1, true)).toBeGreaterThan(bare)
+    expect(cardHeight(MAX_TITLE_LINES, true)).toBe(MAX_NODE_HEIGHT)
+  })
+})
 
 describe('repoOf', () => {
   it('reads owner/name out of an API repository URL', () => {
@@ -94,36 +137,93 @@ describe('deriveState', () => {
 })
 
 describe('buildGraph against captured GitHub data', () => {
+  it('sizes every card to its own title, within the allowed range', () => {
+    const graph = buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    const heights = new Set(graph.nodes.map((node) => node.height))
+
+    expect(heights.size).toBeGreaterThan(1)
+    for (const node of graph.nodes) {
+      expect(node.titleLines).toBeGreaterThanOrEqual(1)
+      expect(node.titleLines).toBeLessThanOrEqual(MAX_TITLE_LINES)
+      expect(node.height).toBe(cardHeight(node.titleLines, node.labels.length > 0))
+      expect(node.height).toBeLessThanOrEqual(MAX_NODE_HEIGHT)
+    }
+  })
+
   it('builds the agent-workflows graph', () => {
     const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
-    expect(graph.nodes).toHaveLength(27)
-    expect(graph.edges).toHaveLength(43)
+    expect(graph.nodes).toHaveLength(NODES_AW)
+    expect(graph.edges).toHaveLength(EDGES_AW)
     expect(graph.complete).toBe(true)
+  })
+
+  it('reports the request cost the load actually paid', () => {
+    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    expect(graph.requestCount).toBeGreaterThan(0)
   })
 
   it('builds the tabelo graph', () => {
     const graph = buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
-    expect(graph.nodes).toHaveLength(82)
-    expect(graph.edges).toHaveLength(50)
+    expect(graph.nodes).toHaveLength(NODES_TABELO)
+    expect(graph.edges).toHaveLength(EDGES_TABELO)
+  })
+
+  it.each([
+    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
+  ])('draws no closed %s issue by default', (_name, issues, blockedBy, target) => {
+    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+    expect(graph.nodes.some((node) => node.state === 'completed')).toBe(false)
+    expect(graph.nodes.some((node) => node.state === 'not-planned')).toBe(false)
   })
 
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])(
-    'recovers %s closed blockers that the open-issue list never returned',
+    'shows %s closed blockers, which the open-issue list never returned, only when asked',
     (_name, issues, blockedBy, target) => {
-      const graph = buildGraph(dataFrom(issues, blockedBy), target)
+      const graph = buildGraph(dataFrom(issues, blockedBy), target, { showClosed: true })
       const listed = new Set((issues as IssuePayload[]).map((issue) => issue.number))
 
       // The list asks only for open issues; a closed blocker reaches the graph inside the
-      // dependency payload of whatever it blocks. Losing that would leave dangling edges.
+      // dependency payload of whatever it blocks.
       const recovered = graph.nodes.filter((node) => !listed.has(node.number))
       expect(recovered.length).toBeGreaterThan(0)
       expect(recovered.every((node) => node.state === 'completed' || node.state === 'not-planned'))
         .toBe(true)
     },
   )
+
+  it.each([
+    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
+  ])('frames every %s card in exactly one group', (_name, issues, blockedBy, target) => {
+    const graph = buildGraph(dataFrom(issues, blockedBy), target)
+    const framed = graph.groups.flatMap((group) => group.members)
+
+    expect(new Set(framed).size).toBe(framed.length)
+    expect(new Set(framed)).toEqual(new Set(graph.nodes.map((node) => node.id)))
+    // Everything with no dependency at all belongs to the one group that says so.
+    expect(graph.groups.filter((group) => group.kind === 'free').length).toBeLessThanOrEqual(1)
+  })
+
+  it('encloses every member of a group inside its frame', () => {
+    const graph = buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+
+    for (const group of graph.groups) {
+      for (const id of group.members) {
+        const { position } = byId.get(id)!
+        expect(position.x).toBeGreaterThanOrEqual(group.position.x)
+        expect(position.y).toBeGreaterThanOrEqual(group.position.y)
+        expect(position.x + NODE_WIDTH).toBeLessThanOrEqual(group.position.x + group.width)
+        expect(position.y + byId.get(id)!.height).toBeLessThanOrEqual(
+          group.position.y + group.height,
+        )
+      }
+    }
+  })
 
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
@@ -147,7 +247,7 @@ describe('buildGraph against captured GitHub data', () => {
 
     for (const node of graph.nodes) {
       const source = byNumber.get(node.number)
-      if (!source || source.state === 'closed') continue
+      if (!source) continue
       const openBlockers = source.issue_dependencies_summary?.blocked_by ?? 0
       expect(node.state === 'blocked').toBe(openBlockers > 0 && node.state !== 'attention')
     }
@@ -161,7 +261,8 @@ describe('buildGraph against captured GitHub data', () => {
     const xs = graph.nodes.map((node) => node.position.x)
     const ys = graph.nodes.map((node) => node.position.y)
     const width = Math.max(...xs) + NODE_WIDTH - Math.min(...xs)
-    const height = Math.max(...ys) + NODE_HEIGHT - Math.min(...ys)
+    const height =
+      Math.max(...graph.nodes.map((node) => node.position.y + node.height)) - Math.min(...ys)
 
     // Before components were packed and wide ranks wrapped, tabelo laid out at 17:1 across
     // 10112px, which is the failure this bound exists to catch.
@@ -176,11 +277,14 @@ describe('buildGraph against captured GitHub data', () => {
     const { nodes } = buildGraph(dataFrom(issues, blockedBy), target)
     for (let i = 0; i < nodes.length; i += 1) {
       for (let j = i + 1; j < nodes.length; j += 1) {
-        const a = nodes[i].position
-        const b = nodes[j].position
+        const a = nodes[i]
+        const b = nodes[j]
         const collides =
-          Math.abs(a.x - b.x) < NODE_WIDTH - 1 && Math.abs(a.y - b.y) < NODE_HEIGHT - 1
-        expect(collides, `${nodes[i].id} overlaps ${nodes[j].id}`).toBe(false)
+          a.position.x < b.position.x + NODE_WIDTH - 1 &&
+          b.position.x < a.position.x + NODE_WIDTH - 1 &&
+          a.position.y < b.position.y + b.height - 1 &&
+          b.position.y < a.position.y + a.height - 1
+        expect(collides, `${a.id} overlaps ${b.id}`).toBe(false)
       }
     }
   })
@@ -196,7 +300,7 @@ describe('buildGraph against captured GitHub data', () => {
       32 - NODE_WIDTH / 2,
     )
     expect(Math.min(...graph.nodes.map((n) => n.position.y))).toBeGreaterThanOrEqual(
-      32 - NODE_HEIGHT / 2,
+      32 - MAX_NODE_HEIGHT / 2,
     )
   })
 
@@ -260,6 +364,31 @@ describe('buildGraph edge cases not present in the captured data', () => {
     })
     expect(graph.nodes).toHaveLength(1)
     expect(graph.edges).toHaveLength(0)
+  })
+
+  it('drops a closed blocker and the edge into it', () => {
+    const blocked = issue({
+      number: 5,
+      // GitHub counts one blocker in total and none of them still open, which is exactly the
+      // shape that must read as ready with no edge drawn.
+      issue_dependencies_summary: {
+        blocked_by: 0,
+        total_blocked_by: 1,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    })
+    const done = issue({ number: 2, state: 'closed', state_reason: 'completed' })
+    const data = dataFrom([blocked], { 5: [done] })
+
+    const graph = buildGraph(data, { owner: 'acme', repo: 'app' })
+    expect(graph.nodes.map((node) => node.number)).toEqual([5])
+    expect(graph.nodes[0].state).toBe('ready')
+    expect(graph.edges).toHaveLength(0)
+
+    const withClosed = buildGraph(data, { owner: 'acme', repo: 'app' }, { showClosed: true })
+    expect(withClosed.nodes.map((node) => node.number).sort()).toEqual([2, 5])
+    expect(withClosed.edges).toHaveLength(1)
   })
 
   it('deduplicates a blocker listed twice', () => {

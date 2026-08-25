@@ -7,36 +7,219 @@ import {
   ReactFlowProvider,
   useReactFlow,
   type Edge,
+  type Node,
 } from '@xyflow/react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 
-import { buildGraph, type IssueGraph } from './graph'
-import { loadRepositoryGraph, UNAUTHENTICATED_HOURLY_LIMIT, type LoadFailure } from './github'
+import { readCache, writeCache, type CachedGraph } from './cache'
+import { buildGraph, NODE_WIDTH, type IssueGraph } from './graph'
+import {
+  loadRepositoryGraph,
+  readRateLimit,
+  UNAUTHENTICATED_HOURLY_LIMIT,
+  type LoadFailure,
+  type RateLimitStatus,
+  type RepositoryGraphData,
+} from './github'
+import { GroupFrame, type GroupNode } from './GroupFrame'
+import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
-import { DEFAULT_OWNER, parseRoute, parseTargetInput, pathForTarget, type RepoTarget } from './route'
+import { RepoInput, rememberTarget } from './RepoInput'
+import { parseRoute, pathForTarget, slugOf, type RepoTarget } from './route'
+import { readStored, writeStored } from './storage'
+import { describeAge, describeUntil } from './time'
 
 const BASE = import.meta.env.BASE_URL
-const NODE_TYPES = { issue: IssueCard }
+const NODE_TYPES = { issue: IssueCard, group: GroupFrame }
 
-const LEGEND = [
+/** Orthogonal segments with rounded corners: a route the eye can follow, not a loose curve. */
+const EDGE_TYPE = 'smoothstep'
+const EDGE_RADIUS = 14
+
+/**
+ * How far past the outermost card panning may go. Generous enough that a card at the edge can be
+ * dragged to the middle of the screen, bounded so the canvas never becomes empty space with the
+ * graph nowhere in sight.
+ */
+const PAN_MARGIN_MIN = 900
+const PAN_MARGIN_SHARE = 0.6
+
+/** Room left around the graph when it is fitted, and how far past that zooming out may go. */
+const FIT_PADDING = 120
+const ZOOM_OUT_ALLOWANCE = 0.75
+/** A floor under the floor: a graph too large to fit still has to be openable. */
+const ABSOLUTE_MIN_ZOOM = 0.05
+
+const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
+const hiddenKey = (slug: string) => `issue-graph:hidden:${slug}`
+
+const OPEN_LEGEND = [
   ['ready', 'ready'],
   ['blocked', 'blocked'],
   ['attention', 'needs attention'],
-  ['completed', 'closed'],
 ] as const
 
-type ViewState =
-  | { kind: 'loading'; done: number; total: number }
-  | { kind: 'failed'; failure: LoadFailure }
-  | { kind: 'ready'; graph: IssueGraph }
+const CLOSED_LEGEND = [
+  ['completed', 'closed'],
+  ['not-planned', 'not planned'],
+] as const
 
-function formatReset(reset: Date | null): string {
-  if (!reset) return 'shortly'
-  return reset.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+/**
+ * The budget as a headline and a footnote. The count is what a decision turns on; when it refills
+ * only matters once it has run out, so it is written smaller and underneath.
+ */
+function budgetParts(status: RateLimitStatus | null): { main: string; sub: string } {
+  if (!status) {
+    return { main: `${UNAUTHENTICATED_HOURLY_LIMIT}/hour`, sub: 'current use unknown' }
+  }
+  return {
+    main: `${status.remaining}/${status.limit} left`,
+    sub: `refills ${describeUntil(status.reset)}`,
+  }
+}
+
+/** The same facts on one line, for the corner of the canvas. */
+function budgetText(status: RateLimitStatus | null): string {
+  const { main, sub } = budgetParts(status)
+  return `${main} · ${sub}`
+}
+
+/** A right-aligned fact: a label, its value, and a smaller note under it. */
+function Fact({ label, value, note }: { label: string; value: string; note?: string }) {
+  return (
+    <div className="facts__row">
+      <dt>{label}</dt>
+      <dd>
+        {value}
+        {note && <small>{note}</small>}
+      </dd>
+    </div>
+  )
+}
+
+/* External navigation ------------------------------------------------------
+   Every link out of the viewer is confirmed, so a click on a card never moves
+   the page somewhere the reader did not choose to go. */
+
+interface PendingLink {
+  url: string
+  label: string
+}
+
+const OpenExternalContext = createContext<(url: string, label: string) => void>(() => {})
+
+export function useOpenExternal(): (url: string, label: string) => void {
+  return useContext(OpenExternalContext)
+}
+
+function ExternalConfirm({ pending, onClose }: { pending: PendingLink; onClose: () => void }) {
+  const confirmRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    confirmRef.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="external-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="dialog__title" id="external-title">
+          Open this on GitHub?
+        </p>
+        <p className="dialog__body">{pending.label}</p>
+        <p className="dialog__url">
+          <code>{pending.url}</code>
+        </p>
+        <div className="dialog__actions">
+          <button
+            className="button"
+            type="button"
+            data-tip="Close this and stay on the graph"
+            onClick={onClose}
+          >
+            Stay here
+          </button>
+          <button
+            className="button button--primary"
+            type="button"
+            ref={confirmRef}
+            data-tip={`Open ${pending.url} in a new tab`}
+            onClick={() => {
+              window.open(pending.url, '_blank', 'noopener,noreferrer')
+              onClose()
+            }}
+          >
+            <Icon name="external" /> Open in a new tab
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Shared shell -------------------------------------------------------------
+   One page for choosing a repository and for everything that has to be said
+   before its graph can be drawn. The heading and the input never move; only the
+   section underneath them changes, so opening a repository reads as the same
+   page continuing rather than as a jump to another screen. */
+
+function Start({
+  initial,
+  onOpen,
+  message,
+  children,
+}: {
+  initial?: string
+  onOpen: (target: RepoTarget) => void
+  message?: string
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="centre">
+      <div className="start">
+        <h1 className="start__title">
+          <Icon name="graph" size={20} /> Issue dependencies
+        </h1>
+        <p className="start__lead">
+          Any public repository, from native GitHub issue relationships. Nothing is installed.
+        </p>
+
+        {message && <p className="notice notice--error">{message}</p>}
+
+        <RepoInput initial={initial} onOpen={onOpen} />
+
+        {children ? (
+          <section className="stage">{children}</section>
+        ) : (
+          <p className="start__url">
+            <code>{BASE}dependencies/owner/repo</code>
+          </p>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function failureText(target: RepoTarget, failure: LoadFailure): { title: string; body: string } {
-  const slug = `${target.owner}/${target.repo}`
+  const slug = slugOf(target)
   switch (failure.kind) {
     case 'not-found':
       return {
@@ -46,73 +229,323 @@ function failureText(target: RepoTarget, failure: LoadFailure): { title: string;
     case 'rate-limited':
       return {
         title: 'GitHub rate limit reached',
-        body: `Unauthenticated requests share ${UNAUTHENTICATED_HOURLY_LIMIT} per hour per IP address. It resets around ${formatReset(failure.reset)}. Showing nothing rather than a misleading part of the graph.`,
+        body: `Unauthenticated requests share ${UNAUTHENTICATED_HOURLY_LIMIT} per hour per IP address. It refills ${describeUntil(failure.reset)}. Showing nothing rather than a misleading part of the graph.`,
       }
     case 'network':
       return { title: 'GitHub could not be reached', body: failure.message }
     case 'unexpected':
       return { title: `GitHub answered ${failure.status}`, body: failure.message }
+    case 'cancelled':
+      return { title: 'Load cancelled', body: 'No dependency requests were spent.' }
   }
 }
 
-function Centred({
-  title,
-  body,
-  onRetry,
+/* Canvas ------------------------------------------------------------------ */
+
+/**
+ * Picks labels out of the graph. Highlighting is additive and purely visual: it never removes a
+ * card, so the shape of the dependencies stays the same while the chosen work stands out.
+ */
+function LabelPicker({
+  labels,
+  active,
+  onToggle,
+  onClear,
 }: {
-  title: string
-  body: string
-  onRetry?: () => void
+  labels: { name: string; count: number }[]
+  active: ReadonlySet<string>
+  onToggle: (label: string) => void
+  onClear: () => void
 }) {
+  const [open, setOpen] = useState(false)
+
+  if (labels.length === 0) return null
+
   return (
-    <div className="centre">
-      <div className="centre__card" role="status">
-        <p className="centre__title">{title}</p>
-        <p className="centre__body">{body}</p>
-        {onRetry && (
-          <button className="centre__retry" type="button" onClick={onRetry}>
-            Try again
-          </button>
-        )}
-      </div>
-    </div>
+    <span className="picker">
+      <button
+        className={`iconbutton${active.size > 0 ? ' is-highlighting' : ''}`}
+        type="button"
+        aria-expanded={open}
+        aria-label={
+          active.size > 0
+            ? `Highlighting ${active.size} label${active.size === 1 ? '' : 's'}`
+            : 'Highlight the issues carrying a label'
+        }
+        data-tip={
+          active.size > 0
+            ? `Highlighting ${active.size} label${active.size === 1 ? '' : 's'}`
+            : 'Highlight a label'
+        }
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name="tag" />
+      </button>
+
+      {open && (
+        <div className="picker__panel">
+          <div className="picker__head">
+            <span>Highlight a label</span>
+            <button
+              className="iconbutton"
+              type="button"
+              aria-label="Close the label list"
+              data-tip="Close the label list"
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+          <ul className="picker__list">
+            {labels.map((label) => (
+              <li key={label.name}>
+                <button
+                  className={`picker__item${active.has(label.name) ? ' is-on' : ''}`}
+                  type="button"
+                  aria-pressed={active.has(label.name)}
+                  data-tip={`${active.has(label.name) ? 'Stop highlighting' : 'Highlight'} the ${
+                    label.count
+                  } issue${label.count === 1 ? '' : 's'} labelled ${label.name}`}
+                  onClick={() => onToggle(label.name)}
+                >
+                  <span className="picker__name">{label.name}</span>
+                  <span className="picker__count">{label.count}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {active.size > 0 && (
+            <button
+              className="button button--small picker__clear"
+              type="button"
+              data-tip="Stop highlighting every label"
+              onClick={onClear}
+            >
+              Clear the highlight
+            </button>
+          )}
+        </div>
+      )}
+    </span>
   )
 }
 
 function Canvas({
   graph,
   slug,
+  data,
+  savedAt,
+  showClosed,
+  onToggleClosed,
   onReload,
 }: {
   graph: IssueGraph
   slug: string
+  data: RepositoryGraphData
+  savedAt: Date | null
+  showClosed: boolean
+  onToggleClosed: () => void
   onReload: () => void
 }) {
   const { fitView } = useReactFlow()
+  const openExternal = useOpenExternal()
 
-  const nodes = useMemo<IssueNode[]>(
-    () =>
-      graph.nodes.map((node) => ({
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }))
+  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
+  const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(
+    () => new Set(readStored<string[]>(hiddenKey(slug), [])),
+  )
+
+  // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
+  // costs requests. Nothing here is ever written back to GitHub.
+  useEffect(() => {
+    writeStored(hiddenKey(slug), [...hidden])
+  }, [slug, hidden])
+
+  // The zoom floor is relative to what is on screen, so it has to follow a resized window.
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectGroup = useCallback((members: string[]) => {
+    setSelected((current) => {
+      const whole = members.every((id) => current.has(id))
+      const next = new Set(current)
+      for (const id of members) {
+        if (whole) next.delete(id)
+        else next.add(id)
+      }
+      return next
+    })
+  }, [])
+
+  const toggleHidden = useCallback((id: string) => {
+    setHidden((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }, [])
+
+  const hideSelected = useCallback(() => {
+    setHidden((current) => new Set([...current, ...selected]))
+  }, [selected])
+
+  const showSelected = useCallback(() => {
+    setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+  }, [selected])
+
+  /** Every label in the graph, alphabetically: what the highlight picker offers. */
+  const labelCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const node of graph.nodes) {
+      for (const label of node.allLabels) counts.set(label, (counts.get(label) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [graph])
+
+  const toggleHighlight = useCallback((label: string) => {
+    setHighlight((current) => {
+      const next = new Set(current)
+      if (!next.delete(label)) next.add(label)
+      return next
+    })
+  }, [])
+
+  const nodes = useMemo<Node[]>(() => {
+    const frames: GroupNode[] = graph.groups.map((group) => ({
+      id: group.id,
+      type: 'group' as const,
+      position: group.position,
+      data: {
+        group,
+        selected: group.members.every((id) => selected.has(id)),
+        onSelect: selectGroup,
+      },
+      style: { width: group.width, height: group.height },
+      draggable: false,
+      selectable: false,
+      // Behind the cards and the edges, which is the only thing that makes it a frame.
+      zIndex: -1,
+    }))
+
+    const cards: IssueNode[] = graph.nodes.map((node) => {
+      const highlighted =
+        highlight.size > 0 && node.allLabels.some((label) => highlight.has(label))
+      return {
         id: node.id,
         type: 'issue' as const,
         position: node.position,
-        data: { node },
+        data: {
+          node,
+          selected: selected.has(node.id),
+          hidden: hidden.has(node.id),
+          highlighted,
+          faded: highlight.size > 0 && !highlighted,
+          onToggleSelect: toggleSelect,
+          onToggleHidden: toggleHidden,
+          onOpen: openExternal,
+        },
+        // The height is the card's own, computed from its title, so React Flow measures and packs
+        // the node exactly as the layout assumed.
+        style: { width: NODE_WIDTH, height: node.height },
         draggable: false,
-      })),
-    [graph],
-  )
+      }
+    })
+
+    return [...frames, ...cards]
+  }, [
+    graph,
+    selected,
+    hidden,
+    highlight,
+    selectGroup,
+    toggleSelect,
+    toggleHidden,
+    openExternal,
+  ])
 
   const edges = useMemo<Edge[]>(
     () =>
-      graph.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.source,
-        target: edge.target,
-        type: 'default',
-        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-      })),
-    [graph],
+      graph.edges.map((edge) => {
+        const dimmed = hidden.has(edge.source) || hidden.has(edge.target)
+        const lit = !dimmed && (selected.has(edge.source) || selected.has(edge.target))
+        return {
+          id: edge.id,
+          source: edge.source,
+          target: edge.target,
+          type: EDGE_TYPE,
+          pathOptions: { borderRadius: EDGE_RADIUS },
+          className: dimmed ? 'edge--dim' : lit ? 'edge--lit' : undefined,
+          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+        }
+      }),
+    [graph, selected, hidden],
   )
+
+  /** What the drawn graph occupies, which both the pan bound and the zoom floor are built on. */
+  const bounds = useMemo(() => {
+    const lefts = graph.nodes.map((node) => node.position.x)
+    const tops = graph.nodes.map((node) => node.position.y)
+    const rights = graph.nodes.map((node) => node.position.x + NODE_WIDTH)
+    const bottoms = graph.nodes.map((node) => node.position.y + node.height)
+    for (const group of graph.groups) {
+      lefts.push(group.position.x)
+      tops.push(group.position.y)
+      rights.push(group.position.x + group.width)
+      bottoms.push(group.position.y + group.height)
+    }
+    const left = Math.min(...lefts)
+    const top = Math.min(...tops)
+    const right = Math.max(...rights)
+    const bottom = Math.max(...bottoms)
+    return { left, top, right, bottom, width: right - left, height: bottom - top }
+  }, [graph])
+
+  /**
+   * Panning stops a screen's worth past the graph, and zooming out stops just past the point where
+   * the whole graph is on screen. Both exist for the same reason: an unbounded canvas lets one
+   * gesture put the graph somewhere the reader then has to hunt for.
+   */
+  const translateExtent = useMemo<[[number, number], [number, number]]>(() => {
+    const margin = Math.max(PAN_MARGIN_MIN, Math.max(bounds.width, bounds.height) * PAN_MARGIN_SHARE)
+    return [
+      [bounds.left - margin, bounds.top - margin],
+      [bounds.right + margin, bounds.bottom + margin],
+    ]
+  }, [bounds])
+
+  const minZoom = useMemo(() => {
+    const fits = Math.min(
+      viewport.width / (bounds.width + FIT_PADDING),
+      viewport.height / (bounds.height + FIT_PADDING),
+    )
+    // A little past "everything is visible", and never so far that fitView cannot reach its own
+    // zoom, which would leave the graph unable to open at all.
+    return Math.min(1, Math.max(ABSOLUTE_MIN_ZOOM, fits * ZOOM_OUT_ALLOWANCE))
+  }, [bounds, viewport])
+
+  const selectedCount = selected.size
+  // Offering "hide" for a selection that is already hidden, or the reverse, is a control that does
+  // nothing when pressed. Unhiding one card needs no bar at all: the card keeps its own eye.
+  const canHide = [...selected].some((id) => !hidden.has(id))
+  const canShow = [...selected].some((id) => hidden.has(id))
 
   return (
     <ReactFlow
@@ -120,206 +553,460 @@ function Canvas({
       edges={edges}
       nodeTypes={NODE_TYPES}
       fitView
-      minZoom={0.05}
+      minZoom={minZoom}
       maxZoom={2}
-      // Layout is automatic and every card is a link; dragging would only fight the click target.
+      translateExtent={translateExtent}
+      // Layout is automatic; dragging a card would only fight the controls it carries.
       nodesDraggable={false}
       nodesConnectable={false}
       edgesFocusable={false}
+      // The React Flow watermark is not part of this page's chrome; the credit is in the README.
+      proOptions={{ hideAttribution: true }}
+      onPaneClick={() => setSelected(new Set())}
       aria-label={`Issue dependency graph for ${slug}`}
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
       <Panel position="top-left" className="bar">
-        <a className="bar__home" href={BASE} title="All repositories">
-          ←
+        <a className="bar__link" href={BASE} data-tip="Choose another repository">
+          <Icon name="graph" />
+          <span>Issue dependencies</span>
         </a>
-        <a
+        <span className="bar__divider" />
+        <button
           className="bar__slug"
-          href={`https://github.com/${slug}`}
-          target="_blank"
-          rel="noopener noreferrer"
+          type="button"
+          data-tip="Open this repository on GitHub"
+          onClick={() => openExternal(`https://github.com/${slug}`, slug)}
         >
           {slug}
-        </a>
+          <Icon name="external" size={11} />
+        </button>
       </Panel>
 
       <Panel position="top-right" className="bar">
-        <button className="bar__button" type="button" onClick={() => void fitView()}>
-          Fit
+        <LabelPicker
+          labels={labelCounts}
+          active={highlight}
+          onToggle={toggleHighlight}
+          onClear={() => setHighlight(new Set())}
+        />
+        <span className="bar__divider" />
+        <button
+          className={`iconbutton${showClosed ? ' is-on' : ''}`}
+          type="button"
+          aria-pressed={showClosed}
+          aria-label={showClosed ? 'Hide closed blockers' : 'Show closed blockers'}
+          data-tip={
+            showClosed
+              ? 'Hide closed blockers'
+              : 'Show closed blockers · costs more requests the first time'
+          }
+          onClick={onToggleClosed}
+        >
+          <Icon name="issue-closed" />
         </button>
-        <button className="bar__button" type="button" onClick={onReload}>
-          Reload
+        <span className="bar__divider" />
+        <button
+          className="iconbutton"
+          type="button"
+          aria-label="Fit the graph to the screen"
+          data-tip="Fit to screen"
+          onClick={() => void fitView()}
+        >
+          <Icon name="fit" />
+        </button>
+        <button
+          className="iconbutton"
+          type="button"
+          aria-label="Read this repository from GitHub again"
+          data-tip="Reload from GitHub"
+          onClick={onReload}
+        >
+          <Icon name="reload" />
         </button>
       </Panel>
 
-      {!graph.complete && (
-        <Panel position="bottom-center" className="bar bar--warn">
-          <span role="status">
-            Incomplete
-            {graph.rateLimited ? `, rate limit resets ${formatReset(graph.rateLimitReset)}` : ''} —
-            no dependencies for {graph.unresolved.map((u) => `#${u.number}`).join(', ')}
-          </span>
+      {selectedCount > 0 && (
+        <Panel position="bottom-center" className="actions">
+          <span className="actions__count">{selectedCount} selected</span>
+          {canHide && (
+            <button
+              className="iconbutton"
+              type="button"
+              aria-label="Hide the selected issues"
+              data-tip="Hide the selected issues"
+              onClick={hideSelected}
+            >
+              <Icon name="eye-off" />
+            </button>
+          )}
+          {canShow && (
+            <button
+              className="iconbutton"
+              type="button"
+              aria-label="Show the selected issues"
+              data-tip="Show the selected issues"
+              onClick={showSelected}
+            >
+              <Icon name="eye" />
+            </button>
+          )}
+          <button
+            className="iconbutton"
+            type="button"
+            aria-label="Clear the selection"
+            data-tip="Clear the selection"
+            onClick={() => setSelected(new Set())}
+          >
+            <Icon name="close" />
+          </button>
         </Panel>
       )}
 
-      <Panel position="bottom-left" className="bar bar--legend">
-        {LEGEND.map(([state, text]) => (
-          <span key={state} className="key">
-            <i className={`key__dot key__dot--${state}`} />
-            {text}
-          </span>
-        ))}
-      </Panel>
-
-      <Panel position="bottom-right" className="bar bar--counts">
-        <span>
-          {graph.nodes.length} issues · {graph.edges.length} dependencies
-        </span>
-        <span className="bar__note" title="Outbound cross-repository edges are not fetched.">
-          native blocked-by only
-        </span>
+      <Panel position="bottom-right" className="info">
+        <div className="info__row">
+          <strong>{graph.nodes.length}</strong> issues · <strong>{graph.edges.length}</strong> deps ·{' '}
+          <strong>{graph.groups.length}</strong> groups
+        </div>
+        <div className="info__row info__row--muted">
+          {savedAt
+            ? `saved copy · ${describeAge(savedAt)}`
+            : `${data.requestCount} requests · ${budgetText(data.rateLimit)}`}
+        </div>
+        <div className="info__legend">
+          {[...OPEN_LEGEND, ...(showClosed ? CLOSED_LEGEND : [])].map(([state, text]) => (
+            <span key={state} className="key">
+              <i className={`key__dot key__dot--${state}`} />
+              {text}
+            </span>
+          ))}
+        </div>
+        {!graph.complete && (
+          <div className="info__warn" role="status">
+            Could not read the blockers of{' '}
+            {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
+            {graph.rateLimited
+              ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
+              : (graph.unresolved[0]?.reason ?? 'the request failed')}
+          </div>
+        )}
       </Panel>
     </ReactFlow>
   )
 }
 
-function GraphView({ target }: { target: RepoTarget }) {
-  const [reloadToken, setReloadToken] = useState(0)
-  const slug = `${target.owner}/${target.repo}`
-  const reload = useCallback(() => setReloadToken((token) => token + 1), [])
+/* Loading, budget gates, and the repository view --------------------------- */
 
-  // Keying on the reload token remounts the body, which resets it to loading without a
-  // synchronous setState inside the fetching effect.
-  return <GraphBody key={reloadToken} target={target} slug={slug} onReload={reload} />
-}
+type Phase =
+  | { kind: 'gate'; status: RateLimitStatus | null; checking: boolean }
+  | { kind: 'listing' }
+  | { kind: 'confirm'; cost: number; status: RateLimitStatus | null; decide: (ok: boolean) => void }
+  | { kind: 'resolving'; done: number; total: number }
+  | { kind: 'failed'; failure: LoadFailure }
+  /** `savedAt` is set when the data came from the local copy rather than from GitHub just now. */
+  | { kind: 'ready'; data: RepositoryGraphData; savedAt: Date | null }
 
-function GraphBody({
+function GraphView({
   target,
-  slug,
-  onReload,
+  onOpen,
 }: {
   target: RepoTarget
-  slug: string
-  onReload: () => void
+  onOpen: (target: RepoTarget) => void
 }) {
-  const [state, setState] = useState<ViewState>({ kind: 'loading', done: 0, total: 0 })
+  const [attempt, setAttempt] = useState(0)
+  const [note, setNote] = useState<string | null>(null)
+  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, false))
 
   useEffect(() => {
+    writeStored(SHOW_CLOSED_KEY, showClosed)
+  }, [showClosed])
+
+  const reload = useCallback((why: string | null = null) => {
+    setNote(why)
+    setAttempt((value) => value + 1)
+  }, [])
+
+  // Remounting on the attempt is what rewinds a load back to its gate, so no effect has to reach
+  // in and reset the phase by hand.
+  return (
+    <GraphLoad
+      key={attempt}
+      target={target}
+      note={note}
+      showClosed={showClosed}
+      onShowClosed={setShowClosed}
+      onReload={reload}
+      onOpen={onOpen}
+    />
+  )
+}
+
+function GraphLoad({
+  target,
+  note,
+  showClosed,
+  onShowClosed,
+  onReload,
+  onOpen,
+}: {
+  target: RepoTarget
+  note: string | null
+  showClosed: boolean
+  onShowClosed: (value: boolean) => void
+  onReload: (why?: string | null) => void
+  onOpen: (target: RepoTarget) => void
+}) {
+  const slug = slugOf(target)
+  const [phase, setPhase] = useState<Phase>({ kind: 'gate', status: null, checking: true })
+  // Read once per mount: the gate has to describe a copy that does not change under it.
+  const [cached] = useState<CachedGraph | null>(() => readCache(slug))
+  const abort = useRef<AbortController | null>(null)
+
+  // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
+  // can always open with real numbers instead of an assumption about what is left.
+  useEffect(() => {
     const controller = new AbortController()
-
-    loadRepositoryGraph(target, {
-      signal: controller.signal,
-      onProgress: ({ done, total }) => {
-        if (!controller.signal.aborted) setState({ kind: 'loading', done, total })
-      },
+    void readRateLimit({ signal: controller.signal }).then((status) => {
+      if (controller.signal.aborted) return
+      setPhase((current) =>
+        current.kind === 'gate' ? { ...current, status, checking: false } : current,
+      )
     })
-      .then((result) => {
-        if (controller.signal.aborted) return
-        setState(
-          result.ok
-            ? { kind: 'ready', graph: buildGraph(result.data, target) }
-            : { kind: 'failed', failure: result.failure },
-        )
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return
-        setState({
-          kind: 'failed',
-          failure: {
-            kind: 'network',
-            message: error instanceof Error ? error.message : 'The request failed.',
-          },
-        })
-      })
-
     return () => controller.abort()
   }, [target])
 
-  if (state.kind === 'loading') {
+  useEffect(() => () => abort.current?.abort(), [])
+
+  const start = useCallback(
+    (includeClosed: boolean) => {
+      abort.current?.abort()
+      const controller = new AbortController()
+      abort.current = controller
+      setPhase({ kind: 'listing' })
+
+      loadRepositoryGraph(target, {
+        signal: controller.signal,
+        includeClosed,
+        onProgress: ({ done, total }) => {
+          if (!controller.signal.aborted) setPhase({ kind: 'resolving', done, total })
+        },
+        confirmDependencies: async (cost) => {
+          const status = await readRateLimit({ signal: controller.signal })
+          if (controller.signal.aborted) return false
+          return new Promise<boolean>((resolve) => {
+            setPhase({ kind: 'confirm', cost, status, decide: resolve })
+          })
+        },
+      })
+        .then((result) => {
+          if (controller.signal.aborted) return
+          if (result.ok) {
+            rememberTarget(target)
+            writeCache(slug, result.data)
+            setPhase({ kind: 'ready', data: result.data, savedAt: null })
+          } else if (result.failure.kind === 'cancelled') {
+            onReload(null)
+          } else {
+            setPhase({ kind: 'failed', failure: result.failure })
+          }
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return
+          setPhase({
+            kind: 'failed',
+            failure: {
+              kind: 'network',
+              message: error instanceof Error ? error.message : 'The request failed.',
+            },
+          })
+        })
+    },
+    [target, slug, onReload],
+  )
+
+  const graph = useMemo(
+    () => (phase.kind === 'ready' ? buildGraph(phase.data, target, { showClosed }) : null),
+    [phase, target, showClosed],
+  )
+
+  const toggleClosed = useCallback(() => {
+    const next = !showClosed
+    onShowClosed(next)
+    // Drawing closed blockers needs the wider dependency read; hiding them never does.
+    if (next && phase.kind === 'ready' && !phase.data.includedClosed) {
+      onReload('Closed blockers were not read yet, so showing them needs another read.')
+    }
+  }, [showClosed, phase, onShowClosed, onReload])
+
+  if (phase.kind === 'ready' && graph && graph.nodes.length > 0) {
     return (
-      <Centred
-        title={slug}
-        body={
-          state.total > 0
-            ? `Resolving dependencies, ${state.done} of ${state.total}.`
-            : 'Listing open issues.'
-        }
-      />
+      <ReactFlowProvider>
+        <Canvas
+          key={`${slug}:${showClosed}`}
+          graph={graph}
+          slug={slug}
+          data={phase.data}
+          savedAt={phase.savedAt}
+          showClosed={showClosed}
+          onToggleClosed={toggleClosed}
+          onReload={() => onReload()}
+        />
+      </ReactFlowProvider>
     )
   }
 
-  if (state.kind === 'failed') {
-    const { title, body } = failureText(target, state.failure)
-    return <Centred title={title} body={body} onRetry={onReload} />
-  }
-
-  if (state.graph.nodes.length === 0) {
-    return (
-      <Centred title={slug} body="This repository has no open issues to draw." onRetry={onReload} />
-    )
-  }
-
+  // Everything short of a drawn graph stays on the page the repository was chosen from.
   return (
-    <ReactFlowProvider>
-      <Canvas graph={state.graph} slug={slug} onReload={onReload} />
-    </ReactFlowProvider>
+    <Start initial={slug} onOpen={onOpen}>
+      {phase.kind === 'gate' && (
+        <>
+          {note && <p className="notice">{note}</p>}
+          <dl className="facts">
+            <Fact
+              label="Budget"
+              value={phase.checking ? '…' : budgetParts(phase.status).main}
+              note={phase.checking ? undefined : budgetParts(phase.status).sub}
+            />
+            {cached && (
+              <Fact
+                label="Saved copy"
+                value={describeAge(cached.savedAt)}
+                note="costs nothing to open"
+              />
+            )}
+          </dl>
+          <p className="stage__note">
+            Reading costs GitHub requests: 1 per 100 issues, then 1 per issue with blockers.
+          </p>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={showClosed}
+              onChange={(event) => onShowClosed(event.target.checked)}
+            />
+            include closed blockers · costs more requests
+          </label>
+          <div className="stage__actions">
+            <button
+              className={cached ? 'button' : 'button button--primary'}
+              type="button"
+              disabled={phase.checking}
+              data-tip="Read this repository from GitHub now, spending requests"
+              onClick={() => start(showClosed)}
+            >
+              <Icon name="reload" size={12} /> Fetch now
+            </button>
+            {cached && (
+              <button
+                className="button button--primary"
+                type="button"
+                data-tip="Draw the copy already in this browser, spending no requests"
+                onClick={() =>
+                  setPhase({ kind: 'ready', data: cached.data, savedAt: cached.savedAt })
+                }
+              >
+                <Icon name="clock" size={12} /> Open saved copy
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {phase.kind === 'confirm' && (
+        <>
+          <dl className="facts">
+            <Fact
+              label="Budget"
+              value={budgetParts(phase.status).main}
+              note={
+                phase.status === null
+                  ? budgetParts(phase.status).sub
+                  : `${Math.max(0, phase.status.remaining - phase.cost)} left after this`
+              }
+            />
+          </dl>
+          <p className="stage__note">
+            {phase.cost} {phase.cost === 1 ? 'issue has' : 'issues have'} blockers, one request
+            each.
+          </p>
+          {phase.status !== null && phase.status.remaining < phase.cost && (
+            <p className="notice notice--error">
+              More than the budget has left. The graph will come back incomplete, and will say so.
+            </p>
+          )}
+          <div className="stage__actions">
+            <button
+              className="button"
+              type="button"
+              data-tip="Stop here and spend nothing more"
+              onClick={() => phase.decide(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="button button--primary"
+              type="button"
+              data-tip={`Read the dependencies, spending ${phase.cost} requests`}
+              onClick={() => phase.decide(true)}
+            >
+              Spend {phase.cost}
+            </button>
+          </div>
+        </>
+      )}
+
+      {(phase.kind === 'listing' || phase.kind === 'resolving') && (
+        <p className="stage__note stage__note--busy">
+          {phase.kind === 'listing'
+            ? 'Listing open issues…'
+            : `Reading dependencies, ${phase.done} of ${phase.total}…`}
+        </p>
+      )}
+
+      {phase.kind === 'failed' && (
+        <>
+          <p className="notice notice--error">
+            <strong>{failureText(target, phase.failure).title}.</strong>{' '}
+            {failureText(target, phase.failure).body}
+          </p>
+          <div className="stage__actions">
+            <button
+              className="button button--primary"
+              type="button"
+              data-tip="Start over from the budget"
+              onClick={() => onReload()}
+            >
+              Try again
+            </button>
+          </div>
+        </>
+      )}
+
+      {phase.kind === 'ready' && (
+        <>
+          <p className="stage__note">No open issues to draw.</p>
+          <div className="stage__actions">
+            <button
+              className="button button--primary"
+              type="button"
+              data-tip="Start over from the budget"
+              onClick={() => onReload()}
+            >
+              Read again
+            </button>
+          </div>
+        </>
+      )}
+    </Start>
   )
 }
 
-function Index({ onOpen, message }: { onOpen: (target: RepoTarget) => void; message?: string }) {
-  const [value, setValue] = useState('')
-  const [error, setError] = useState<string | null>(null)
-
-  return (
-    <div className="centre">
-      <div className="index">
-        <h1 className="index__title">Issue dependencies</h1>
-        <p className="index__lead">
-          A dependency graph for any public GitHub repository, from native issue relationships.
-          Nothing is installed in the repository you point it at.
-        </p>
-
-        {message && <p className="index__error">{message}</p>}
-
-        <form
-          className="index__form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            const target = parseTargetInput(value)
-            if (!target) {
-              setError('Enter a repository as owner/name.')
-              return
-            }
-            setError(null)
-            onOpen(target)
-          }}
-        >
-          <input
-            className="index__input"
-            value={value}
-            placeholder={`${DEFAULT_OWNER}/tabelo`}
-            aria-label="Repository"
-            onChange={(event) => setValue(event.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <button className="index__go" type="submit">
-            Open
-          </button>
-        </form>
-        {error && <p className="index__error">{error}</p>}
-
-        <p className="index__url">
-          <code>{BASE}dependencies/owner/repo</code>
-        </p>
-      </div>
-    </div>
-  )
-}
+/* Router ------------------------------------------------------------------ */
 
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname)
+  const [pending, setPending] = useState<PendingLink | null>(null)
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
@@ -337,9 +1024,16 @@ export function App() {
     (target: RepoTarget) => navigate(pathForTarget(target, BASE)),
     [navigate],
   )
+  const openExternal = useCallback((url: string, label: string) => setPending({ url, label }), [])
 
-  if (route.kind === 'graph') {
-    return <GraphView key={`${route.target.owner}/${route.target.repo}`} target={route.target} />
-  }
-  return <Index onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
+  return (
+    <OpenExternalContext.Provider value={openExternal}>
+      {route.kind === 'graph' ? (
+        <GraphView key={slugOf(route.target)} target={route.target} onOpen={openTarget} />
+      ) : (
+        <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
+      )}
+      {pending && <ExternalConfirm pending={pending} onClose={() => setPending(null)} />}
+    </OpenExternalContext.Provider>
+  )
 }

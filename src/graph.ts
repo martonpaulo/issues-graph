@@ -10,9 +10,56 @@ import type { RepoTarget } from './route'
  * so a body claiming "depends on #123" cannot invent an edge.
  */
 
-/** Fixed so layout is predictable; the card clamps its title to fit. */
+/** Every card is the same width; the height follows its title. */
 export const NODE_WIDTH = 232
-export const NODE_HEIGHT = 92
+
+/**
+ * A card is as tall as its title needs, between one line and five, and no taller.
+ *
+ * Uniform cards waste a column of empty space on short titles and truncate long ones at the same
+ * time. The count is estimated from the text rather than measured, because this module is pure and
+ * has to produce the same layout in a test as in a browser; the estimate is deliberately generous,
+ * since a line too many only adds slack while a line too few would clip the title.
+ */
+export const MAX_TITLE_LINES = 5
+const TITLE_LINE_HEIGHT = 17
+/** Characters that fit on one line at 232px wide, 12.5px Inter, minus the card's padding. */
+const TITLE_CHARS_PER_LINE = 33
+/** Border, padding, the number/state row, and the gap under it. Mirrors `.card` in styles.css. */
+const CARD_CHROME = 38
+/** Comfortable gap under the title, plus the row of label chips. */
+const LABELS_BLOCK = 28
+
+export function titleLineCount(title: string, perLine = TITLE_CHARS_PER_LINE): number {
+  const words = title.trim().split(/\s+/).filter((word) => word.length > 0)
+  if (words.length === 0) return 1
+
+  let lines = 1
+  let used = 0
+  for (const word of words) {
+    const needed = used === 0 ? word.length : used + 1 + word.length
+    if (used > 0 && needed > perLine) {
+      lines += 1
+      used = word.length
+    } else {
+      used = needed
+    }
+    // A single word longer than the line wraps inside itself.
+    while (used > perLine) {
+      lines += 1
+      used -= perLine
+    }
+  }
+
+  return Math.min(MAX_TITLE_LINES, Math.max(1, lines))
+}
+
+export function cardHeight(titleLines: number, hasLabels: boolean): number {
+  return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + (hasLabels ? LABELS_BLOCK : 0)
+}
+
+/** The tallest a card can get, which is what a bounding estimate has to assume. */
+export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, true)
 
 export type IssueState = 'ready' | 'blocked' | 'attention' | 'completed' | 'not-planned'
 
@@ -25,7 +72,13 @@ export interface GraphNode {
   state: IssueState
   /** True when the issue lives in another repository and was reached as a blocker. */
   external: boolean
+  /** The few labels the card has room to show. */
   labels: ParsedLabel[]
+  /** Every label on the issue, which is what the highlight picker offers. */
+  allLabels: string[]
+  /** Lines the title is allowed, and the height that leaves the card. */
+  titleLines: number
+  height: number
   position: { x: number; y: number }
 }
 
@@ -36,9 +89,27 @@ export interface GraphEdge {
   target: string
 }
 
+/**
+ * A frame drawn behind a set of cards.
+ *
+ * `chain` is one weakly-connected set of dependencies: work that has to be finished as a unit, in
+ * the order the arrows give. `free` is everything with no dependency at all, which can be picked
+ * up in any order.
+ */
+export interface GraphGroup {
+  id: string
+  kind: 'chain' | 'free'
+  label: string
+  members: string[]
+  position: { x: number; y: number }
+  width: number
+  height: number
+}
+
 export interface IssueGraph {
   nodes: GraphNode[]
   edges: GraphEdge[]
+  groups: GraphGroup[]
   /** False when any dependency could not be read. The canvas must say so rather than imply whole. */
   complete: boolean
   unresolved: UnresolvedDependency[]
@@ -55,6 +126,10 @@ export function repoOf(repositoryUrl: string): string {
 
 export function nodeId(repo: string, number: number): string {
   return `${repo}#${number}`
+}
+
+export function isOpen(issue: IssuePayload): boolean {
+  return issue.state !== 'closed'
 }
 
 /**
@@ -74,6 +149,8 @@ export function deriveState(issue: IssuePayload): IssueState {
 
 function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
   const repo = repoOf(issue.repository_url)
+  const labels = cardLabels(issue.labels)
+  const titleLines = titleLineCount(issue.title)
   return {
     id: nodeId(repo, issue.number),
     number: issue.number,
@@ -82,14 +159,21 @@ function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
     repo,
     state: deriveState(issue),
     external: repo !== `${target.owner}/${target.repo}`,
-    labels: cardLabels(issue.labels),
+    labels,
+    allLabels: issue.labels.map((label) => label.name),
+    titleLines,
+    height: cardHeight(titleLines, labels.length > 0),
     position: { x: 0, y: 0 },
   }
 }
 
 /** Space between cards in the grid, and between packed components. */
 const GRID_GAP = 20
-const COMPONENT_GAP = 56
+const COMPONENT_GAP = 76
+
+/** Breathing room inside a group frame, and the strip its label sits in above the cards. */
+export const GROUP_PADDING = 14
+export const GROUP_LABEL_HEIGHT = 24
 
 /** Roughly 16:9. Layout aims for this so the whole graph fits a screen after fit-to-view. */
 const TARGET_ASPECT = 1.9
@@ -149,20 +233,21 @@ function layoutComponent(nodes: GraphNode[], edges: GraphEdge[], maxWidth: numbe
   g.setDefaultEdgeLabel(() => ({}))
 
   const ids = new Set(nodes.map((node) => node.id))
-  for (const node of nodes) g.setNode(node.id, { width: NODE_WIDTH, height: NODE_HEIGHT })
+  for (const node of nodes) g.setNode(node.id, { width: NODE_WIDTH, height: node.height })
   for (const edge of edges) {
     if (ids.has(edge.source) && ids.has(edge.target)) g.setEdge(edge.source, edge.target)
   }
 
   dagre.layout(g)
 
-  // Group by rank, keeping dagre's left-to-right order inside each one.
-  const ranks = new Map<number, { id: string; x: number }[]>()
+  // Group by rank, keeping dagre's left-to-right order inside each one. dagre centres every node
+  // of a rank on the same line, so the rounded centre is the rank key even with mixed heights.
+  const ranks = new Map<number, { id: string; x: number; height: number }[]>()
   for (const node of nodes) {
     const laid = g.node(node.id)
     const rank = Math.round(laid?.y ?? 0)
     const row = ranks.get(rank)
-    const entry = { id: node.id, x: laid?.x ?? 0 }
+    const entry = { id: node.id, x: laid?.x ?? 0, height: node.height }
     if (row) row.push(entry)
     else ranks.set(rank, [entry])
   }
@@ -175,55 +260,89 @@ function layoutComponent(nodes: GraphNode[], edges: GraphEdge[], maxWidth: numbe
   for (const rank of [...ranks.keys()].sort((a, b) => a - b)) {
     const row = ranks.get(rank)!.sort((a, b) => a.x - b.x)
     const perRow = Math.min(columns, row.length)
-    const subRows = Math.ceil(row.length / perRow)
+    let y = cursorY
 
-    row.forEach((entry, index) => {
-      const column = index % perRow
-      const subRow = Math.floor(index / perRow)
+    for (let start = 0; start < row.length; start += perRow) {
+      const sub = row.slice(start, start + perRow)
       // Centre each sub-row so a wrapped fan still reads as one group under its blocker.
-      const count = Math.min(perRow, row.length - subRow * perRow)
-      const rowWidth = count * NODE_WIDTH + (count - 1) * 24
+      const rowWidth = sub.length * NODE_WIDTH + (sub.length - 1) * 24
       const offset = (perRow * NODE_WIDTH + (perRow - 1) * 24 - rowWidth) / 2
-      const x = offset + column * (NODE_WIDTH + 24)
-      positions.set(entry.id, { x, y: cursorY + subRow * (NODE_HEIGHT + SUBROW_GAP) })
-      width = Math.max(width, x + NODE_WIDTH)
-    })
+      let tallest = 0
 
-    cursorY += subRows * NODE_HEIGHT + (subRows - 1) * SUBROW_GAP + RANK_GAP
+      sub.forEach((entry, index) => {
+        const x = offset + index * (NODE_WIDTH + 24)
+        positions.set(entry.id, { x, y })
+        width = Math.max(width, x + NODE_WIDTH)
+        tallest = Math.max(tallest, entry.height)
+      })
+
+      y += tallest + SUBROW_GAP
+    }
+
+    cursorY = y - SUBROW_GAP + RANK_GAP
   }
 
   return { width, height: Math.max(0, cursorY - RANK_GAP), positions }
 }
 
-/** Packs every dependency-free issue into one block instead of one very long rank. */
+/**
+ * Packs every dependency-free issue into one block instead of one very long rank.
+ *
+ * Cards vary in height, so this fills the shortest column each time rather than laying out a rigid
+ * grid: a strict grid would leave a ragged gap under every short card in a row.
+ */
 function gridBox(nodes: GraphNode[], columns: number): Box {
+  const used = Math.max(1, Math.min(columns, nodes.length))
+  const columnHeights = new Array<number>(used).fill(0)
   const positions = new Map<string, { x: number; y: number }>()
-  nodes.forEach((node, index) => {
+
+  for (const node of nodes) {
+    let column = 0
+    for (let index = 1; index < used; index += 1) {
+      if (columnHeights[index] < columnHeights[column]) column = index
+    }
     positions.set(node.id, {
-      x: (index % columns) * (NODE_WIDTH + GRID_GAP),
-      y: Math.floor(index / columns) * (NODE_HEIGHT + GRID_GAP),
+      x: column * (NODE_WIDTH + GRID_GAP),
+      y: columnHeights[column],
     })
-  })
-  const rows = Math.ceil(nodes.length / columns)
-  const used = Math.min(columns, nodes.length)
+    columnHeights[column] += node.height + GRID_GAP
+  }
+
   return {
     width: used * NODE_WIDTH + (used - 1) * GRID_GAP,
-    height: rows * NODE_HEIGHT + (rows - 1) * GRID_GAP,
+    height: Math.max(0, Math.max(...columnHeights) - GRID_GAP),
     positions,
   }
 }
 
+function groupLabel(kind: GraphGroup['kind'], count: number): string {
+  const issues = `${count} issue${count === 1 ? '' : 's'}`
+  // The two frames mean opposite things, so each says which it is rather than leaving the reader
+  // to infer it from a border style.
+  return kind === 'chain'
+    ? `Chain · ${issues}, one order`
+    : `Independent · ${issues}, any order`
+}
+
+export interface Layout {
+  nodes: GraphNode[]
+  groups: GraphGroup[]
+}
+
 /**
- * Lays the graph out as packed components rather than as one dagre run.
+ * Lays the graph out as packed components rather than as one dagre run, and frames each one.
  *
  * dagre places every weakly-connected component on the same rank line, so a backlog of many small
  * independent chains opens as one enormous row: martonpaulo/tabelo measured 10112x592, an aspect of
  * 17:1, with 31 cards on a single rank. Ranking each component on its own and then shelf-packing
  * the results turns the same graph into something close to a screen shape, and every dependency
  * chain stays intact and readable inside its own block.
+ *
+ * The frames are the answer to "what can be picked up together": one frame is one connected piece
+ * of work, and the last frame holds everything that depends on nothing.
  */
-export function layout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
-  if (nodes.length === 0) return nodes
+export function layout(nodes: GraphNode[], edges: GraphEdge[]): Layout {
+  if (nodes.length === 0) return { nodes, groups: [] }
 
   const components = componentsOf(nodes, edges)
   const structured = components.filter((group) => group.length > 1)
@@ -233,7 +352,10 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
   // and a wide fan naturally broad, and a target guessed from the node count alone gets both wrong.
   const natural = structured.map((group) => layoutComponent(group, edges, Infinity))
   const naturalArea = natural.reduce((sum, box) => sum + box.width * box.height, 0)
-  const singlesArea = singles.length * (NODE_WIDTH + GRID_GAP) * (NODE_HEIGHT + GRID_GAP)
+  const singlesArea = singles.reduce(
+    (sum, node) => sum + (NODE_WIDTH + GRID_GAP) * (node.height + GRID_GAP),
+    0,
+  )
   const target = Math.max(
     NODE_WIDTH * 4,
     Math.sqrt(Math.max(naturalArea + singlesArea, 1) * TARGET_ASPECT),
@@ -248,11 +370,12 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
     .sort((a, b) => b.group.length - a.group.length || b.box.height - a.box.height)
 
   const placed = new Map<string, { x: number; y: number }>()
+  const groups: GraphGroup[] = []
   let cursorX = 0
   let cursorY = 0
   let rowHeight = 0
 
-  const place = (box: Box) => {
+  const place = (box: Box, members: GraphNode[], kind: GraphGroup['kind']) => {
     if (cursorX > 0 && cursorX + box.width > target) {
       cursorX = 0
       cursorY += rowHeight + COMPONENT_GAP
@@ -261,11 +384,37 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
     for (const [id, position] of box.positions) {
       placed.set(id, { x: cursorX + position.x, y: cursorY + position.y })
     }
+
+    // The frame is measured from where the cards actually landed, so a ragged block is enclosed
+    // exactly rather than by the box the packer reserved for it.
+    let left = Infinity
+    let top = Infinity
+    let right = -Infinity
+    let bottom = -Infinity
+    for (const node of members) {
+      const position = placed.get(node.id)!
+      left = Math.min(left, position.x)
+      top = Math.min(top, position.y)
+      right = Math.max(right, position.x + NODE_WIDTH)
+      bottom = Math.max(bottom, position.y + node.height)
+    }
+
+    const ids = members.map((node) => node.id).sort()
+    groups.push({
+      id: `group:${ids[0]}`,
+      kind,
+      label: groupLabel(kind, members.length),
+      members: ids,
+      position: { x: left - GROUP_PADDING, y: top - GROUP_PADDING - GROUP_LABEL_HEIGHT },
+      width: right - left + GROUP_PADDING * 2,
+      height: bottom - top + GROUP_PADDING * 2 + GROUP_LABEL_HEIGHT,
+    })
+
     cursorX += box.width + COMPONENT_GAP
     rowHeight = Math.max(rowHeight, box.height)
   }
 
-  for (const { box } of boxes) place(box)
+  for (const { box, group } of boxes) place(box, group, 'chain')
 
   if (singles.length > 0) {
     const columns = Math.max(1, Math.floor((target + GRID_GAP) / (NODE_WIDTH + GRID_GAP)))
@@ -275,15 +424,34 @@ export function layout(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] {
       cursorY += rowHeight + COMPONENT_GAP
       rowHeight = 0
     }
-    place(gridBox(singles, columns))
+    place(gridBox(singles, columns), singles, 'free')
   }
 
-  return nodes.map((node) => ({ ...node, position: placed.get(node.id) ?? node.position }))
+  return {
+    nodes: nodes.map((node) => ({ ...node, position: placed.get(node.id) ?? node.position })),
+    groups,
+  }
 }
 
-export function buildGraph(data: RepositoryGraphData, target: RepoTarget): IssueGraph {
+export interface BuildOptions {
+  /**
+   * Draws closed blockers and the edges into them. Off by default: a finished blocker no longer
+   * blocks, so the issue it used to block belongs with the work that is ready to start, and a
+   * backlog reads as what is left to do rather than as what has already happened.
+   */
+  showClosed?: boolean
+}
+
+export function buildGraph(
+  data: RepositoryGraphData,
+  target: RepoTarget,
+  options: BuildOptions = {},
+): IssueGraph {
+  const showClosed = options.showClosed === true
   const nodes = new Map<string, GraphNode>()
+  // The list is of open issues; this guards the invariant rather than expecting to drop anything.
   for (const issue of data.issues) {
+    if (!isOpen(issue)) continue
     const node = toNode(issue, target)
     nodes.set(node.id, node)
   }
@@ -296,6 +464,8 @@ export function buildGraph(data: RepositoryGraphData, target: RepoTarget): Issue
     if (!nodes.has(targetId)) continue
 
     for (const blocker of blockers) {
+      if (!showClosed && !isOpen(blocker)) continue
+
       // A blocker in another repository is not in the issue list, so it joins the graph here.
       const blockerNode = toNode(blocker, target)
       if (!nodes.has(blockerNode.id)) nodes.set(blockerNode.id, blockerNode)
@@ -307,9 +477,12 @@ export function buildGraph(data: RepositoryGraphData, target: RepoTarget): Issue
     }
   }
 
+  const laid = layout([...nodes.values()], edges)
+
   return {
-    nodes: layout([...nodes.values()], edges),
+    nodes: laid.nodes,
     edges,
+    groups: laid.groups,
     complete: data.complete,
     unresolved: data.unresolved,
     rateLimited: data.rateLimited,

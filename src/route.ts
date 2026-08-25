@@ -1,11 +1,12 @@
 /**
  * Repository selection lives entirely in the URL: the viewer never ships per-repository code.
  *
- *   /dependencies/:owner/:repo   canonical
- *   /dependencies/:repo          owner defaults to DEFAULT_OWNER
+ *   /dependencies/:owner/:repo
+ *
+ * The owner is always written out. A one-segment shorthand that defaulted to a particular owner
+ * made a shared link mean different things depending on who deployed the site, and hid the fact
+ * that the viewer reads any public repository, not one account's.
  */
-
-export const DEFAULT_OWNER = 'martonpaulo'
 
 export interface RepoTarget {
   owner: string
@@ -47,35 +48,36 @@ export function parseRoute(pathname: string, base: string): Route {
 
   const rest = segments.slice(1)
   if (rest.length === 0) return { kind: 'index' }
-  if (rest.length > 2) {
-    return { kind: 'invalid', reason: 'A dependency URL names at most an owner and a repository.' }
+  if (rest.length !== 2) {
+    return { kind: 'invalid', reason: 'A dependency URL names an owner and a repository.' }
   }
 
-  const owner = rest.length === 2 ? rest[0] : DEFAULT_OWNER
-  const repo = rest.length === 2 ? rest[1] : rest[0]
-
+  const [owner, repo] = rest
   if (!isName(owner)) return { kind: 'invalid', reason: `"${owner}" is not a valid owner name.` }
   if (!isName(repo)) return { kind: 'invalid', reason: `"${repo}" is not a valid repository name.` }
 
   return { kind: 'graph', target: { owner, repo } }
 }
 
-/** Builds the canonical path for a target, always including the owner. */
+/** Builds the canonical path for a target. */
 export function pathForTarget(target: RepoTarget, base: string): string {
   const normalisedBase = base.endsWith('/') ? base : `${base}/`
   return `${normalisedBase}dependencies/${target.owner}/${target.repo}`
 }
 
-/** Accepts `owner/repo` or a bare `repo` as typed into the index form. */
+export function slugOf(target: RepoTarget): string {
+  return `${target.owner}/${target.repo}`
+}
+
+/** Accepts `owner/repo`, or the same thing pasted as a github.com URL. */
 export function parseTargetInput(input: string): RepoTarget | null {
   const trimmed = input.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\/+$/, '')
   if (trimmed.length === 0) return null
 
   const parts = trimmed.split('/')
-  if (parts.length > 2) return null
+  if (parts.length !== 2) return null
 
-  const owner = parts.length === 2 ? parts[0] : DEFAULT_OWNER
-  const repo = parts.length === 2 ? parts[1] : parts[0]
+  const [owner, repo] = parts
   if (!isName(owner) || !isName(repo)) return null
 
   return { owner, repo }

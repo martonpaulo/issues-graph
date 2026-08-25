@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { DEFAULT_OWNER, parseRoute, parseTargetInput, pathForTarget, segmentsOf } from './route'
+import { parseRoute, parseTargetInput, pathForTarget, segmentsOf, slugOf } from './route'
 
 const BASE = '/agent-workflows/'
 
@@ -12,10 +12,10 @@ describe('parseRoute', () => {
     })
   })
 
-  it('defaults the owner when only a repository is named', () => {
+  it('rejects a bare repository, because the owner is never assumed', () => {
     expect(parseRoute(`${BASE}dependencies/tabelo`, BASE)).toEqual({
-      kind: 'graph',
-      target: { owner: DEFAULT_OWNER, repo: 'tabelo' },
+      kind: 'invalid',
+      reason: 'A dependency URL names an owner and a repository.',
     })
   })
 
@@ -36,10 +36,10 @@ describe('parseRoute', () => {
     }
   })
 
-  it('tolerates a trailing slash, which collapses to the single-segment form', () => {
-    expect(parseRoute(`${BASE}dependencies/tabelo/`, BASE)).toEqual({
+  it('tolerates a trailing slash', () => {
+    expect(parseRoute(`${BASE}dependencies/acme/app/`, BASE)).toEqual({
       kind: 'graph',
-      target: { owner: DEFAULT_OWNER, repo: 'tabelo' },
+      target: { owner: 'acme', repo: 'app' },
     })
   })
 
@@ -66,7 +66,7 @@ describe('segmentsOf', () => {
 })
 
 describe('pathForTarget', () => {
-  it('always writes the owner, so a shared link never depends on the default', () => {
+  it('writes owner and repository', () => {
     expect(pathForTarget({ owner: 'acme', repo: 'app' }, BASE)).toBe(
       '/agent-workflows/dependencies/acme/app',
     )
@@ -78,16 +78,23 @@ describe('pathForTarget', () => {
   })
 })
 
+describe('slugOf', () => {
+  it('joins the target the way GitHub writes it', () => {
+    expect(slugOf({ owner: 'acme', repo: 'app' })).toBe('acme/app')
+  })
+})
+
 describe('parseTargetInput', () => {
-  it('accepts owner/repo, a bare repo, and a pasted GitHub URL', () => {
+  it('accepts owner/repo and a pasted GitHub URL', () => {
     expect(parseTargetInput('acme/app')).toEqual({ owner: 'acme', repo: 'app' })
-    expect(parseTargetInput('  tabelo ')).toEqual({ owner: DEFAULT_OWNER, repo: 'tabelo' })
+    expect(parseTargetInput('  acme/app ')).toEqual({ owner: 'acme', repo: 'app' })
     expect(parseTargetInput('https://github.com/acme/app/')).toEqual({ owner: 'acme', repo: 'app' })
   })
 
-  it('rejects empty and malformed input', () => {
+  it('rejects empty, malformed, and owner-less input', () => {
     expect(parseTargetInput('')).toBeNull()
     expect(parseTargetInput('a/b/c')).toBeNull()
     expect(parseTargetInput('bad name')).toBeNull()
+    expect(parseTargetInput('tabelo')).toBeNull()
   })
 })

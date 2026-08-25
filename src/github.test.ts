@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import rawIssue from './__fixtures__/agent-workflows.raw-issue.json'
-import { type IssuePayload, loadRepositoryGraph, nextPageUrl } from './github'
+import {
+  issuesNeedingBlockers,
+  loadRepositoryGraph,
+  nextPageUrl,
+  readRateLimit,
+  searchRepositories,
+  type IssuePayload,
+} from './github'
 
 const TARGET = { owner: 'acme', repo: 'app' }
 
-function issue(number: number, totalBlockedBy = 0): IssuePayload {
+function issue(number: number, blockedBy = 0, totalBlockedBy = blockedBy): IssuePayload {
   return {
     number,
     title: `Issue ${number}`,
@@ -15,7 +22,7 @@ function issue(number: number, totalBlockedBy = 0): IssuePayload {
     repository_url: 'https://api.github.com/repos/acme/app',
     labels: [],
     issue_dependencies_summary: {
-      blocked_by: totalBlockedBy,
+      blocked_by: blockedBy,
       total_blocked_by: totalBlockedBy,
       blocking: 0,
       total_blocking: 0,
@@ -161,7 +168,9 @@ describe('loadRepositoryGraph', () => {
     expect(result.data.unresolved.map((u) => u.number)).toEqual([1, 2, 3])
   })
 
-  it('marks the graph incomplete when fewer blockers come back than GitHub counted', async () => {
+  it('stays complete when GitHub\'s own count disagrees with the list it returned', async () => {
+    // A blocker in a repository this reader cannot see is counted in the summary and absent from
+    // the list. Everything readable was read, so there is nothing to report.
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       if (String(url).includes('/dependencies/blocked_by')) return json([])
       return json([issue(1, 2)])
@@ -171,8 +180,8 @@ describe('loadRepositoryGraph', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    expect(result.data.complete).toBe(false)
-    expect(result.data.unresolved[0].reason).toContain('2 blockers')
+    expect(result.data.complete).toBe(true)
+    expect(result.data.unresolved).toEqual([])
   })
 
   it('keeps a single dependency failure from discarding the rest of the graph', async () => {
@@ -205,6 +214,164 @@ describe('loadRepositoryGraph', () => {
     })
 
     expect(progress).toEqual([0, 1, 2])
+  })
+})
+
+describe('the budget the load will spend', () => {
+  it('counts only issues with an open blocker, because closed ones are not drawn', () => {
+    const issues = [issue(1), issue(2, 1), issue(3, 0, 4)]
+    expect(issuesNeedingBlockers(issues).map((i) => i.number)).toEqual([2])
+    expect(issuesNeedingBlockers(issues, true).map((i) => i.number)).toEqual([2, 3])
+  })
+
+  it('asks before spending the dependency phase, and reports the exact cost', async () => {
+    const asked: number[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) =>
+      String(url).includes('/dependencies/blocked_by')
+        ? json([issue(9)])
+        : json([issue(1, 1), issue(2, 1), issue(3)]),
+    )
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      confirmDependencies: (cost) => {
+        asked.push(cost)
+        return true
+      },
+    })
+
+    expect(asked).toEqual([2])
+    expect(result.ok).toBe(true)
+  })
+
+  it('spends nothing beyond the list when the answer is no', async () => {
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      seen.push(String(url))
+      return json([issue(1, 1)])
+    })
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      confirmDependencies: () => false,
+    })
+
+    expect(seen).toHaveLength(1)
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.kind).toBe('cancelled')
+  })
+
+  it('never asks when nothing has an open blocker', async () => {
+    const confirm = vi.fn(() => true)
+    const fetchImpl = vi.fn(async () => json([issue(1), issue(2)]))
+
+    await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      confirmDependencies: confirm,
+    })
+
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
+  it('widens the dependency phase only when closed blockers are wanted', async () => {
+    const dependencyCalls = (calls: string[]) =>
+      calls.filter((url) => url.includes('/dependencies/blocked_by')).length
+
+    const run = async (includeClosed: boolean) => {
+      const seen: string[] = []
+      const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+        seen.push(String(url))
+        if (String(url).includes('/dependencies/blocked_by')) return json([issue(9)])
+        return json([issue(1, 1), issue(2, 0, 3)])
+      })
+      const result = await loadRepositoryGraph(TARGET, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        includeClosed,
+      })
+      return { seen, result }
+    }
+
+    const narrow = await run(false)
+    const wide = await run(true)
+
+    expect(dependencyCalls(narrow.seen)).toBe(1)
+    expect(dependencyCalls(wide.seen)).toBe(2)
+    expect(narrow.result.ok && narrow.result.data.includedClosed).toBe(false)
+    expect(wide.result.ok && wide.result.data.includedClosed).toBe(true)
+  })
+
+  it('carries the budget GitHub reported on the last response', async () => {
+    const fetchImpl = vi.fn(async () =>
+      json([issue(1)], {
+        headers: {
+          'x-ratelimit-limit': '60',
+          'x-ratelimit-remaining': '48',
+          'x-ratelimit-reset': '1750000000',
+        },
+      }),
+    )
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.rateLimit).toEqual({
+      limit: 60,
+      remaining: 48,
+      reset: new Date(1750000000 * 1000),
+    })
+  })
+})
+
+describe('readRateLimit', () => {
+  it('reads the core budget', async () => {
+    const fetchImpl = vi.fn(async () =>
+      json({ resources: { core: { limit: 60, remaining: 12, reset: 1750000000 } } }),
+    )
+
+    await expect(
+      readRateLimit({ fetchImpl: fetchImpl as unknown as typeof fetch }),
+    ).resolves.toEqual({ limit: 60, remaining: 12, reset: new Date(1750000000 * 1000) })
+  })
+
+  it('answers null rather than failing when the probe cannot be read', async () => {
+    const fetchImpl = vi.fn(async () => json({ message: 'nope' }, { status: 500 }))
+    await expect(
+      readRateLimit({ fetchImpl: fetchImpl as unknown as typeof fetch }),
+    ).resolves.toBeNull()
+  })
+})
+
+describe('searchRepositories', () => {
+  it('scopes the query to an owner once one is typed', async () => {
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      seen.push(decodeURIComponent(String(url)))
+      return json({ items: [{ full_name: 'acme/app' }, { no_name: true }] })
+    })
+
+    await expect(
+      searchRepositories('acme/ap', { fetchImpl: fetchImpl as unknown as typeof fetch }),
+    ).resolves.toEqual(['acme/app'])
+    expect(seen[0]).toContain('q=ap in:name user:acme')
+  })
+
+  it('asks for nothing on a query too short to mean anything', async () => {
+    const fetchImpl = vi.fn(async () => json({ items: [] }))
+    await expect(
+      searchRepositories('a', { fetchImpl: fetchImpl as unknown as typeof fetch }),
+    ).resolves.toEqual([])
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('stays silent when search is throttled, so typing never surfaces an error', async () => {
+    const fetchImpl = vi.fn(async () => json({ message: 'rate limited' }, { status: 403 }))
+    await expect(
+      searchRepositories('acme', { fetchImpl: fetchImpl as unknown as typeof fetch }),
+    ).resolves.toEqual([])
   })
 })
 
