@@ -100,7 +100,7 @@ export function RepoInput({
           submit(active >= 0 && visible ? suggestions[active] : value)
         }}
       >
-        <span className="repoinput__field">
+        <label className="repoinput__field">
           <Icon name="search" />
           <input
             className="repoinput__input"
@@ -141,12 +141,11 @@ export function RepoInput({
               }
             }}
           />
-        </span>
+        </label>
         <button
           className="button button--primary"
           type="submit"
           disabled={typed.length === 0 || unchanged}
-          data-tip={unchanged ? 'This repository is already open' : 'Open this repository'}
         >
           Open
         </button>

@@ -8,7 +8,11 @@ export interface GroupFrameData extends Record<string, unknown> {
   onSelect: (members: string[]) => void
 }
 
-export type GroupNode = Node<GroupFrameData, 'group'>
+/**
+ * The node type is `frame`, not `group`: React Flow ships a built-in `group` type whose default
+ * stylesheet draws a dark 1px border, and a custom type of that name inherits it.
+ */
+export type GroupNode = Node<GroupFrameData, 'frame'>
 
 /**
  * The frame behind a set of cards. It is a node so React Flow pans and zooms it with everything
@@ -23,7 +27,6 @@ export function GroupFrame({ data }: NodeProps<GroupNode>) {
         type="button"
         className="group__label nodrag nopan"
         aria-pressed={selected}
-        data-tip="Select every issue in this group"
         onClick={() => onSelect(group.members)}
       >
         {group.label}

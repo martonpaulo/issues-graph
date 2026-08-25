@@ -65,7 +65,6 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
         type="button"
         className="card__body nodrag"
         aria-pressed={selected}
-        data-tip={node.title}
         onPointerDown={(event) => {
           pressedAt.current = { x: event.clientX, y: event.clientY }
         }}
@@ -97,7 +96,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
         {node.labels.length > 0 && (
           <span className="card__labels">
             {node.labels.map((chip) => (
-              <span key={chip.raw} className="chip" data-tip={chip.raw}>
+              <span key={chip.raw} className="chip">
                 {chip.namespace ? `${chip.namespace}: ${chip.value}` : chip.value}
               </span>
             ))}

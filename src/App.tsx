@@ -38,7 +38,7 @@ import { readStored, writeStored } from './storage'
 import { describeAge, describeUntil } from './time'
 
 const BASE = import.meta.env.BASE_URL
-const NODE_TYPES = { issue: IssueCard, group: GroupFrame }
+const NODE_TYPES = { issue: IssueCard, frame: GroupFrame }
 
 /** Orthogonal segments with rounded corners: a route the eye can follow, not a loose curve. */
 const EDGE_TYPE = 'smoothstep'
@@ -152,7 +152,6 @@ function ExternalConfirm({ pending, onClose }: { pending: PendingLink; onClose: 
           <button
             className="button"
             type="button"
-            data-tip="Close this and stay on the graph"
             onClick={onClose}
           >
             Stay here
@@ -161,7 +160,6 @@ function ExternalConfirm({ pending, onClose }: { pending: PendingLink; onClose: 
             className="button button--primary"
             type="button"
             ref={confirmRef}
-            data-tip={`Open ${pending.url} in a new tab`}
             onClick={() => {
               window.open(pending.url, '_blank', 'noopener,noreferrer')
               onClose()
@@ -310,9 +308,6 @@ function LabelPicker({
                   className={`picker__item${active.has(label.name) ? ' is-on' : ''}`}
                   type="button"
                   aria-pressed={active.has(label.name)}
-                  data-tip={`${active.has(label.name) ? 'Stop highlighting' : 'Highlight'} the ${
-                    label.count
-                  } issue${label.count === 1 ? '' : 's'} labelled ${label.name}`}
                   onClick={() => onToggle(label.name)}
                 >
                   <span className="picker__name">{label.name}</span>
@@ -325,7 +320,6 @@ function LabelPicker({
             <button
               className="button button--small picker__clear"
               type="button"
-              data-tip="Stop highlighting every label"
               onClick={onClear}
             >
               Clear the highlight
@@ -438,7 +432,7 @@ function Canvas({
   const nodes = useMemo<Node[]>(() => {
     const frames: GroupNode[] = graph.groups.map((group) => ({
       id: group.id,
-      type: 'group' as const,
+      type: 'frame' as const,
       position: group.position,
       data: {
         group,
@@ -575,7 +569,7 @@ function Canvas({
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
       <Panel position="top-left" className="bar">
-        <a className="bar__link" href={BASE} data-tip="Choose another repository">
+        <a className="bar__link" href={BASE}>
           <Icon name="graph" />
           <span>Issue dependencies</span>
         </a>
@@ -583,7 +577,6 @@ function Canvas({
         <button
           className="bar__slug"
           type="button"
-          data-tip="Open this repository on GitHub"
           onClick={() => openExternal(`https://github.com/${slug}`, slug)}
         >
           {slug}
@@ -899,7 +892,6 @@ function GraphLoad({
               className={cached ? 'button' : 'button button--primary'}
               type="button"
               disabled={phase.checking}
-              data-tip="Read this repository from GitHub now, spending requests"
               onClick={() => start(showClosed)}
             >
               <Icon name="reload" size={12} /> Fetch now
@@ -908,7 +900,6 @@ function GraphLoad({
               <button
                 className="button button--primary"
                 type="button"
-                data-tip="Draw the copy already in this browser, spending no requests"
                 onClick={() =>
                   setPhase({ kind: 'ready', data: cached.data, savedAt: cached.savedAt })
                 }
@@ -946,7 +937,6 @@ function GraphLoad({
             <button
               className="button"
               type="button"
-              data-tip="Stop here and spend nothing more"
               onClick={() => phase.decide(false)}
             >
               Cancel
@@ -954,7 +944,6 @@ function GraphLoad({
             <button
               className="button button--primary"
               type="button"
-              data-tip={`Read the dependencies, spending ${phase.cost} requests`}
               onClick={() => phase.decide(true)}
             >
               Spend {phase.cost}
@@ -981,7 +970,6 @@ function GraphLoad({
             <button
               className="button button--primary"
               type="button"
-              data-tip="Start over from the budget"
               onClick={() => onReload()}
             >
               Try again
@@ -997,7 +985,6 @@ function GraphLoad({
             <button
               className="button button--primary"
               type="button"
-              data-tip="Start over from the budget"
               onClick={() => onReload()}
             >
               Read again

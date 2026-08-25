@@ -216,6 +216,14 @@ code {
   opacity: 1;
 }
 
+/* Each React Flow node is its own stacking context with an inline z-index, so a hint drawn inside
+   one card slides under the next card. Lifting the hovered node is the only way past that, and the
+   inline style is why this needs `!important`. */
+.react-flow__node-issue:hover,
+.react-flow__node-issue:focus-within {
+  z-index: 100 !important;
+}
+
 /* Near the bottom of the window there is no room below, so the hint goes above. */
 .actions [data-tip]::after,
 .stage__actions [data-tip]::after,
@@ -446,6 +454,19 @@ code {
   opacity: 0.25;
 }
 
+/* Cursors -----------------------------------------------------------------
+   The pane says "grab" because dragging it pans. Anything drawn over the pane
+   has to keep that promise or contradict it deliberately: a card and a group
+   label are pressable, so they point; the frame behind a group is not, so it
+   grabs like the canvas underneath it. While a drag is in progress everything
+   inside the pane shows the closed hand, including the card the drag started
+   on. */
+
+.react-flow__pane.dragging,
+.react-flow__pane.dragging * {
+  cursor: grabbing !important;
+}
+
 /* Group frame -------------------------------------------------------------
    The two kinds mean opposite things, so they do not share a look: a chain is a
    solid, filled block of work that has an order, and the independent set is an
@@ -455,6 +476,7 @@ code {
   width: 100%;
   height: 100%;
   border-radius: 14px;
+  cursor: grab;
 }
 
 .group--chain {
@@ -737,6 +759,7 @@ code {
   accent-color: var(--accent);
   width: 14px;
   height: 14px;
+  cursor: pointer;
 }
 
 .notice {
@@ -849,6 +872,7 @@ code {
   gap: 8px;
   flex: 1;
   padding: 0 11px;
+  cursor: text;
   border-radius: 8px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
