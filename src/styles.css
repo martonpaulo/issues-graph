@@ -502,6 +502,41 @@ code {
   border-color: color-mix(in srgb, var(--attention-line) 60%, var(--surface));
 }
 
+/* A label the reader picked out. Amber, so it never reads as selection. */
+.card--highlight {
+  border-color: var(--highlight);
+  box-shadow:
+    0 0 0 2px var(--highlight),
+    0 0 0 6px color-mix(in srgb, var(--highlight) 22%, transparent),
+    var(--shadow);
+}
+
+.card--faded {
+  opacity: 0.45;
+}
+
+/* Selection has to be obvious across every state colour, so it is a solid ring drawn outside the
+   card rather than a change of border: a 1px tint disappears on a filled pastel card, and growing
+   the border would eat the height the layout already allotted. Last, so it wins over the ring an
+   out-of-repository card or a highlighted one already carries. */
+.card--selected {
+  border-color: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 0 0 6px color-mix(in srgb, var(--accent) 24%, transparent),
+    0 6px 18px rgba(31, 42, 55, 0.16);
+}
+
+/* Hidden is a reading aid: the card stays where it is, drained of colour and attention. */
+.card--hidden {
+  opacity: 0.32;
+  filter: grayscale(1);
+}
+
+.card--hidden:hover {
+  opacity: 0.7;
+}
+
 .card--external .card__body {
   padding-left: 16px;
 }
