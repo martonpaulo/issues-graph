@@ -478,7 +478,12 @@ function Canvas({
           source: edge.source,
           target: edge.target,
           type: 'dependency' as const,
-          data: { centerY: edge.centerY, points: edge.points },
+          data: {
+            centerY: edge.centerY,
+            points: edge.points,
+            sourceOffset: edge.sourceOffset,
+            targetOffset: edge.targetOffset,
+          },
           // A lit edge is drawn last so it crosses over the ones it shares a channel with.
           zIndex: lit ? 5 : 0,
           className: dimmed ? 'edge--dim' : lit ? 'edge--lit' : undefined,
@@ -874,8 +879,7 @@ function GraphLoad({
             />
           </dl>
           <p className="stage__note">
-            {phase.cost} {phase.cost === 1 ? 'issue has' : 'issues have'} blockers, one request
-            each.
+            {phase.cost} {phase.cost === 1 ? 'issue has' : 'issues have'} blockers.
           </p>
           {phase.status !== null && phase.status.remaining < phase.cost && (
             <p className="notice notice--error">

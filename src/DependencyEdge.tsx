@@ -5,7 +5,10 @@ import type { Point } from './graph'
 /** Orthogonal segments with rounded corners: a route the eye can follow, not a loose curve. */
 export const EDGE_RADIUS = 12
 
-export type DependencyEdgeType = Edge<{ centerY?: number; points?: Point[] }, 'dependency'>
+export type DependencyEdgeType = Edge<
+  { centerY?: number; points?: Point[]; sourceOffset?: number; targetOffset?: number },
+  'dependency'
+>
 
 /**
  * Turns waypoints into an orthogonal route: down, across, down again.
@@ -91,22 +94,33 @@ export function DependencyEdge({
   markerEnd,
   data,
 }: EdgeProps<DependencyEdgeType>) {
+  // Every edge of a card leaves and arrives at its own point along the card's edge, so a fan of
+  // four does not become one line with four heads.
+  const fromX = sourceX + (data?.sourceOffset ?? 0)
+  const toX = targetX + (data?.targetOffset ?? 0)
+
   if (data?.points && data.points.length > 2) {
     // The ends come from the handles, which is where the arrow has to start and stop; the middle
     // waypoints are dagre's.
     const waypoints = [
-      { x: sourceX, y: sourceY },
+      { x: fromX, y: sourceY },
       ...data.points.slice(1, -1),
-      { x: targetX, y: targetY },
+      { x: toX, y: targetY },
     ]
-    return <BaseEdge id={id} path={roundedPath(orthogonalise(waypoints), EDGE_RADIUS)} markerEnd={markerEnd} />
+    return (
+      <BaseEdge
+        id={id}
+        path={roundedPath(orthogonalise(waypoints), EDGE_RADIUS)}
+        markerEnd={markerEnd}
+      />
+    )
   }
 
   const [path] = getSmoothStepPath({
-    sourceX,
+    sourceX: fromX,
     sourceY,
     sourcePosition,
-    targetX,
+    targetX: toX,
     targetY,
     targetPosition,
     borderRadius: EDGE_RADIUS,

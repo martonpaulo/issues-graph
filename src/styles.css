@@ -67,6 +67,9 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
+  /* The page is a diagram, not a document: dragging across it pans and selects nothing. */
+  user-select: none;
+  -webkit-user-select: none;
   font-family: 'Inter Variable', Inter, ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica,
     Arial, sans-serif;
   font-size: 14px;
@@ -226,8 +229,15 @@ code {
   bottom: calc(100% + 7px);
 }
 
-/* The right-hand chrome would push its own hint off-screen. */
-.bar [data-tip]:last-child::after {
+/* A hint centred under a control in a corner panel runs off the edge of the window, so in those
+   panels it lines up with the side it is on instead. */
+.react-flow__panel.left [data-tip]::after {
+  left: 0;
+  right: auto;
+  transform: none;
+}
+
+.react-flow__panel.right [data-tip]::after {
   left: auto;
   right: 0;
   transform: none;
@@ -479,16 +489,16 @@ code {
   padding-left: 16px;
 }
 
+/* Names the repository the issue came from. Deliberately not blue and not underlined: it is a
+   label, and nothing on a card is a link except the icon that says so. */
 .chip--repo {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
+  display: inline-block;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  color: var(--muted);
   opacity: 1;
 }
 
@@ -818,6 +828,9 @@ code {
 }
 
 .repoinput__input {
+  /* The one place text is typed is the one place it can be selected. */
+  user-select: text;
+  -webkit-user-select: text;
   flex: 1;
   min-width: 0;
   font: inherit;

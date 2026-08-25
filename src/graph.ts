@@ -103,6 +103,9 @@ export interface GraphEdge {
    * keeps such an edge from cutting through the cards it passes.
    */
   points?: Point[]
+  /** How far from the centre of each card this edge leaves and arrives. */
+  sourceOffset?: number
+  targetOffset?: number
 }
 
 /**
@@ -255,6 +258,10 @@ const CHANNEL_INSET = 14
 /** Beyond this the channels are too close together to tell apart, so they repeat. */
 const MAX_CHANNELS = 7
 
+/** Space between two edges leaving or arriving at the same card, and the room they may use. */
+const PORT_SPACING = 22
+const PORT_MARGIN = 44
+
 /**
  * Ranks one component with dagre and keeps its answer whenever it fits.
  *
@@ -396,9 +403,7 @@ function groupLabel(kind: GraphGroup['kind'], count: number): string {
   const issues = `${count} issue${count === 1 ? '' : 's'}`
   // The two frames mean opposite things, so each says which it is rather than leaving the reader
   // to infer it from a border style.
-  return kind === 'chain'
-    ? `Chain · ${issues}, one order`
-    : `Independent · ${issues}, any order`
+  return kind === 'chain' ? `Chain · ${issues}` : `Independent · ${issues}`
 }
 
 export interface Layout {
@@ -584,11 +589,69 @@ export function routeEdges(
     })
   }
 
+  const ports = spreadPorts(nodes, edges)
+
   return edges.map((edge) => {
     const route = routes.get(edge.id)
-    if (route && route.length > 2) return { ...edge, points: route }
-    return centres.has(edge.id) ? { ...edge, centerY: centres.get(edge.id) } : edge
+    const port = ports.get(edge.id)
+    const base = route && route.length > 2 ? { points: route } : { centerY: centres.get(edge.id) }
+    return { ...edge, ...base, ...port }
   })
+}
+
+/**
+ * Spreads the edges of a card across its width instead of running them all through its centre.
+ *
+ * Four arrows landing on one point overlap for their last stretch and become one thick line with
+ * four heads. Fanning them out — in the order of where they come from, so they do not cross on the
+ * way in — is what makes each one traceable back to its blocker.
+ */
+function spreadPorts(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+): Map<string, { sourceOffset: number; targetOffset: number }> {
+  const byId = new Map(nodes.map((node) => [node.id, node]))
+  const incoming = new Map<string, GraphEdge[]>()
+  const outgoing = new Map<string, GraphEdge[]>()
+
+  for (const edge of edges) {
+    incoming.set(edge.target, [...(incoming.get(edge.target) ?? []), edge])
+    outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge])
+  }
+
+  const ports = new Map<string, { sourceOffset: number; targetOffset: number }>()
+  const offsetsFor = (count: number) => {
+    const spacing = Math.min(PORT_SPACING, (NODE_WIDTH - PORT_MARGIN) / Math.max(1, count - 1))
+    return (index: number) => (index - (count - 1) / 2) * spacing
+  }
+
+  const read = (id: string) => ports.get(id) ?? { sourceOffset: 0, targetOffset: 0 }
+  const centreX = (id: string) => {
+    const node = byId.get(id)
+    return node ? node.position.x + NODE_WIDTH / 2 : 0
+  }
+
+  for (const [, group] of incoming) {
+    const ordered = [...group].sort(
+      (a, b) => centreX(a.source) - centreX(b.source) || a.id.localeCompare(b.id),
+    )
+    const offset = offsetsFor(ordered.length)
+    ordered.forEach((edge, index) => {
+      ports.set(edge.id, { ...read(edge.id), targetOffset: offset(index) })
+    })
+  }
+
+  for (const [, group] of outgoing) {
+    const ordered = [...group].sort(
+      (a, b) => centreX(a.target) - centreX(b.target) || a.id.localeCompare(b.id),
+    )
+    const offset = offsetsFor(ordered.length)
+    ordered.forEach((edge, index) => {
+      ports.set(edge.id, { ...read(edge.id), sourceOffset: offset(index) })
+    })
+  }
+
+  return ports
 }
 
 export function buildGraph(

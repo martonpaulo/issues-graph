@@ -98,10 +98,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
             {/* The repository comes first and is never dropped: without it the number means
                 nothing, since it belongs to somebody else's numbering. */}
             {node.external && (
-              <span className="chip chip--repo">
-                <Icon name="external" size={9} />
-                {node.repoLabel}
-              </span>
+              <span className="chip chip--repo">{node.repoLabel}</span>
             )}
             {node.labels.map((chip) => (
               <span key={chip.raw} className="chip">
