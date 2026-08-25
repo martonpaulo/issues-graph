@@ -30,9 +30,15 @@ const LABELS_GAP = 11
 /** One row of label chips, and the space between two rows. */
 const CHIP_ROW_HEIGHT = 17
 const CHIP_GAP = 4
-/** Rough per-character width of chip text at 10px, plus its padding. */
-const CHIP_CHAR_WIDTH = 5.4
+/**
+ * Per-character width of chip text at 10px Inter, plus the chip's own padding and border. Measured
+ * from the rendered cards: the real average is 4.2–4.5, and the extra is headroom, since a row too
+ * many only leaves a gap while a row too few would push the chips out of the card.
+ */
+const CHIP_CHAR_WIDTH = 4.6
 const CHIP_PADDING = 12
+/** The width the chips wrap inside: the card minus its padding. */
+const CHIP_ROW_WIDTH = 210
 
 export function titleLineCount(title: string, perLine = TITLE_CHARS_PER_LINE): number {
   const words = title.trim().split(/\s+/).filter((word) => word.length > 0)
@@ -62,7 +68,7 @@ export function titleLineCount(title: string, perLine = TITLE_CHARS_PER_LINE): n
  * How many rows a card's chips wrap onto. Estimated from the text for the same reason the title's
  * lines are: this module is pure, and the layout has to agree with what the browser will draw.
  */
-export function chipRows(texts: string[], width = NODE_WIDTH - 20): number {
+export function chipRows(texts: string[], width = CHIP_ROW_WIDTH): number {
   if (texts.length === 0) return 0
 
   let rows = 1

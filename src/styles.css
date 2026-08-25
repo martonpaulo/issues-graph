@@ -479,14 +479,27 @@ code {
 }
 
 /* An issue from another repository, reached because it blocks something here.
-   It carries no state colour at all: the colours say what is ready and what is blocked *here*, and
-   this issue's state is another backlog's business. A dashed edge and a bar down its leading side
-   are what mark it; the state is still written on it in words. */
+   It keeps its state colour — ready and blocked mean the same thing wherever the issue lives — but
+   at about half strength, under a dashed edge and a bar down its leading side. Two cues that do
+   not compete: hue still says the state, weight says whose backlog it is. */
 .card--external {
-  background: color-mix(in srgb, var(--surface) 88%, var(--bg));
-  border-color: var(--line-strong);
   border-style: dashed;
-  box-shadow: inset 7px 0 0 color-mix(in srgb, var(--muted) 45%, transparent), var(--shadow);
+  box-shadow: inset 6px 0 0 color-mix(in srgb, var(--muted) 40%, transparent), var(--shadow);
+}
+
+.card--external.card--ready {
+  background: color-mix(in srgb, var(--ready-fill) 45%, var(--surface));
+  border-color: color-mix(in srgb, var(--ready-line) 60%, var(--surface));
+}
+
+.card--external.card--blocked {
+  background: color-mix(in srgb, var(--blocked-fill) 45%, var(--surface));
+  border-color: color-mix(in srgb, var(--blocked-line) 60%, var(--surface));
+}
+
+.card--external.card--attention {
+  background: color-mix(in srgb, var(--attention-fill) 45%, var(--surface));
+  border-color: color-mix(in srgb, var(--attention-line) 60%, var(--surface));
 }
 
 .card--external .card__body {

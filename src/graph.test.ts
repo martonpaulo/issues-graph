@@ -92,9 +92,9 @@ describe('chipRows and cardHeight', () => {
     expect(chipRows([])).toBe(0)
     expect(chipRows(['type: bug'])).toBe(1)
     expect(chipRows(['type: bug', 'priority: P1', 'effort: L'])).toBe(1)
-    expect(
-      chipRows(['area: design-system', 'evidence: confirmed', 'type: improvement']),
-    ).toBeGreaterThan(1)
+    // What the three slots hold on a real card, which has to stay on one row.
+    expect(chipRows(['type: feature', 'priority: P2', 'effort: M'])).toBe(1)
+    expect(chipRows(['type: documentation', 'priority: P1', 'effort: M'])).toBe(2)
     expect(chipRows(['a', 'b', 'c', 'd', 'e', 'f'])).toBe(1)
   })
 
