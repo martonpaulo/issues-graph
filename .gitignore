@@ -1,0 +1,16 @@
+# Node toolchain and build output
+node_modules/
+dist/
+
+# Logs and caches
+*.log
+.cache/
+tmp/
+.tmp/
+
+# OS and editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
