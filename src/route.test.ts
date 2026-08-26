@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parseRoute, parseTargetInput, pathForTarget, segmentsOf, slugOf } from './route'
 
-const BASE = '/agent-workflows/'
+const BASE = '/issues-graph/'
 
 describe('parseRoute', () => {
   it('reads owner and repository from the canonical path', () => {
@@ -68,7 +68,7 @@ describe('segmentsOf', () => {
 describe('pathForTarget', () => {
   it('writes owner and repository', () => {
     expect(pathForTarget({ owner: 'acme', repo: 'app' }, BASE)).toBe(
-      '/agent-workflows/dependencies/acme/app',
+      '/issues-graph/dependencies/acme/app',
     )
   })
 

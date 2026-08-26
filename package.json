@@ -1,9 +1,9 @@
 {
-  "name": "agent-workflows-dependency-viewer",
+  "name": "issues-graph",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Hosted dependency graph for GitHub Issues, published from martonpaulo/agent-workflows",
+  "description": "Hosted dependency graph for GitHub Issues",
   "license": "MIT",
   "scripts": {
     "dev": "vite",

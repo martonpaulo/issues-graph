@@ -23,7 +23,7 @@ function pagesSpaFallback(): Plugin {
 
 export default defineConfig({
   // Project sites are served from /<repository>/, so every asset URL carries that prefix.
-  base: '/agent-workflows/',
+  base: '/issues-graph/',
   plugins: [react(), pagesSpaFallback()],
   test: {
     environment: 'node',
