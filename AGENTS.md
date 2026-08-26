@@ -37,6 +37,22 @@ Data flows one way — skills create the dependencies, GitHub holds them, this r
 repository is the end of it. It has no authority over anything it displays. A change here can make a
 graph wrong on screen; it can never make a backlog wrong.
 
+## Agent skill paths
+
+Where project skills write their artifacts. Paths are recorded; nothing is created until it has real
+content — no empty files or directories.
+
+- Product definition: `docs/product.md`
+- Architecture decisions (ADRs): `docs/adr/` (create when the first decision is recorded — the
+  layout engine, the unauthenticated-only boundary and the Pages SPA fallback are the candidates)
+- Research notes: `docs/research/` (create when persisting research, e.g. observed GitHub REST
+  rate-limit behavior)
+- Handoffs: `.scratch/handoffs/`
+- Prototypes: `.scratch/prototypes/`
+
+No domain glossary. The vocabulary on screen is GitHub's own — issue, `blocked by`, `blocking`,
+label — and inventing a second name for any of it would be the drift a glossary exists to prevent.
+
 ## Patterns
 
 These are the conventions the code already repeats, discovered from it rather than imposed.

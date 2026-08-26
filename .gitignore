@@ -1,3 +1,6 @@
+# Disposable agent scratch space (handoffs, prototypes)
+.scratch/
+
 # Node toolchain and build output
 node_modules/
 dist/
