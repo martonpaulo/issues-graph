@@ -60,8 +60,9 @@ Extracted from [`martonpaulo/agent-workflows`](https://github.com/martonpaulo/ag
 it lived as `web/`, so that repository stays what its name says it is. The commit history came with
 it.
 
-## Status
+## Versioning
 
-Repository policy, identity, license and GitHub metadata are still to be established by
-`project-setup`. This README covers what the project is and how to run it; it is not yet the
-project's canonical guidance.
+There is none, deliberately. Nothing pins this repository, so there is no compatibility contract a
+version number could describe: `main` is what is deployed. Git history is the record.
+[`AGENTS.md`](AGENTS.md) carries the full policy and [`docs/product.md`](docs/product.md) says what
+this is and what it will never do.
