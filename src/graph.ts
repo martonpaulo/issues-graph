@@ -118,7 +118,8 @@ export interface GraphNode {
   title: string
   url: string
   repo: string
-  state: IssueState
+  /** Local workflow presentation state. External repositories do not share this convention. */
+  state: IssueState | null
   /** True when the issue lives in another repository and was reached as a blocker. */
   external: boolean
   /**
@@ -126,7 +127,7 @@ export interface GraphNode {
    * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
    */
   repoLabel: string
-  /** The three slots the card shows, filled or not. */
+  /** The slots the card shows, filled or not. External cards show none. */
   labels: CardChip[]
   /** Every label on the issue, which is what the highlight picker offers. */
   allLabels: string[]
@@ -208,7 +209,8 @@ function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
   const external = repo !== `${target.owner}/${target.repo}`
   const [owner, name] = repo.split('/')
   const repoLabel = external ? (owner === target.owner ? name : repo) : ''
-  const labels = cardLabels(issue.labels)
+  const state = external ? null : deriveState(issue)
+  const labels = external ? [] : cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
   const rows = chipRows(labels.map(chipText))
   return {
@@ -217,7 +219,7 @@ function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
     title: issue.title,
     url: issue.html_url,
     repo,
-    state: deriveState(issue),
+    state,
     external,
     repoLabel,
     labels,

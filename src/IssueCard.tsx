@@ -43,7 +43,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
 
   const classes = [
     'card',
-    `card--${node.state}`,
+    node.state ? `card--${node.state}` : '',
     node.external ? 'card--external' : '',
     selected ? 'card--selected' : '',
     hidden ? 'card--hidden' : '',
@@ -89,7 +89,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
             {node.external && <span className="card__repo">{node.repoLabel}</span>}
             <span className="card__number">#{node.number}</span>
           </span>
-          <span className="card__state">{STATE_TEXT[node.state]}</span>
+          {node.state && <span className="card__state">{STATE_TEXT[node.state]}</span>}
         </span>
 
         <span
