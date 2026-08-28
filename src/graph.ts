@@ -21,8 +21,15 @@ export const NODE_WIDTH = 232
  */
 export const MAX_TITLE_LINES = 5
 const TITLE_LINE_HEIGHT = 17
-/** Characters that fit on one line at 232px wide, 12.5px Inter, minus the card's padding. */
-const TITLE_CHARS_PER_LINE = 33
+/**
+ * Width available to a title, expressed in quarter-character units. Most glyphs cost four; the
+ * narrow glyphs below cost three. This keeps the old conservative 33-character bound for wide
+ * text without reserving a second line for narrow text that Inter renders on one.
+ */
+const TITLE_UNITS_PER_LINE = 33 * 4
+const TITLE_CHAR_UNITS = 4
+const NARROW_TITLE_CHAR_UNITS = 3
+const NARROW_TITLE_CHARS = new Set("fijltI1.,':;|!")
 /** Border, padding, the number/state row, and the gap under it. Mirrors `.card` in styles.css. */
 const CARD_CHROME = 38
 /** Comfortable gap between the title and the chips under it. */
@@ -40,17 +47,26 @@ const CHIP_PADDING = 12
 /** The width the chips wrap inside: the card minus its padding. */
 const CHIP_ROW_WIDTH = 210
 
-export function titleLineCount(title: string, perLine = TITLE_CHARS_PER_LINE): number {
+function titleUnits(text: string): number {
+  return [...text].reduce(
+    (total, character) =>
+      total + (NARROW_TITLE_CHARS.has(character) ? NARROW_TITLE_CHAR_UNITS : TITLE_CHAR_UNITS),
+    0,
+  )
+}
+
+export function titleLineCount(title: string, perLine = TITLE_UNITS_PER_LINE): number {
   const words = title.trim().split(/\s+/).filter((word) => word.length > 0)
   if (words.length === 0) return 1
 
   let lines = 1
   let used = 0
   for (const word of words) {
-    const needed = used === 0 ? word.length : used + 1 + word.length
+    const wordWidth = titleUnits(word)
+    const needed = used === 0 ? wordWidth : used + TITLE_CHAR_UNITS + wordWidth
     if (used > 0 && needed > perLine) {
       lines += 1
-      used = word.length
+      used = wordWidth
     } else {
       used = needed
     }

@@ -5,6 +5,7 @@ import awIssues from './__fixtures__/agent-workflows.issues.json'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
+import { chipText } from './labels'
 import {
   buildGraph,
   cardHeight,
@@ -149,6 +150,20 @@ describe('deriveState', () => {
 })
 
 describe('buildGraph against captured GitHub data', () => {
+  it('keeps the reported short-title card tight without shortening its neighbour', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const issue12 = graph.nodes.find((node) => node.number === 12)!
+    const issue13 = graph.nodes.find((node) => node.number === 13)!
+
+    expect(issue12.title).toBe('Repair loop after a real CI failure')
+    expect(issue12.titleLines).toBe(1)
+    expect(chipRows(issue12.labels.map(chipText))).toBe(1)
+    expect(issue12.height).toBe(cardHeight(1, 1))
+
+    expect(issue13.title).toBe('Repair loop after changes_requested')
+    expect(issue13.titleLines).toBe(2)
+  })
+
   it('sizes every card to its own title, within the allowed range', async () => {
     const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     const heights = new Set(graph.nodes.map((node) => node.height))
