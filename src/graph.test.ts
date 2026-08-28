@@ -180,6 +180,35 @@ describe('buildGraph against captured GitHub data', () => {
     expect(graph.edges).toHaveLength(EDGES_TABELO)
   })
 
+  it('omits presentation metadata from an external blocker', async () => {
+    const localIssue = tabeloIssues[0] as IssuePayload
+    const externalIssue = awIssues[0] as IssuePayload
+    const graph = await buildGraph(
+      dataFrom([localIssue], { [localIssue.number]: [externalIssue] }),
+      TABELO,
+    )
+
+    const local = graph.nodes.find((node) => !node.external)!
+    const external = graph.nodes.find((node) => node.external)!
+
+    expect(external).toMatchObject({
+      repo: 'martonpaulo/agent-workflows',
+      repoLabel: 'agent-workflows',
+      state: null,
+      labels: [],
+      allLabels: externalIssue.labels.map((label) => label.name),
+    })
+    expect(external.height).toBe(cardHeight(external.titleLines, 0))
+    expect(local.state).not.toBeNull()
+    expect(local.labels).not.toHaveLength(0)
+    expect(graph.edges).toContainEqual({
+      id: `${external.id}->${local.id}`,
+      source: external.id,
+      target: local.id,
+      points: expect.any(Array),
+    })
+  })
+
   it.each([
     ['agent-workflows', awIssues, awBlockedBy, AW],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],

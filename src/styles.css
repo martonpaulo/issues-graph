@@ -478,28 +478,11 @@ code {
   border-style: dashed;
 }
 
-/* An issue from another repository, reached because it blocks something here.
-   It keeps its state colour — ready and blocked mean the same thing wherever the issue lives — but
-   at about half strength, under a dashed edge and a bar down its leading side. Two cues that do
-   not compete: hue still says the state, weight says whose backlog it is. */
+/* An issue from another repository, reached because it blocks something here. Its neutral surface,
+   dashed edge and leading bar identify it without projecting this repository's workflow state. */
 .card--external {
   border-style: dashed;
   box-shadow: inset 6px 0 0 color-mix(in srgb, var(--muted) 40%, transparent), var(--shadow);
-}
-
-.card--external.card--ready {
-  background: color-mix(in srgb, var(--ready-fill) 45%, var(--surface));
-  border-color: color-mix(in srgb, var(--ready-line) 60%, var(--surface));
-}
-
-.card--external.card--blocked {
-  background: color-mix(in srgb, var(--blocked-fill) 45%, var(--surface));
-  border-color: color-mix(in srgb, var(--blocked-line) 60%, var(--surface));
-}
-
-.card--external.card--attention {
-  background: color-mix(in srgb, var(--attention-fill) 45%, var(--surface));
-  border-color: color-mix(in srgb, var(--attention-line) 60%, var(--surface));
 }
 
 /* A label the reader picked out. Amber, so it never reads as selection. */
