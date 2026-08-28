@@ -13,7 +13,7 @@ export interface IssueCardData extends Record<string, unknown> {
   highlighted: boolean
   /** A highlight is on and this card is not part of it. */
   faded: boolean
-  onToggleSelect: (id: string) => void
+  onSelect: (id: string, additive: boolean) => void
   onToggleHidden: (id: string) => void
   onOpen: (url: string, label: string) => void
 }
@@ -36,7 +36,7 @@ const STATE_TEXT: Record<IssueState, string> = {
 }
 
 export function IssueCard({ data }: NodeProps<IssueNode>) {
-  const { node, selected, hidden, highlighted, faded, onToggleSelect, onToggleHidden, onOpen } =
+  const { node, selected, hidden, highlighted, faded, onSelect, onToggleHidden, onOpen } =
     data
   const label = node.external ? `${node.repo}#${node.number}` : `#${node.number}`
   const pressedAt = useRef<{ x: number; y: number } | null>(null)
@@ -79,7 +79,7 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
           ) {
             return
           }
-          onToggleSelect(node.id)
+          onSelect(node.id, event.metaKey || event.ctrlKey)
         }}
       >
         <span className="card__head">

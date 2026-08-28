@@ -311,6 +311,18 @@ function LabelPicker({
   )
 }
 
+export function nextIssueSelection(
+  current: ReadonlySet<string>,
+  id: string,
+  additive: boolean,
+): ReadonlySet<string> {
+  if (!additive) return new Set([id])
+
+  const next = new Set(current)
+  if (!next.delete(id)) next.add(id)
+  return next
+}
+
 function Canvas({
   graph,
   slug,
@@ -347,12 +359,8 @@ function Canvas({
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (!next.delete(id)) next.add(id)
-      return next
-    })
+  const selectIssue = useCallback((id: string, additive: boolean) => {
+    setSelected((current) => nextIssueSelection(current, id, additive))
   }, [])
 
   const selectGroup = useCallback((members: string[]) => {
@@ -446,7 +454,7 @@ function Canvas({
           hidden: hidden.has(node.id),
           highlighted,
           faded: highlight.size > 0 && !highlighted,
-          onToggleSelect: toggleSelect,
+          onSelect: selectIssue,
           onToggleHidden: toggleHidden,
           onOpen: openExternal,
         },
@@ -464,7 +472,7 @@ function Canvas({
     hidden,
     highlight,
     selectGroup,
-    toggleSelect,
+    selectIssue,
     toggleHidden,
     openExternal,
   ])
