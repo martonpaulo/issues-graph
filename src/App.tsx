@@ -666,7 +666,7 @@ function Canvas({
         </span>
       </Panel>
 
-      <Panel position="top-right" className="bar">
+      <Panel position="top-right" className="bar bar--tools">
         <LabelPicker
           labels={labelCounts}
           active={highlight}
