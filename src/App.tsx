@@ -323,6 +323,271 @@ export function nextIssueSelection(
   return next
 }
 
+function useGraphLayout(graph: IssueGraph) {
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }))
+
+  // The zoom floor is relative to what is on screen, so it has to follow a resized window.
+  useEffect(() => {
+    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  /** What the drawn graph occupies, which both the pan bound and the zoom floor are built on. */
+  const bounds = useMemo(() => {
+    const lefts = graph.nodes.map((node) => node.position.x)
+    const tops = graph.nodes.map((node) => node.position.y)
+    const rights = graph.nodes.map((node) => node.position.x + NODE_WIDTH)
+    const bottoms = graph.nodes.map((node) => node.position.y + node.height)
+    for (const group of graph.groups) {
+      lefts.push(group.position.x)
+      tops.push(group.position.y)
+      rights.push(group.position.x + group.width)
+      bottoms.push(group.position.y + group.height)
+    }
+    const left = Math.min(...lefts)
+    const top = Math.min(...tops)
+    const right = Math.max(...rights)
+    const bottom = Math.max(...bottoms)
+    return { left, top, right, bottom, width: right - left, height: bottom - top }
+  }, [graph])
+
+  /**
+   * Panning stops a screen's worth past the graph, and zooming out stops just past the point where
+   * the whole graph is on screen. Both exist for the same reason: an unbounded canvas lets one
+   * gesture put the graph somewhere the reader then has to hunt for.
+   */
+  const translateExtent = useMemo<[[number, number], [number, number]]>(() => {
+    const margin = Math.max(PAN_MARGIN_MIN, Math.max(bounds.width, bounds.height) * PAN_MARGIN_SHARE)
+    return [
+      [bounds.left - margin, bounds.top - margin],
+      [bounds.right + margin, bounds.bottom + margin],
+    ]
+  }, [bounds])
+
+  const minZoom = useMemo(() => {
+    const fits = Math.min(
+      viewport.width / (bounds.width + FIT_PADDING),
+      viewport.height / (bounds.height + FIT_PADDING),
+    )
+    // A little past "everything is visible", and never so far that fitView cannot reach its own
+    // zoom, which would leave the graph unable to open at all.
+    return Math.min(1, Math.max(ABSOLUTE_MIN_ZOOM, fits * ZOOM_OUT_ALLOWANCE))
+  }, [bounds, viewport])
+
+  return { translateExtent, minZoom }
+}
+
+function useCanvasShortcuts({
+  graph,
+  selected,
+  setSelected,
+  setHidden,
+  fitView,
+  openExternal,
+}: {
+  graph: IssueGraph
+  selected: ReadonlySet<string>
+  setSelected: (value: ReadonlySet<string> | ((current: ReadonlySet<string>) => ReadonlySet<string>)) => void
+  setHidden: (value: ReadonlySet<string> | ((current: ReadonlySet<string>) => ReadonlySet<string>)) => void
+  fitView: () => void
+  openExternal: (url: string, label: string) => void
+}) {
+  /**
+   * The few keys worth having on a canvas: leave a selection, take all of it, put the graph back
+   * on screen, hide what is selected, and open the one issue that is.
+   */
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      // Never steal a key from a field or from a dialog that is waiting on an answer.
+      if (target?.closest('input, textarea, [contenteditable="true"], .overlay')) return
+      if (event.altKey || event.ctrlKey) return
+
+      if (event.key === 'Escape') {
+        setSelected(new Set())
+        return
+      }
+      if (event.key.toLowerCase() === 'a' && (event.metaKey || event.shiftKey)) {
+        event.preventDefault()
+        setSelected(new Set(graph.nodes.map((node) => node.id)))
+        return
+      }
+      if (event.metaKey) return
+
+      if (event.key.toLowerCase() === 'f') {
+        void fitView()
+      } else if (event.key.toLowerCase() === 'h') {
+        setHidden((current) => new Set([...current, ...selected]))
+      } else if (event.key.toLowerCase() === 's') {
+        setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+      } else if (event.key === 'Enter' && selected.size === 1) {
+        const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
+        if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
+      }
+    }
+
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [graph, selected, fitView, openExternal, setSelected, setHidden])
+}
+
+function TopLeftBar({
+  slug,
+  nodeCount,
+  dependentCount,
+  blockingCount,
+  onOpenExternal,
+}: {
+  slug: string
+  nodeCount: number
+  dependentCount: number
+  blockingCount: number
+  onOpenExternal: (url: string, label: string) => void
+}) {
+  return (
+    <Panel position="top-left" className="bar">
+      {/* The wordmark is not worth the width here: the icon alone is the way back. */}
+      <a className="iconbutton" href={BASE} data-tip="Choose another repository">
+        <Icon name="graph" />
+      </a>
+      <button
+        className="bar__slug"
+        type="button"
+        onClick={() => onOpenExternal(`https://github.com/${slug}`, slug)}
+      >
+        {slug}
+        <Icon name="external" size={11} />
+      </button>
+      <span className="bar__divider" />
+      <span className="bar__counts">
+        <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong> depend
+        on others · <strong>{blockingCount}</strong> block others
+      </span>
+    </Panel>
+  )
+}
+
+function TopRightBar({
+  labelCounts,
+  highlight,
+  onToggleHighlight,
+  onClearHighlight,
+  onFitView,
+  onAskAgain,
+}: {
+  labelCounts: { name: string; count: number }[]
+  highlight: ReadonlySet<string>
+  onToggleHighlight: (label: string) => void
+  onClearHighlight: () => void
+  onFitView: () => void
+  onAskAgain: () => void
+}) {
+  return (
+    <Panel position="top-right" className="bar">
+      <LabelPicker
+        labels={labelCounts}
+        active={highlight}
+        onToggle={onToggleHighlight}
+        onClear={onClearHighlight}
+      />
+      <span className="bar__divider" />
+      <button
+        className="iconbutton"
+        type="button"
+        aria-label="Centre and fit the graph on screen"
+        data-tip="Centre and fit · F"
+        onClick={() => void onFitView()}
+      >
+        <Icon name="fit" />
+      </button>
+      <button
+        className="iconbutton"
+        type="button"
+        aria-label="Read this repository from GitHub again"
+        data-tip="Read again from GitHub"
+        onClick={onAskAgain}
+      >
+        <Icon name="reload" />
+      </button>
+    </Panel>
+  )
+}
+
+function SelectionBar({
+  selectedCount,
+  canHide,
+  canShow,
+  onHideSelected,
+  onShowSelected,
+  onClearSelection,
+}: {
+  selectedCount: number
+  canHide: boolean
+  canShow: boolean
+  onHideSelected: () => void
+  onShowSelected: () => void
+  onClearSelection: () => void
+}) {
+  if (selectedCount === 0) return null
+
+  return (
+    <Panel position="bottom-center" className="actions">
+      <span className="actions__count">{selectedCount} selected</span>
+      {canHide && (
+        <button
+          className="iconbutton"
+          type="button"
+          aria-label="Hide the selected issues"
+          data-tip="Hide the selected issues · H"
+          onClick={onHideSelected}
+        >
+          <Icon name="eye-off" />
+        </button>
+      )}
+      {canShow && (
+        <button
+          className="iconbutton"
+          type="button"
+          aria-label="Show the selected issues"
+          data-tip="Show the selected issues · S"
+          onClick={onShowSelected}
+        >
+          <Icon name="eye" />
+        </button>
+      )}
+      <button
+        className="iconbutton"
+        type="button"
+        aria-label="Clear the selection"
+        data-tip="Clear the selection · Esc"
+        onClick={onClearSelection}
+      >
+        <Icon name="close" />
+      </button>
+    </Panel>
+  )
+}
+
+function IncompleteWarning({ graph }: { graph: IssueGraph }) {
+  if (graph.complete) return null
+
+  return (
+    <Panel position="bottom-right" className="info">
+      <div className="info__warn" role="status">
+        Could not read the blockers of{' '}
+        {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
+        {graph.rateLimited
+          ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
+          : (graph.unresolved[0]?.reason ?? 'the request failed')}
+      </div>
+    </Panel>
+  )
+}
+
 function Canvas({
   graph,
   slug,
@@ -336,10 +601,6 @@ function Canvas({
   const { fitView } = useReactFlow()
   const openExternal = useOpenExternal()
 
-  const [viewport, setViewport] = useState(() => ({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  }))
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
@@ -351,13 +612,6 @@ function Canvas({
   useEffect(() => {
     writeStored(hiddenKey(slug), [...hidden])
   }, [slug, hidden])
-
-  // The zoom floor is relative to what is on screen, so it has to follow a resized window.
-  useEffect(() => {
-    const onResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight })
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
 
   const selectIssue = useCallback((id: string, additive: boolean) => {
     setSelected((current) => nextIssueSelection(current, id, additive))
@@ -497,85 +751,15 @@ function Canvas({
     [graph, selected, hidden],
   )
 
-  /** What the drawn graph occupies, which both the pan bound and the zoom floor are built on. */
-  const bounds = useMemo(() => {
-    const lefts = graph.nodes.map((node) => node.position.x)
-    const tops = graph.nodes.map((node) => node.position.y)
-    const rights = graph.nodes.map((node) => node.position.x + NODE_WIDTH)
-    const bottoms = graph.nodes.map((node) => node.position.y + node.height)
-    for (const group of graph.groups) {
-      lefts.push(group.position.x)
-      tops.push(group.position.y)
-      rights.push(group.position.x + group.width)
-      bottoms.push(group.position.y + group.height)
-    }
-    const left = Math.min(...lefts)
-    const top = Math.min(...tops)
-    const right = Math.max(...rights)
-    const bottom = Math.max(...bottoms)
-    return { left, top, right, bottom, width: right - left, height: bottom - top }
-  }, [graph])
-
-  /**
-   * Panning stops a screen's worth past the graph, and zooming out stops just past the point where
-   * the whole graph is on screen. Both exist for the same reason: an unbounded canvas lets one
-   * gesture put the graph somewhere the reader then has to hunt for.
-   */
-  const translateExtent = useMemo<[[number, number], [number, number]]>(() => {
-    const margin = Math.max(PAN_MARGIN_MIN, Math.max(bounds.width, bounds.height) * PAN_MARGIN_SHARE)
-    return [
-      [bounds.left - margin, bounds.top - margin],
-      [bounds.right + margin, bounds.bottom + margin],
-    ]
-  }, [bounds])
-
-  const minZoom = useMemo(() => {
-    const fits = Math.min(
-      viewport.width / (bounds.width + FIT_PADDING),
-      viewport.height / (bounds.height + FIT_PADDING),
-    )
-    // A little past "everything is visible", and never so far that fitView cannot reach its own
-    // zoom, which would leave the graph unable to open at all.
-    return Math.min(1, Math.max(ABSOLUTE_MIN_ZOOM, fits * ZOOM_OUT_ALLOWANCE))
-  }, [bounds, viewport])
-
-  /**
-   * The few keys worth having on a canvas: leave a selection, take all of it, put the graph back
-   * on screen, hide what is selected, and open the one issue that is.
-   */
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      // Never steal a key from a field or from a dialog that is waiting on an answer.
-      if (target?.closest('input, textarea, [contenteditable="true"], .overlay')) return
-      if (event.altKey || event.ctrlKey) return
-
-      if (event.key === 'Escape') {
-        setSelected(new Set())
-        return
-      }
-      if (event.key.toLowerCase() === 'a' && (event.metaKey || event.shiftKey)) {
-        event.preventDefault()
-        setSelected(new Set(graph.nodes.map((node) => node.id)))
-        return
-      }
-      if (event.metaKey) return
-
-      if (event.key.toLowerCase() === 'f') {
-        void fitView()
-      } else if (event.key.toLowerCase() === 'h') {
-        setHidden((current) => new Set([...current, ...selected]))
-      } else if (event.key.toLowerCase() === 's') {
-        setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
-      } else if (event.key === 'Enter' && selected.size === 1) {
-        const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
-        if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
-      }
-    }
-
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [graph, selected, fitView, openExternal])
+  const { translateExtent, minZoom } = useGraphLayout(graph)
+  useCanvasShortcuts({
+    graph,
+    selected,
+    setSelected,
+    setHidden,
+    fitView,
+    openExternal,
+  })
 
   const selectedCount = selected.size
   // Offering "hide" for a selection that is already hidden, or the reverse, is a control that does
@@ -604,104 +788,35 @@ function Canvas({
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
-      <Panel position="top-left" className="bar">
-        {/* The wordmark is not worth the width here: the icon alone is the way back. */}
-        <a className="iconbutton" href={BASE} data-tip="Choose another repository">
-          <Icon name="graph" />
-        </a>
-        <button
-          className="bar__slug"
-          type="button"
-          onClick={() => openExternal(`https://github.com/${slug}`, slug)}
-        >
-          {slug}
-          <Icon name="external" size={11} />
-        </button>
-        <span className="bar__divider" />
-        <span className="bar__counts">
-          <strong>{graph.nodes.length}</strong> issues · <strong>{counts.dependent}</strong> depend
-          on others · <strong>{counts.blocking}</strong> block others
-        </span>
-      </Panel>
+      <TopLeftBar
+        slug={slug}
+        nodeCount={graph.nodes.length}
+        dependentCount={counts.dependent}
+        blockingCount={counts.blocking}
+        onOpenExternal={openExternal}
+      />
 
-      <Panel position="top-right" className="bar">
-        <LabelPicker
-          labels={labelCounts}
-          active={highlight}
-          onToggle={toggleHighlight}
-          onClear={() => setHighlight(new Set())}
-        />
-        <span className="bar__divider" />
-        <button
-          className="iconbutton"
-          type="button"
-          aria-label="Centre and fit the graph on screen"
-          data-tip="Centre and fit · F"
-          onClick={() => void fitView()}
-        >
-          <Icon name="fit" />
-        </button>
-        <button
-          className="iconbutton"
-          type="button"
-          aria-label="Read this repository from GitHub again"
-          data-tip="Read again from GitHub"
-          onClick={onAskAgain}
-        >
-          <Icon name="reload" />
-        </button>
-      </Panel>
+      <TopRightBar
+        labelCounts={labelCounts}
+        highlight={highlight}
+        onToggleHighlight={toggleHighlight}
+        onClearHighlight={() => setHighlight(new Set())}
+        onFitView={fitView}
+        onAskAgain={onAskAgain}
+      />
 
-      {selectedCount > 0 && (
-        <Panel position="bottom-center" className="actions">
-          <span className="actions__count">{selectedCount} selected</span>
-          {canHide && (
-            <button
-              className="iconbutton"
-              type="button"
-              aria-label="Hide the selected issues"
-              data-tip="Hide the selected issues · H"
-              onClick={hideSelected}
-            >
-              <Icon name="eye-off" />
-            </button>
-          )}
-          {canShow && (
-            <button
-              className="iconbutton"
-              type="button"
-              aria-label="Show the selected issues"
-              data-tip="Show the selected issues · S"
-              onClick={showSelected}
-            >
-              <Icon name="eye" />
-            </button>
-          )}
-          <button
-            className="iconbutton"
-            type="button"
-            aria-label="Clear the selection"
-            data-tip="Clear the selection · Esc"
-            onClick={() => setSelected(new Set())}
-          >
-            <Icon name="close" />
-          </button>
-        </Panel>
-      )}
+      <SelectionBar
+        selectedCount={selectedCount}
+        canHide={canHide}
+        canShow={canShow}
+        onHideSelected={hideSelected}
+        onShowSelected={showSelected}
+        onClearSelection={() => setSelected(new Set())}
+      />
 
       {/* Nothing floats here unless something is actually missing: every card names its own
           state, and how the data was obtained was settled on the way in. */}
-      {!graph.complete && (
-        <Panel position="bottom-right" className="info">
-          <div className="info__warn" role="status">
-            Could not read the blockers of{' '}
-            {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
-            {graph.rateLimited
-              ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
-              : (graph.unresolved[0]?.reason ?? 'the request failed')}
-          </div>
-        </Panel>
-      )}
+      <IncompleteWarning graph={graph} />
     </ReactFlow>
   )
 }
