@@ -23,15 +23,20 @@ comment naming the open choice and what is already established, and end the run 
 missing phase gets the comment without the label. Never invent a decision and never wait for an
 answer.
 
+A fourth disposition closes rather than parks: when the run holds reproducible evidence that the
+issue's premise is false, post that evidence as a comment and close the issue as not planned. The
+gate is a command a human can rerun with its output, never an assertion. Anything short of proof
+is parked.
+
 ## Automatic merge
 
-Auto-merge: DISARMED — no required status checks on main; arming is forbidden until they exist.
+enabled
 
-Arm `gh pr merge --auto --merge` only when **all** predicates hold: the closing issue carries
-`effort: XS`, `S`, or `M`; CI is green on the exact current head; an approved review exists from
-a different model family than the implementer; no public interface change; no persisted
-data-format change; no migration; branch protection satisfied. Record the basis in the PR body.
-Outside the predicates, leave the pull request open for the owner.
+Arm `gh pr merge --auto --merge` only when **all** predicates hold: CI is green on the exact
+current head; an approved review exists from a different model family than the implementer;
+branch protection satisfied. Effort size is not a predicate; every approved change is eligible.
+Record the basis in the PR body. Outside the predicates, leave the pull request open for the
+owner.
 
 ## Effort and depth
 
@@ -43,15 +48,76 @@ Outside the predicates, leave the pull request open for the owner.
 | L | very high | 45 |
 | XL | evaluate splitting before tasks are written |
 
-## Default routing
+## Roles and who fills them
 
-Claude implements `M` and above; Codex implements `XS`/`S` volume; Antigravity reviews. This
-table is the working assumption until the comparative evaluation replaces it with measurement.
+Three roles, each selectable per issue by a label, each falling back to a repository default
+when the issue does not say. The names match Agent Orchestrator's own roles.
+
+| Role | Label | This repository's default |
+| --- | --- | --- |
+| Implementer | `implementer: claude\|codex\|antigravity` | **claude** |
+| Reviewer | `reviewer: claude\|codex\|antigravity` | **antigravity** |
+| Orchestrator | `orchestrator: claude\|codex\|antigravity` | **codex** |
+
+**The issue outranks the default.** Honour an explicit label even when another pool has more
+headroom; the label is the owner's decision, and quota is a reason to relabel rather than to
+substitute silently.
+
+Keep the implementer and the reviewer in different model families where you can. That is what
+makes the automatic-merge different-family predicate reachable; a same-family pair is allowed
+and simply leaves automatic merge unavailable.
+
+### When the issue does not choose
+
+Claude, Codex, and Antigravity are each eligible for **any local role at any effort level**, and
+the owner selects freely between them. No measured quality difference between them is recorded,
+so nothing here suggests one is better suited to a size or a kind of task.
+
+What does differ is where the work is billed:
+
+| Executor | Quota pool | Per-call cost |
+| --- | --- | --- |
+| Claude | Claude subscription | normal |
+| Codex | ChatGPT subscription, separate pool | normal |
+| Antigravity | Google AI subscription, separate pool | reported high fixed system-prompt overhead, unverified on the current release |
+
+Two rules follow, and both are about economics rather than capability:
+
+- **Pick the pool with headroom.** Three separate subscriptions let work run in parallel without
+  exhausting any single pool. Read the quota before dispatching a batch.
+- **Vary the family between implementing and reviewing.** A reviewer from a different vendor
+  than the implementer disagrees more usefully than one sharing the same training and the same
+  instructions.
+
+The comparative evaluation may replace this guidance with measurement; it may never narrow the
+selectable set.
+
+## Phase provenance
+
+Every pull request carries one line naming the phases that produced it, so which skills ran is
+auditable from GitHub alone:
+
+```text
+Phases: issue-plan (delegated), issue-implement
+```
+
+Name only phases that ran, in order, marking a delegated one as `(delegated)`. A completed review
+appends `issue-review (<harness>)`. A run that cannot state its phases leaves the pull request for
+the owner.
+
+## Review routing
+
+A `reviewer:` label pins the lane. Without the label, the repository default applies. A provider
+outage, a malformed result, an exhausted quota, or an unknown error leaves the review pending or
+blocked; never substitute the reviewer silently.
+Name the lane that produced the review in the pull request body, because the automatic-merge
+different-family predicate reads that provenance.
 
 ## Boundaries
 
-- Never push to `main`; the repository's pre-push guard enforces this for worker sessions.
+- Never push to `main`; the repository's pre-push guard enforces this for worker
+  sessions.
 - Discovered out-of-scope work may become one agent-proposed issue per finding, per the
   publishing conventions' agent-proposed section: capture-format body, provenance in body and
-  signature, `type:` and `priority:` labels only — no assignee, no `jules` label, no `effort:`.
+  signature, `type:` and `priority:` labels only — no assignee, no routing label, no `effort:`.
   Owner triage is the only path from proposal to execution.
