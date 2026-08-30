@@ -364,6 +364,42 @@ export function nextIssueSelection(
   return next
 }
 
+export interface GraphBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
+}
+
+/**
+ * The box every card and every group frame sits inside. One pass rather than a corner-per-array:
+ * a spread of one array per corner also puts the whole node list on the call stack, which is the
+ * part that stops working on a large backlog.
+ */
+export function graphBounds(graph: IssueGraph): GraphBounds {
+  let left = Infinity
+  let top = Infinity
+  let right = -Infinity
+  let bottom = -Infinity
+
+  for (const node of graph.nodes) {
+    if (node.position.x < left) left = node.position.x
+    if (node.position.y < top) top = node.position.y
+    if (node.position.x + NODE_WIDTH > right) right = node.position.x + NODE_WIDTH
+    if (node.position.y + node.height > bottom) bottom = node.position.y + node.height
+  }
+  for (const group of graph.groups) {
+    if (group.position.x < left) left = group.position.x
+    if (group.position.y < top) top = group.position.y
+    if (group.position.x + group.width > right) right = group.position.x + group.width
+    if (group.position.y + group.height > bottom) bottom = group.position.y + group.height
+  }
+
+  return { left, top, right, bottom, width: right - left, height: bottom - top }
+}
+
 function Canvas({
   graph,
   slug,
@@ -541,23 +577,7 @@ function Canvas({
   )
 
   /** What the drawn graph occupies, which both the pan bound and the zoom floor are built on. */
-  const bounds = useMemo(() => {
-    const lefts = graph.nodes.map((node) => node.position.x)
-    const tops = graph.nodes.map((node) => node.position.y)
-    const rights = graph.nodes.map((node) => node.position.x + NODE_WIDTH)
-    const bottoms = graph.nodes.map((node) => node.position.y + node.height)
-    for (const group of graph.groups) {
-      lefts.push(group.position.x)
-      tops.push(group.position.y)
-      rights.push(group.position.x + group.width)
-      bottoms.push(group.position.y + group.height)
-    }
-    const left = Math.min(...lefts)
-    const top = Math.min(...tops)
-    const right = Math.max(...rights)
-    const bottom = Math.max(...bottoms)
-    return { left, top, right, bottom, width: right - left, height: bottom - top }
-  }, [graph])
+  const bounds = useMemo(() => graphBounds(graph), [graph])
 
   /**
    * Panning stops a screen's worth past the graph, and zooming out stops just past the point where
