@@ -34,8 +34,9 @@ that shape from a list means opening issues one by one and holding the graph in 
 
 The workaround people reach for is generating a diagram file into the repository and regenerating it
 after every change. That works and it costs a maintained artifact, a regeneration step somebody has
-to remember, and a file that is wrong between the change and the regeneration. This reads the live
-API instead, so it cannot be stale and it leaves nothing behind.
+to remember, and a file that is wrong between the change and the regeneration. This reads GitHub on
+demand instead and leaves nothing in the repository. A fresh read reflects GitHub at that moment; a
+saved browser copy stays explicitly identified by its age and dependency coverage.
 
 ## What it does
 
@@ -46,7 +47,8 @@ API instead, so it cannot be stale and it leaves nothing behind.
 - Keeps closed blockers available behind a switch, because the reason an issue is unblocked is often
   the thing you need to see.
 - Quotes each read against the unauthenticated request budget and confirms it before spending it,
-  then saves it in the reader's own browser so opening the same repository twice is free.
+  then saves it in the reader's own browser. Later visits explicitly choose between a fresh read and
+  that free saved copy, whose canvas shows when it was saved and whether it includes closed blockers.
 
 ## What it will never do
 
@@ -79,4 +81,4 @@ the only job it has.
   much a page may read, which is why reads are quoted before they are spent and cached after.
 - **Static hosting only**, on GitHub Pages. No server, no build-time data, no scheduled job.
 - **The browser is the whole runtime.** Everything the page knows, it fetched itself, in the session
-  the reader is looking at.
+  the reader is looking at or an earlier session that produced the explicitly identified saved copy.
