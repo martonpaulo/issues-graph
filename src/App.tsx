@@ -16,6 +16,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type Dispatch,
+  type SetStateAction,
 } from 'react'
 
 import { readCache, writeCache, type CachedGraph } from './cache'
@@ -26,15 +28,15 @@ import {
   UNAUTHENTICATED_HOURLY_LIMIT,
   type LoadFailure,
   type RateLimitStatus,
-  type RepositoryGraphData,
 } from './github'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
-import { RepoInput, rememberTarget } from './RepoInput'
+import { RepoInput } from './RepoInput'
 import { parseRoute, pathForTarget, slugOf, type RepoTarget } from './route'
 import { readStored, writeStored } from './storage'
+import { rememberTarget } from './suggestions'
 import { describeAge, describeUntil } from './time'
 
 const BASE = import.meta.env.BASE_URL
@@ -57,6 +59,47 @@ const ABSOLUTE_MIN_ZOOM = 0.05
 
 const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
 const hiddenKey = (slug: string) => `issue-graph:hidden:${slug}`
+
+export interface SavedCopyProvenance {
+  savedAt: Date
+  includedClosed: boolean
+}
+
+export type SavedCopyDecision =
+  | { kind: 'open'; provenance: SavedCopyProvenance }
+  | { kind: 'requires-latest'; reason: string }
+
+/** A saved copy can only satisfy views covered by the GitHub read that produced it. */
+export function decideSavedCopyOpen(
+  cached: CachedGraph,
+  showClosed: boolean,
+): SavedCopyDecision {
+  if (showClosed && !cached.data.includedClosed) {
+    return {
+      kind: 'requires-latest',
+      reason: 'A wider GitHub read is required to include closed blockers.',
+    }
+  }
+
+  return {
+    kind: 'open',
+    provenance: {
+      savedAt: cached.savedAt,
+      includedClosed: cached.data.includedClosed,
+    },
+  }
+}
+
+function savedCopyCoverage(includedClosed: boolean): string {
+  return includedClosed ? 'includes closed blockers' : 'open blockers only'
+}
+
+export function describeSavedCopy(
+  savedCopy: SavedCopyProvenance,
+  now: Date = new Date(),
+): string {
+  return `Saved copy · ${describeAge(savedCopy.savedAt, now)} · ${savedCopyCoverage(savedCopy.includedClosed)}`
+}
 
 /**
  * The budget as a headline and a footnote. The count is what a decision turns on; when it refills
@@ -323,6 +366,46 @@ export function nextIssueSelection(
   return next
 }
 
+export interface GraphBounds {
+  left: number
+  top: number
+  right: number
+  bottom: number
+  width: number
+  height: number
+}
+
+/**
+ * The box every card and every group frame sits inside. One pass rather than a corner-per-array:
+ * a spread of one array per corner also puts the whole node list on the call stack, which is the
+ * part that stops working on a large backlog.
+ */
+export function graphBounds(graph: IssueGraph): GraphBounds {
+  let left = Infinity
+  let top = Infinity
+  let right = -Infinity
+  let bottom = -Infinity
+
+  for (const node of graph.nodes) {
+    if (node.position.x < left) left = node.position.x
+    if (node.position.y < top) top = node.position.y
+    if (node.position.x + NODE_WIDTH > right) right = node.position.x + NODE_WIDTH
+    if (node.position.y + node.height > bottom) bottom = node.position.y + node.height
+  }
+  for (const group of graph.groups) {
+    if (group.position.x < left) left = group.position.x
+    if (group.position.y < top) top = group.position.y
+    if (group.position.x + group.width > right) right = group.position.x + group.width
+    if (group.position.y + group.height > bottom) bottom = group.position.y + group.height
+  }
+
+  return { left, top, right, bottom, width: right - left, height: bottom - top }
+}
+
+/**
+ * Everything the canvas needs to bound a gesture: how far a pan may travel and how far a zoom may
+ * pull back. Both are read off the drawn graph and the window, so they live together.
+ */
 function useGraphLayout(graph: IssueGraph) {
   const [viewport, setViewport] = useState(() => ({
     width: window.innerWidth,
@@ -337,23 +420,7 @@ function useGraphLayout(graph: IssueGraph) {
   }, [])
 
   /** What the drawn graph occupies, which both the pan bound and the zoom floor are built on. */
-  const bounds = useMemo(() => {
-    const lefts = graph.nodes.map((node) => node.position.x)
-    const tops = graph.nodes.map((node) => node.position.y)
-    const rights = graph.nodes.map((node) => node.position.x + NODE_WIDTH)
-    const bottoms = graph.nodes.map((node) => node.position.y + node.height)
-    for (const group of graph.groups) {
-      lefts.push(group.position.x)
-      tops.push(group.position.y)
-      rights.push(group.position.x + group.width)
-      bottoms.push(group.position.y + group.height)
-    }
-    const left = Math.min(...lefts)
-    const top = Math.min(...tops)
-    const right = Math.max(...rights)
-    const bottom = Math.max(...bottoms)
-    return { left, top, right, bottom, width: right - left, height: bottom - top }
-  }, [graph])
+  const bounds = useMemo(() => graphBounds(graph), [graph])
 
   /**
    * Panning stops a screen's worth past the graph, and zooming out stops just past the point where
@@ -391,8 +458,8 @@ function useCanvasShortcuts({
 }: {
   graph: IssueGraph
   selected: ReadonlySet<string>
-  setSelected: (value: ReadonlySet<string> | ((current: ReadonlySet<string>) => ReadonlySet<string>)) => void
-  setHidden: (value: ReadonlySet<string> | ((current: ReadonlySet<string>) => ReadonlySet<string>)) => void
+  setSelected: Dispatch<SetStateAction<ReadonlySet<string>>>
+  setHidden: Dispatch<SetStateAction<ReadonlySet<string>>>
   fitView: () => void
   openExternal: (url: string, label: string) => void
 }) {
@@ -464,8 +531,8 @@ function TopLeftBar({
       </button>
       <span className="bar__divider" />
       <span className="bar__counts">
-        <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong> depend
-        on others · <strong>{blockingCount}</strong> block others
+        <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong> depend on others ·{' '}
+        <strong>{blockingCount}</strong> block others
       </span>
     </Panel>
   )
@@ -487,7 +554,7 @@ function TopRightBar({
   onAskAgain: () => void
 }) {
   return (
-    <Panel position="top-right" className="bar">
+    <Panel position="top-right" className="bar bar--tools">
       <LabelPicker
         labels={labelCounts}
         active={highlight}
@@ -504,14 +571,8 @@ function TopRightBar({
       >
         <Icon name="fit" />
       </button>
-      <button
-        className="iconbutton"
-        type="button"
-        aria-label="Read this repository from GitHub again"
-        data-tip="Read again from GitHub"
-        onClick={onAskAgain}
-      >
-        <Icon name="reload" />
+      <button className="button button--small" type="button" onClick={onAskAgain}>
+        <Icon name="reload" size={12} /> Read latest from GitHub
       </button>
     </Panel>
   )
@@ -572,18 +633,34 @@ function SelectionBar({
   )
 }
 
-function IncompleteWarning({ graph }: { graph: IssueGraph }) {
-  if (graph.complete) return null
+/**
+ * The only two things the canvas says about the drawing itself: where it came from, and what it
+ * could not reach. Neither is worth a panel on its own, and nothing floats here when both are
+ * absent — every card already names its own state.
+ */
+function GraphStatus({
+  graph,
+  savedCopy,
+}: {
+  graph: IssueGraph
+  savedCopy: SavedCopyProvenance | null
+}) {
+  if (!savedCopy && graph.complete) return null
 
   return (
     <Panel position="bottom-right" className="info">
-      <div className="info__warn" role="status">
-        Could not read the blockers of{' '}
-        {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
-        {graph.rateLimited
-          ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
-          : (graph.unresolved[0]?.reason ?? 'the request failed')}
-      </div>
+      {savedCopy && (
+        <div className="info__row info__row--muted">{describeSavedCopy(savedCopy)}</div>
+      )}
+      {!graph.complete && (
+        <div className="info__warn" role="status">
+          Could not read the blockers of{' '}
+          {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
+          {graph.rateLimited
+            ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
+            : (graph.unresolved[0]?.reason ?? 'the request failed')}
+        </div>
+      )}
     </Panel>
   )
 }
@@ -591,10 +668,12 @@ function IncompleteWarning({ graph }: { graph: IssueGraph }) {
 function Canvas({
   graph,
   slug,
+  savedCopy,
   onAskAgain,
 }: {
   graph: IssueGraph
   slug: string
+  savedCopy: SavedCopyProvenance | null
   /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
   onAskAgain: () => void
 }) {
@@ -814,9 +893,7 @@ function Canvas({
         onClearSelection={() => setSelected(new Set())}
       />
 
-      {/* Nothing floats here unless something is actually missing: every card names its own
-          state, and how the data was obtained was settled on the way in. */}
-      <IncompleteWarning graph={graph} />
+      <GraphStatus graph={graph} savedCopy={savedCopy} />
     </ReactFlow>
   )
 }
@@ -831,7 +908,7 @@ type Phase =
   /** The layout runs off the main path of the load, and on a large graph it is not instant. */
   | { kind: 'drawing' }
   | { kind: 'failed'; failure: LoadFailure }
-  | { kind: 'ready'; graph: IssueGraph }
+  | { kind: 'ready'; graph: IssueGraph; savedCopy: SavedCopyProvenance | null }
 
 function GraphView({
   target,
@@ -842,9 +919,6 @@ function GraphView({
 }) {
   const [attempt, setAttempt] = useState(0)
   const [note, setNote] = useState<string | null>(null)
-  // Opening a repository draws the saved copy straight away; asking again is what brings the
-  // budget page back, and only an explicit request does that.
-  const [askFirst, setAskFirst] = useState(false)
   const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, false))
 
   useEffect(() => {
@@ -853,7 +927,6 @@ function GraphView({
 
   const reload = useCallback((why: string | null = null) => {
     setNote(why)
-    setAskFirst(true)
     setAttempt((value) => value + 1)
   }, [])
 
@@ -864,7 +937,6 @@ function GraphView({
       key={attempt}
       target={target}
       note={note}
-      askFirst={askFirst}
       showClosed={showClosed}
       onShowClosed={setShowClosed}
       onReload={reload}
@@ -876,7 +948,6 @@ function GraphView({
 function GraphLoad({
   target,
   note,
-  askFirst,
   showClosed,
   onShowClosed,
   onReload,
@@ -884,7 +955,6 @@ function GraphLoad({
 }: {
   target: RepoTarget
   note: string | null
-  askFirst: boolean
   showClosed: boolean
   onShowClosed: (value: boolean) => void
   onReload: (why?: string | null) => void
@@ -893,19 +963,8 @@ function GraphLoad({
   const slug = slugOf(target)
   // Read once per mount: the gate has to describe a copy that does not change under it.
   const [cached] = useState<CachedGraph | null>(() => readCache(slug))
-  const [phase, setPhase] = useState<Phase>(() =>
-    cached && !askFirst ? { kind: 'drawing' } : { kind: 'gate', status: null, checking: true },
-  )
+  const [phase, setPhase] = useState<Phase>({ kind: 'gate', status: null, checking: true })
   const abort = useRef<AbortController | null>(null)
-
-  // A copy already in the browser costs nothing, so opening a link to a repository that has one
-  // draws it rather than asking a question whose answer is obvious.
-  useEffect(() => {
-    if (!cached || askFirst) return
-    void buildGraph(cached.data, target, { showClosed }).then((graph) => {
-      setPhase((current) => (current.kind === 'drawing' ? { kind: 'ready', graph } : current))
-    })
-  }, [cached, askFirst, target, showClosed])
 
   // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
   // can always open with real numbers instead of an assumption about what is left.
@@ -950,7 +1009,7 @@ function GraphLoad({
             writeCache(slug, result.data)
             setPhase({ kind: 'drawing' })
             const graph = await buildGraph(result.data, target, { showClosed: includeClosed })
-            if (!controller.signal.aborted) setPhase({ kind: 'ready', graph })
+            if (!controller.signal.aborted) setPhase({ kind: 'ready', graph, savedCopy: null })
           } else if (result.failure.kind === 'cancelled') {
             onReload(null)
           } else {
@@ -971,15 +1030,20 @@ function GraphLoad({
     [target, slug, onReload],
   )
 
-  const draw = useCallback(
-    (data: RepositoryGraphData) => {
+  const drawSavedCopy = useCallback(
+    (copy: CachedGraph) => {
+      const decision = decideSavedCopyOpen(copy, showClosed)
+      if (decision.kind !== 'open') return
+
       setPhase({ kind: 'drawing' })
-      void buildGraph(data, target, { showClosed }).then((graph) =>
-        setPhase({ kind: 'ready', graph }),
+      void buildGraph(copy.data, target, { showClosed }).then((graph) =>
+        setPhase({ kind: 'ready', graph, savedCopy: decision.provenance }),
       )
     },
     [target, showClosed],
   )
+
+  const savedCopyDecision = cached ? decideSavedCopyOpen(cached, showClosed) : null
 
   if (phase.kind === 'ready' && phase.graph.nodes.length > 0) {
     return (
@@ -988,6 +1052,7 @@ function GraphLoad({
           key={`${slug}:${showClosed}`}
           graph={phase.graph}
           slug={slug}
+          savedCopy={phase.savedCopy}
           onAskAgain={() => onReload()}
         />
       </ReactFlowProvider>
@@ -1010,7 +1075,7 @@ function GraphLoad({
               <Fact
                 label="Saved copy"
                 value={describeAge(cached.savedAt)}
-                note="costs nothing to open"
+                note={savedCopyCoverage(cached.data.includedClosed)}
               />
             )}
           </dl>
@@ -1027,7 +1092,7 @@ function GraphLoad({
           </label>
           <div className="stage__actions">
             <button
-              className={cached ? 'button' : 'button button--primary'}
+              className={savedCopyDecision?.kind === 'open' ? 'button' : 'button button--primary'}
               type="button"
               disabled={phase.checking}
               onClick={() => start(showClosed)}
@@ -1038,12 +1103,23 @@ function GraphLoad({
               <button
                 className="button button--primary"
                 type="button"
-                onClick={() => draw(cached.data)}
+                disabled={savedCopyDecision?.kind === 'requires-latest'}
+                aria-describedby={
+                  savedCopyDecision?.kind === 'requires-latest'
+                    ? 'saved-copy-unavailable'
+                    : undefined
+                }
+                onClick={() => drawSavedCopy(cached)}
               >
                 <Icon name="clock" size={12} /> Open saved copy
               </button>
             )}
           </div>
+          {savedCopyDecision?.kind === 'requires-latest' && (
+            <p className="notice" id="saved-copy-unavailable" role="status">
+              {savedCopyDecision.reason}
+            </p>
+          )}
         </>
       )}
 

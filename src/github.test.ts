@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import rawIssue from './__fixtures__/agent-workflows.raw-issue.json'
 import {
+  DEPENDENCY_CONCURRENCY,
   issuesNeedingBlockers,
   loadRepositoryGraph,
   nextPageUrl,
@@ -148,24 +149,94 @@ describe('loadRepositoryGraph', () => {
   })
 
   it('stops asking once the budget runs out mid-run and marks the graph incomplete', async () => {
+    const blocked = Array.from({ length: DEPENDENCY_CONCURRENCY * 3 }, (_, i) => issue(i + 1, 1))
     let dependencyCalls = 0
     const fetchImpl = vi.fn(async (url: string | URL | Request) => {
       if (String(url).includes('/dependencies/blocked_by')) {
         dependencyCalls += 1
         return rateLimited()
       }
-      return json([issue(1, 1), issue(2, 1), issue(3, 1)])
+      return json(blocked)
     })
 
     const result = await loadRepositoryGraph(TARGET, { fetchImpl: fetchImpl as unknown as typeof fetch })
 
     expect(result.ok).toBe(true)
     if (!result.ok) return
-    // One attempt proves the budget is gone; the remaining two are reported, not retried.
-    expect(dependencyCalls).toBe(1)
+    // Whatever was already in flight when the first 403 came back cannot be recalled, so the run
+    // spends at most one window; everything after it is reported rather than retried.
+    expect(dependencyCalls).toBeLessThanOrEqual(DEPENDENCY_CONCURRENCY)
+    expect(dependencyCalls).toBeLessThan(blocked.length)
     expect(result.data.rateLimited).toBe(true)
     expect(result.data.complete).toBe(false)
-    expect(result.data.unresolved.map((u) => u.number)).toEqual([1, 2, 3])
+    expect(result.data.unresolved.map((u) => u.number)).toEqual(blocked.map((i) => i.number))
+  })
+
+  it('runs the dependency requests in parallel, bounded by the concurrency window', async () => {
+    const total = DEPENDENCY_CONCURRENCY * 2
+    const blocked = Array.from({ length: total }, (_, i) => issue(i + 1, 1))
+    const release: (() => void)[] = []
+    let inFlight = 0
+    let peak = 0
+
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (!String(url).includes('/dependencies/blocked_by')) return json(blocked)
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await new Promise<void>((resolve) => release.push(resolve))
+      inFlight -= 1
+      return json([issue(99)])
+    })
+
+    const pending = loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+
+    // Let every worker reach its request, then answer them all.
+    while (release.length < DEPENDENCY_CONCURRENCY) await Promise.resolve()
+    expect(peak).toBe(DEPENDENCY_CONCURRENCY)
+    let resolved = 0
+    while (resolved < total) {
+      const next = release[resolved]
+      if (!next) {
+        await Promise.resolve()
+        continue
+      }
+      resolved += 1
+      next()
+    }
+
+    const result = await pending
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.blockers.size).toBe(total)
+    expect(peak).toBe(DEPENDENCY_CONCURRENCY)
+  })
+
+  it('reports every dependency failure in issue order, not completion order', async () => {
+    const later: (() => void)[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const target = String(url)
+      if (target.includes('/issues/1/dependencies')) {
+        // The first issue answers last, so a completion-ordered report would put it second.
+        await new Promise<void>((resolve) => later.push(resolve))
+        return json({}, { status: 500 })
+      }
+      if (target.includes('/issues/2/dependencies')) return json({}, { status: 404 })
+      return json([issue(1, 1), issue(2, 1)])
+    })
+
+    const pending = loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+    while (later.length < 1) await Promise.resolve()
+    later[0]()
+
+    const result = await pending
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.unresolved.map((u) => u.number)).toEqual([1, 2])
+    expect(result.data.unresolved[1].reason).toBe('dependencies were not found')
   })
 
   it('stays complete when GitHub\'s own count disagrees with the list it returned', async () => {

@@ -21,6 +21,18 @@ const API_ROOT = 'https://api.github.com'
  */
 export const UNAUTHENTICATED_HOURLY_LIMIT = 60
 
+/**
+ * How many dependency requests are in flight at once.
+ *
+ * They are independent reads, so awaiting each one before sending the next made the phase take as
+ * long as the sum of its round trips: a graph needing 30 of them waited for 30 sequential responses.
+ * The width stays small on purpose. GitHub asks clients to keep concurrency modest and answers a
+ * burst with a secondary rate limit, and a narrow window also bounds how many requests a run can
+ * have in the air before the first exhausted-budget response stops the rest.
+ * https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api
+ */
+export const DEPENDENCY_CONCURRENCY = 6
+
 export interface RateLimitStatus {
   limit: number
   remaining: number
@@ -301,41 +313,65 @@ export async function loadRepositoryGraph(
 
   options.onProgress?.({ done: 0, total: needBlockers.length })
 
-  for (const [index, issue] of needBlockers.entries()) {
-    // Once the budget is gone every further request fails the same way; stop asking and report.
-    if (rateLimited) {
-      unresolved.push({ number: issue.number, reason: 'rate limit reached before it was read' })
-      continue
-    }
+  // Kept per issue rather than appended on completion, so the report stays in issue order however
+  // the parallel requests happen to finish.
+  const failures: (UnresolvedDependency | null)[] = needBlockers.map(() => null)
+  let done = 0
+  let nextIndex = 0
 
-    const url =
-      `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
-      `/issues/${issue.number}/dependencies/blocked_by`
+  const worker = async (): Promise<void> => {
+    while (nextIndex < needBlockers.length) {
+      const index = nextIndex
+      nextIndex += 1
+      const issue = needBlockers[index]
 
-    try {
-      const list = (await (await request(url, options, count)).json()) as IssuePayload[]
-      // Whatever GitHub returns is what the graph draws. A summary count that disagrees with the
-      // list is GitHub's own inconsistency — a blocker in a repository this reader cannot see, for
-      // one — and reporting it as a gap only tells the reader something they can do nothing with.
-      blockers.set(issue.number, list)
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') throw error
-      if (!(error instanceof RequestFailure)) throw error
+      // Once the budget is gone every further request fails the same way; stop asking and report.
+      if (rateLimited) {
+        failures[index] = {
+          number: issue.number,
+          reason: 'rate limit reached before it was read',
+        }
+      } else {
+        const url =
+          `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
+          `/issues/${issue.number}/dependencies/blocked_by`
 
-      if (error.failure.kind === 'rate-limited') {
-        rateLimited = true
-        rateLimitReset = error.failure.reset
-        unresolved.push({ number: issue.number, reason: 'rate limit reached' })
-      } else if (error.failure.kind === 'network') {
-        unresolved.push({ number: issue.number, reason: error.failure.message })
-      } else if (error.failure.kind === 'not-found') {
-        unresolved.push({ number: issue.number, reason: 'dependencies were not found' })
-      } else if (error.failure.kind === 'unexpected') {
-        unresolved.push({ number: issue.number, reason: error.failure.message })
+        try {
+          const list = (await (await request(url, options, count)).json()) as IssuePayload[]
+          // Whatever GitHub returns is what the graph draws. A summary count that disagrees with the
+          // list is GitHub's own inconsistency — a blocker in a repository this reader cannot see,
+          // for one — and reporting it as a gap only tells the reader something they can do nothing
+          // with.
+          blockers.set(issue.number, list)
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') throw error
+          if (!(error instanceof RequestFailure)) throw error
+
+          if (error.failure.kind === 'rate-limited') {
+            rateLimited = true
+            rateLimitReset = error.failure.reset
+            failures[index] = { number: issue.number, reason: 'rate limit reached' }
+          } else if (error.failure.kind === 'network') {
+            failures[index] = { number: issue.number, reason: error.failure.message }
+          } else if (error.failure.kind === 'not-found') {
+            failures[index] = { number: issue.number, reason: 'dependencies were not found' }
+          } else if (error.failure.kind === 'unexpected') {
+            failures[index] = { number: issue.number, reason: error.failure.message }
+          }
+        }
       }
-    }
 
-    options.onProgress?.({ done: index + 1, total: needBlockers.length })
+      done += 1
+      options.onProgress?.({ done, total: needBlockers.length })
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(DEPENDENCY_CONCURRENCY, needBlockers.length) }, worker),
+  )
+
+  for (const failure of failures) {
+    if (failure) unresolved.push(failure)
   }
 
   return {

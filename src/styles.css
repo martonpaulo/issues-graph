@@ -330,6 +330,13 @@ code {
   }
 }
 
+/* Keep the latest-read label visible on phones without letting the two fixed top panels overlap. */
+@media (max-width: 640px) {
+  .react-flow__panel.bar--tools {
+    top: 48px;
+  }
+}
+
 /* Canvas ------------------------------------------------------------------ */
 
 .dots {
