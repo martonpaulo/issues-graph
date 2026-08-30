@@ -56,7 +56,7 @@ when the issue does not say. The names match Agent Orchestrator's own roles.
 | Role | Label | This repository's default |
 | --- | --- | --- |
 | Implementer | `implementer: claude\|codex\|antigravity` | **claude** |
-| Reviewer | `reviewer: claude\|codex\|antigravity` | **antigravity** |
+| Reviewer | `reviewer: claude\|codex\|antigravity` | **codex** |
 | Orchestrator | `orchestrator: claude\|codex\|antigravity` | **codex** |
 
 **The issue outranks the default.** Honour an explicit label even when another pool has more
@@ -102,8 +102,16 @@ Phases: issue-plan (delegated), issue-implement
 ```
 
 Name only phases that ran, in order, marking a delegated one as `(delegated)`. A completed review
-appends `issue-review (<harness>)`. A run that cannot state its phases leaves the pull request for
-the owner.
+appends `issue-review (<harness>)`.
+
+A second line names every other skill the run invoked, so specialized routing is visible too:
+
+```text
+Skills: skd-test-design, skd-github-publishing-conventions
+```
+
+Write `Skills: none` when the run reached no other skill; an omitted line is not the same claim as
+an empty one. A run that cannot state what it invoked leaves the pull request for the owner.
 
 ## Review routing
 
