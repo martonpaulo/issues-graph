@@ -1,0 +1,21 @@
+#!/bin/sh
+# Repository-owned pre-push guard, installed by project-setup's agent-orchestration opt-in via
+# `git config core.hooksPath .ao/hooks`. Blocks orchestrated worker sessions (AO_SESSION_ID set)
+# from pushing to the protected branch; a human push is untouched. Deliberate override:
+# SKD_ALLOW_PROTECTED_PUSH=1.
+
+protected="refs/heads/main"
+
+if [ -z "${AO_SESSION_ID:-}" ] || [ "${SKD_ALLOW_PROTECTED_PUSH:-0}" = "1" ]; then
+    exit 0
+fi
+
+status=0
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+    if [ "$remote_ref" = "$protected" ]; then
+        echo "pre-push guard: worker session may not push to $remote_ref" >&2
+        echo "open a pull request instead; a human sets SKD_ALLOW_PROTECTED_PUSH=1 to override" >&2
+        status=1
+    fi
+done
+exit "$status"
