@@ -32,9 +32,10 @@ import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
-import { RepoInput, rememberTarget } from './RepoInput'
+import { RepoInput } from './RepoInput'
 import { parseRoute, pathForTarget, slugOf, type RepoTarget } from './route'
 import { readStored, writeStored } from './storage'
+import { rememberTarget } from './suggestions'
 import { describeAge, describeUntil } from './time'
 
 const BASE = import.meta.env.BASE_URL
