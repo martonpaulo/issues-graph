@@ -2,9 +2,18 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { App, decideSavedCopyOpen, describeSavedCopy, nextIssueSelection } from './App'
+import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
+import awIssues from './__fixtures__/agent-workflows.issues.json'
+import {
+  App,
+  decideSavedCopyOpen,
+  describeSavedCopy,
+  graphBounds,
+  nextIssueSelection,
+} from './App'
 import { readCache, writeCache } from './cache'
-import type { RepositoryGraphData } from './github'
+import type { IssuePayload, RepositoryGraphData } from './github'
+import { buildGraph, NODE_WIDTH } from './graph'
 
 const narrowData: RepositoryGraphData = {
   issues: [],
@@ -112,5 +121,92 @@ describe('saved copy entry', () => {
     expect(describeSavedCopy({ savedAt, includedClosed: true }, now)).toBe(
       'Saved copy · 2 hours ago · includes closed blockers',
     )
+  })
+})
+
+describe('graphBounds', () => {
+  function dataFrom(issues: unknown, blockedBy: unknown): RepositoryGraphData {
+    const blockers = new Map(
+      Object.entries(blockedBy as Record<string, IssuePayload[]>).map(([number, list]) => [
+        Number(number),
+        list,
+      ]),
+    )
+    return {
+      issues: issues as IssuePayload[],
+      blockers,
+      complete: true,
+      unresolved: [],
+      rateLimited: false,
+      rateLimitReset: null,
+      requestCount: 1 + blockers.size,
+      rateLimit: null,
+      includedClosed: true,
+    }
+  }
+
+  it('encloses every card and every group frame of a captured graph', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+      owner: 'martonpaulo',
+      repo: 'agent-workflows',
+    })
+    const bounds = graphBounds(graph)
+
+    expect(graph.nodes.length).toBeGreaterThan(0)
+    expect(graph.groups.length).toBeGreaterThan(0)
+    for (const node of graph.nodes) {
+      expect(node.position.x).toBeGreaterThanOrEqual(bounds.left)
+      expect(node.position.y).toBeGreaterThanOrEqual(bounds.top)
+      expect(node.position.x + NODE_WIDTH).toBeLessThanOrEqual(bounds.right)
+      expect(node.position.y + node.height).toBeLessThanOrEqual(bounds.bottom)
+    }
+    for (const group of graph.groups) {
+      expect(group.position.x).toBeGreaterThanOrEqual(bounds.left)
+      expect(group.position.y).toBeGreaterThanOrEqual(bounds.top)
+      expect(group.position.x + group.width).toBeLessThanOrEqual(bounds.right)
+      expect(group.position.y + group.height).toBeLessThanOrEqual(bounds.bottom)
+    }
+    expect(bounds.width).toBe(bounds.right - bounds.left)
+    expect(bounds.height).toBe(bounds.bottom - bounds.top)
+  })
+
+  it('touches each edge of the box it reports', async () => {
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+      owner: 'martonpaulo',
+      repo: 'agent-workflows',
+    })
+    const bounds = graphBounds(graph)
+    const boxes = [
+      ...graph.nodes.map((node) => ({
+        left: node.position.x,
+        top: node.position.y,
+        right: node.position.x + NODE_WIDTH,
+        bottom: node.position.y + node.height,
+      })),
+      ...graph.groups.map((group) => ({
+        left: group.position.x,
+        top: group.position.y,
+        right: group.position.x + group.width,
+        bottom: group.position.y + group.height,
+      })),
+    ]
+    expect(Math.min(...boxes.map((box) => box.left))).toBe(bounds.left)
+    expect(Math.min(...boxes.map((box) => box.top))).toBe(bounds.top)
+    expect(Math.max(...boxes.map((box) => box.right))).toBe(bounds.right)
+    expect(Math.max(...boxes.map((box) => box.bottom))).toBe(bounds.bottom)
+  })
+
+  it('reports an empty box for a graph with nothing drawn', () => {
+    const bounds = graphBounds({
+      nodes: [],
+      edges: [],
+      groups: [],
+      complete: true,
+      unresolved: [],
+      rateLimited: false,
+      rateLimitReset: null,
+      requestCount: 0,
+    })
+    expect(Number.isFinite(bounds.width)).toBe(false)
   })
 })
