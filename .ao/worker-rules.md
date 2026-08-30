@@ -18,15 +18,22 @@ The issue skills' unattended contract applies in full.
 
 ## Parking instead of asking
 
-When a needed choice is not settled by the issue: apply `status: needs-decision`, post one
-comment naming the open choice and what is already established, and end the run cleanly. A
-missing phase gets the comment without the label. Never invent a decision and never wait for an
-answer.
+When the run reaches something it cannot settle, park the issue: record the blocker on the issue,
+then **put the question to the owner and wait**. A parked session stays open on purpose, because
+that is what puts it in the board's *needs you* column. Ending cleanly hides it behind an idle
+worker nobody looks at.
 
-A fourth disposition closes rather than parks: when the run holds reproducible evidence that the
-issue's premise is false, post that evidence as a comment and close the issue as not planned. The
-gate is a command a human can rerun with its output, never an assertion. Anything short of proof
-is parked.
+- **Blocked on a human choice** — apply `status: needs-decision`, post one comment stating exactly
+  which choice is open and what is already established, then ask the owner and wait.
+- **Blocked on a missing phase** — post one comment naming the missing phase, no label change,
+  then name it to the owner and wait.
+- **Disproven** — the run holds reproducible evidence that the issue's premise is false. Post that
+  evidence and close the issue as not planned. This is the one disposition that ends clean, and
+  the gate is a command a human can rerun with its output, never an assertion. Anything short of
+  proof is parked. A disproven run also terminates its own session, so the card lands in the
+  board's archive instead of sitting idle among live work.
+
+Never invent a product decision, a provenance label, or a new `status:` value.
 
 ## Automatic merge
 
