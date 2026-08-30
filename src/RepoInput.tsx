@@ -52,7 +52,12 @@ export function RepoInput({
       typed.length === 0 ? true : slug.toLowerCase().includes(typed.toLowerCase()),
     )
     if (found.query === typed) {
-      for (const slug of found.slugs) if (!merged.includes(slug)) merged.push(slug)
+      const seen = new Set(merged)
+      for (const slug of found.slugs)
+        if (!seen.has(slug)) {
+          seen.add(slug)
+          merged.push(slug)
+        }
     }
     return merged.slice(0, 8)
   }, [typed, found])
