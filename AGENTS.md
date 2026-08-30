@@ -16,12 +16,21 @@
 - Commit policy: Automatic. Commit each completed concern without waiting to be asked.
 - Push policy: Automatic. Push the working branch after committing.
 - Product versioning: None. This is a continuously deployed page: `main` is what is live, and no consumer pins anything, so there is no compatibility contract for a version number to describe. Git history is the record. Do not add tags, a `CHANGELOG.md`, or release ceremony without an explicit decision to start versioning.
+- Agent automation: `enabled`
+- Implementation agent: `claude`
+- Review agent: `antigravity`
 - Merge policy: merge commits only, every commit of the branch preserved. Never squash.
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
-- Release, signing, and secret-storage policy: Not applicable. Nothing is published, packaged, or signed; deployment is a GitHub Pages build from `main`. This repository holds no secret and needs none — every read is unauthenticated.
+- Release and signing policy: Not applicable. Nothing is packaged or signed; deployment is a GitHub Pages build from `main`.
+- Secret-storage policy: the product has no credential and every product read is unauthenticated. Agent-automation credentials, when provisioned, live only as GitHub Actions repository secrets and never in the repository or agent transcripts.
+- Client guidance: Gemini CLI (`unavailable`) uses `GEMINI.md -> AGENTS.md`; Antigravity CLI (`unavailable`) uses root `AGENTS.md`. Functional verification is pending for both clients.
+- Agent orchestration: Enabled for Agent Orchestrator local workers and Jules cloud routing. Auto-merge remains disarmed until `main` has required status checks.
+- Skills baseline revision: `a475ff79c4daf4b47bb87adf7eab576824cadb8d`
+- Skills baseline applied: `2026-08-30`
+- Skills baseline divergence `label-taxonomy-established-history` at `a475ff79c4daf4b47bb87adf7eab576824cadb8d`: 29 issues predate the canonical taxonomy; `project-groom` owns mapping and removal of legacy labels, so setup preserved them.
 
-Treat these values as stable project decisions. Change an established identifier, license, visibility, branch policy, versioning model, localization strategy, landing-page contract, or release policy only through an explicit task that describes the migration and downstream effects.
+Treat these values as stable project decisions. Change an established identifier, license, visibility, branch policy, versioning model, localization strategy, landing-page contract, agent-automation decision, or release policy only through an explicit task that describes the migration and downstream effects.
 
 ## Where this sits
 
@@ -52,6 +61,23 @@ content — no empty files or directories.
 
 No domain glossary. The vocabulary on screen is GitHub's own — issue, `blocked by`, `blocking`,
 label — and inventing a second name for any of it would be the drift a glossary exists to prevent.
+
+## Agent execution
+
+Rules for any executor working from a clone of this repository, including cloud executors that
+read only committed files.
+
+- Run tests with `npm test`; run lint with `npm run lint`. A change is not done while either fails
+  on the exact current head.
+- Branch as `<type>/<agent>/issue-<n>/<short-slug>`; commit with Conventional Commits, subject
+  ending in `(#<n>)`.
+- Never push to `main` and never merge: open a pull request and stop. Merge belongs to the owner,
+  or to GitHub auto-merge under the predicates recorded in `.ao/worker-rules.md`.
+- Start the PR body with one `Closes #<n>` line per resolved issue, then the problem, the
+  implementation, the tests run with results, and the residual risk.
+- Do not touch: `AGENTS.md`, `.ao/`, or `.github/workflows/`.
+- When a needed decision is not written in the issue: comment exactly what is missing, apply
+  `status: needs-decision`, and stop cleanly instead of guessing.
 
 ## Patterns
 
@@ -91,6 +117,26 @@ deviating silently is what produces two ways of doing the same thing.
 - Ask only when a material decision cannot be discovered safely. Prefer explicit, reversible assumptions when enough context exists.
 - Give concise progress updates during long-running work.
 
+## Long-running operations
+
+For any command, process, browser action, integration, or delegated task likely to run long:
+
+- Use the client's bounded yield, timeout, or status mechanism and wait for an observable
+  condition instead of an arbitrary sleep.
+- Keep the user informed at least once per minute when the client supports progress commentary.
+- Distinguish slow but progressing work from a stall using new output, state changes, resource
+  activity, the known duration of the current phase, or a tool-reported deadline. Elapsed time
+  alone is not evidence of a stall.
+- Inspect the current output and state before interrupting, retrying, or changing approach.
+- Interrupt only when there is evidence of no useful progress, a deadline has expired, or the
+  continued cost or risk is no longer justified.
+- After an interruption, explain what state or output was preserved, diagnose the likely cause,
+  and choose a narrower retry, a different tool, a smaller unit of work, or an explicit blocker.
+- Never rerun the same unchanged failure, and do not add a polling service, background job, timer,
+  or other infrastructure merely to satisfy this rule.
+- Keep termination thresholds task-specific. Workflow-specific wait tools and user-input
+  boundaries remain authoritative.
+
 ## Before editing
 
 1. Check applicable instructions, Git status, and the current branch.
@@ -119,6 +165,7 @@ deviating silently is what produces two ways of doing the same thing.
 - Distinguish canonical data, reconstructible cache, transient state, local preferences, durable intent, and operating-system artifacts.
 - Persist or synchronize only data that must survive or cross devices. Never turn a cache or mirror into an independent source of truth.
 - Use stable application-owned identifiers. Validate data at input and persistence boundaries.
+- Make every relational schema change through an explicit, deterministic, tested, versioned migration. Never edit a production schema manually.
 - Use transactions or atomic writes when partial failure could leave inconsistent state. Preserve unrelated fields during external updates.
 - Request only necessary permissions, fields, and scopes. Keep credentials, tokens, private keys, signing material, personal data, and sensitive payloads out of the repository and logs.
 - Use structured subprocess arguments and validate destinations, redirects, and untrusted inputs.
@@ -144,13 +191,221 @@ deviating silently is what produces two ways of doing the same thing.
 - Durable documentation describes responsibilities, contracts, invariants, commands, and decisions. Audits cite exact evidence. Manuals use exact filenames only when users must act on them and the names are stable contracts.
 - Update the smallest canonical documentation section when a durable contract changes. Do not create empty documentation for possible future use.
 - Keep the README easy to scan. Cover benefit, behavior, requirements, setup, usage, validation, security, privacy, limitations, landing page, and download where applicable.
+- When creating a README or materially updating one, use the recorded `Public name` above as the H1
+  and preserve an existing approved H1, including its branding and casing. Humanize the raw
+  repository slug only when the public name is unresolved; never mechanically title-case an
+  approved name or sweep unrelated README content.
+- Every fenced code block you create or materially edit has an explicit language identifier. Use
+  the real language for code or configuration and `text` for plain commands or output; leave
+  untouched historical fences alone.
 - Use badges, real screenshots, statistics, and emoji only when they improve comprehension and can remain current.
 - Preserve third-party licenses, copyright, attribution, and notices. Maintain `NOTICE.md` or the established attribution file when required.
+
+## Durable project learning
+
+At workflow wrap-up, assess whether the work produced a learning that should outlive the current
+session. A learning qualifies only when it is verified, specific to this project, likely to recur,
+and belongs in a durable source.
+
+Qualifying examples include:
+
+- reproducible build, test, setup, or recovery commands that were actually run;
+- an ownership boundary or invariant established by code and accepted guidance;
+- a recurring failure shield with a verified cause; or
+- a versioned external constraint whose source must remain visible.
+
+Hypotheses, one-off debugging steps, raw logs, issue-specific implementation details, transient
+environment state, machine-specific paths, credentials, personal data, and model conclusions
+without evidence do not qualify.
+
+Compare each qualifying learning with the existing canonical guidance, README, scripts, and
+architecture records. If the learning is already recorded, do nothing. If it is absent or
+contradictory, present one compact proposal that names the evidence, the canonical owner, the exact
+section or script, and the smallest intended change. Use the shared proposal fields `Evidence`,
+`Canonical owner`, `Smallest change`, `Draft`, and `Decision requested`. The draft is the exact
+section or script change being proposed; end with `Decision requested: Approve, reject, or revise.`
+Do not create a new file when an existing owner can hold the learning, and do not turn a convenience
+into a mandatory convention.
+
+Documentation required by the selected behavior remains part of the current task and needs no
+additional approval. An adjacent learning outside the accepted scope is proposal-only and waits for
+explicit owner approval before editing, staging, or committing. Behavior-changing configuration or
+script work is a separate approved task and never enters through the documentation gate. Do not
+delay the requested task result while waiting on an adjacent proposal, and do not publish the
+proposal externally on your own.
+
+## User attention cards
+
+When the user must notice and respond to a proposed follow-up, a material choice, a permission
+boundary, or a blocker, use exactly one of the four attention cards below. Never hide one inside a
+general summary, ordinary bullet list, or vague "human review" note.
+
+The English labels in the templates name the semantic fields; they are not fixed user-facing copy.
+Render every visible heading, field label, explanation, option, recommendation, and reply token in
+the language already used with the user. If the user changes language explicitly, follow the latest
+choice. Keep code, commands, paths, identifiers, and quoted source text in their required form.
+
+Surround every card with a Markdown horizontal rule: a standalone `---` before its heading and
+another after its final response line. When cards are consecutive, one rule may separate them. The
+emoji supplements the descriptive heading and never replaces it. Use one card per requested
+decision, approval, action, or issue proposal, and end with an exact response format the user can
+copy.
+
+### Proposed issue
+
+Use this card when the work uncovers a distinct, evidence-backed, implementable improvement outside
+the accepted scope that is valuable enough to preserve and is not already tracked. A durable
+research note or other repository artifact does not replace this visible proposal. Do not propose
+issues for incidental observations, speculative ideas without enough evidence, already tracked
+work, or changes completed within the current task. The card proposes backlog capture; it never
+authorizes creating or publishing the issue.
+
+```markdown
+---
+
+## 🆕 Proposed issue: <short title>
+
+**What I need from you:** Approve, reject, or revise this issue proposal.
+
+### Why this matters
+
+<Explain the user or project impact in plain language.>
+
+### Current situation
+
+<Explain what happens today and the evidence found.>
+
+### Proposed outcome
+
+<Explain what should become possible or improve after implementation.>
+
+### Why this is a separate issue
+
+<Explain why it is valuable but outside the current task.>
+
+### My recommendation
+
+<Explain briefly why opening the issue is worthwhile.>
+
+**Reply with:** `Approve issue`, `Reject issue`, or `Revise: ...`
+
+---
+```
+
+### Decision needed
+
+Use this card when the user must choose among materially different outcomes. State why the choice
+cannot be made safely from existing evidence, show the meaningful options and tradeoffs, and make a
+clear recommendation. Do not stop at "human review needed."
+
+```markdown
+---
+
+## 🧭 Decision needed: <question>
+
+**What I need from you:** Choose one of the options below.
+
+### Why this decision is needed
+
+<Explain what cannot be decided safely without the user's preference.>
+
+### Options
+
+| Option | What it means | Advantages | Disadvantages |
+| --- | --- | --- | --- |
+| A — <name> | <plain explanation> | <benefits> | <tradeoffs> |
+| B — <name> | <plain explanation> | <benefits> | <tradeoffs> |
+
+### My recommendation
+
+**Option <X>**, because <short evidence-based reason>.
+
+**Reply with:** `Option A`, `Option B`, or `Revise: ...`
+
+---
+```
+
+### Approval needed
+
+Use this card when one exact action is already preferred but crossing a permission, publication,
+destructive-operation, cost, privacy, or external-mutation boundary requires approval. Name the
+exact target, expected change, risk, reversibility, and recovery path. Approval covers only the
+stated action.
+
+```markdown
+---
+
+## 🔐 Approval needed: <exact action>
+
+**What I need from you:** Approve or decline this specific action.
+
+### Proposed action
+
+<Describe exactly what will be changed, published, deleted, or executed.>
+
+### Why it is needed
+
+<Explain the benefit and why the action cannot be avoided.>
+
+### Impact and safety
+
+- **Target:** <exact repository, file, branch, service, or data>
+- **Expected change:** <what will be different>
+- **Risk:** <what could go wrong>
+- **Reversible:** <yes or no, and how>
+- **Recovery:** <how the previous state can be restored>
+
+### My recommendation
+
+<Recommend approval or rejection, with a short reason.>
+
+**Reply with:** `Approve`, `Decline`, or `Revise: ...`
+
+---
+```
+
+### Action needed
+
+Use this card when work is blocked by one specific external action from the user rather than by a
+choice or permission decision. State what is blocked, why the agent cannot continue, the smallest
+unblocking action, and the observable condition for resumption.
+
+```markdown
+---
+
+## ⛔ Action needed: <blocking condition>
+
+**What I need from you:** <one specific action>.
+
+### What is blocked
+
+<Explain which requested work cannot continue.>
+
+### Why I cannot continue
+
+<Explain the verified blocker in plain language.>
+
+### How to unblock it
+
+1. <First exact action>
+2. <Second action, only when necessary>
+
+### I can continue when
+
+<Describe the observable condition that confirms the blocker is resolved.>
+
+---
+```
 
 ## Configuration and repository hygiene
 
 - Ignore secrets, local environments, logs, caches, build output, and generated artifacts appropriate to the actual stack.
 - Configure dependency updates, CI, release workflows, a release channel, signing, and secure secret storage when distribution or project risk requires them. Do not add placeholder automation.
+- Change GitHub's repository `homepage` to the recorded canonical landing-page URL only when the
+  Pages site exists, the latest `github-pages` deployment succeeded, and both GitHub URL surfaces
+  agree with that recorded URL. When the value differs, preview and confirm the exact change, then
+  read `homepage` back through the API. Otherwise leave it unchanged and report the evidence gap;
+  do not enable or deploy Pages as setup work.
 - Keep secrets in the platform or provider's secure store, never in versioned files.
 
 ## Tests and validation
