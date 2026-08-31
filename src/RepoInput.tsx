@@ -82,14 +82,14 @@ export function nextActiveOption(
 /**
  * The option a submit would take, or -1 when the typed text stands on its own.
  *
- * Deliberately blind to whether the popup is on screen. Pressing the `Open` button blurs the input,
- * which closes the popup in the render *before* the submit event arrives, so a choice derived from
- * visibility would be thrown away by the very click meant to act on it. Only giving up the
- * highlight — Escape, typing, or choosing — gives up the choice. An index past the end is one whose
- * suggestion list moved under it, which is no choice either.
+ * A choice exists only while the options it was made among are on screen. Leaving the field
+ * dismisses the popup and the highlight with it, so a submit that happens later cannot act on a
+ * choice the user has moved on from — and an index past the end, whose suggestion list moved under
+ * it, is no choice either. What keeps the `Open` button from destroying the choice it is meant to
+ * act on is that pressing it never blurs the input; see the button's `onMouseDown`.
  */
-export function chosenSuggestion(active: number, count: number): number {
-  return active >= 0 && active < count ? active : -1
+export function chosenSuggestion(active: number, count: number, visible: boolean): number {
+  return visible && active >= 0 && active < count ? active : -1
 }
 
 /**
@@ -120,17 +120,23 @@ function useComboboxNavigation(count: number) {
   const show = useCallback(() => setOpen(true), [])
   const close = useCallback(() => setOpen(false), [])
   const reset = useCallback(() => setActive(-1), [])
+  /** Leaving the field abandons the popup and the highlight together, so neither goes stale. */
+  const dismiss = useCallback(() => {
+    setOpen(false)
+    setActive(-1)
+  }, [])
 
   const visible = open && count > 0
 
   return {
     active,
     visible,
-    chosen: chosenSuggestion(active, count),
+    chosen: chosenSuggestion(active, count, visible),
     setActive,
     show,
     close,
     reset,
+    dismiss,
     onKeyDown,
   }
 }
@@ -257,13 +263,18 @@ export function RepoInput({
               list.show()
             }}
             onFocus={list.show}
-            onBlur={list.close}
+            onBlur={list.dismiss}
             onKeyDown={list.onKeyDown}
           />
         </label>
         <button
           className="button button--primary"
           type="submit"
+          // The press must not blur the input: a blur would dismiss the popup, and with it the
+          // highlighted option, in the render before this button's own submit event arrived. Same
+          // remedy as the options use, for the same reason — the input stays the focus owner, so
+          // there is no ordering between a close and a submit to get wrong.
+          onMouseDown={(event) => event.preventDefault()}
           disabled={typed.length === 0 || unchanged}
         >
           Open

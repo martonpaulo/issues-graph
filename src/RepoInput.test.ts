@@ -49,57 +49,64 @@ describe('nextActiveOption', () => {
 })
 
 describe('chosenSuggestion', () => {
-  it('takes the highlighted option', () => {
-    expect(chosenSuggestion(0, 3)).toBe(0)
-    expect(chosenSuggestion(2, 3)).toBe(2)
+  it('takes the highlighted option while the options are on screen', () => {
+    expect(chosenSuggestion(0, 3, true)).toBe(0)
+    expect(chosenSuggestion(2, 3, true)).toBe(2)
   })
 
   it('leaves the typed text alone when nothing is highlighted', () => {
-    expect(chosenSuggestion(-1, 3)).toBe(-1)
-    expect(chosenSuggestion(-1, 0)).toBe(-1)
+    expect(chosenSuggestion(-1, 3, true)).toBe(-1)
+    expect(chosenSuggestion(-1, 0, false)).toBe(-1)
+  })
+
+  it('takes no choice from a dismissed popup', () => {
+    expect(chosenSuggestion(1, 3, false)).toBe(-1)
   })
 
   it('drops a highlight whose suggestion list moved under it', () => {
-    expect(chosenSuggestion(2, 1)).toBe(-1)
-    expect(chosenSuggestion(0, 0)).toBe(-1)
+    expect(chosenSuggestion(2, 1, true)).toBe(-1)
+    expect(chosenSuggestion(0, 0, true)).toBe(-1)
   })
 })
 
 /**
- * Clicking `Open` blurs the input, so the popup closes in the render before the submit event
- * arrives. The regression this replays is a submit that read the closed popup and opened the raw
- * typed text instead of the option the user had highlighted.
+ * The two submissions that must not be confused. Pressing `Open` cannot blur the input — its
+ * `onMouseDown` prevents the default — so the popup is still open when the submit event arrives and
+ * the highlight is still the choice. Any real departure from the field dismisses the popup and the
+ * highlight together, so a submit after that opens what was typed, never a suggestion the user has
+ * moved on from.
  */
-describe('the Open button submitting a highlighted option', () => {
-  it('still submits the highlight after the blur has closed the popup', () => {
-    const suggestions = ['acme/app', 'acme/tools']
-    const typedValue = 'acme'
+describe('what a submit opens', () => {
+  const suggestions = ['acme/app', 'acme/tools']
+  const typedValue = 'acme'
 
-    // The user highlights the second option.
+  function submitted(active: number, visible: boolean): string {
+    const chosen = chosenSuggestion(active, suggestions.length, visible)
+    return chosen >= 0 ? suggestions[chosen] : typedValue
+  }
+
+  function highlightSecond(): number {
     let active = nextActiveOption('ArrowDown', -1, suggestions.length) ?? -1
     active = nextActiveOption('ArrowDown', active, suggestions.length) ?? active
     expect(active).toBe(1)
+    return active
+  }
 
-    // Pressing the button blurs the input, which closes the popup before the submit fires.
-    const open = false
-
-    const chosen = chosenSuggestion(active, suggestions.length)
-    expect(chosen).toBe(1)
-    expect(chosen >= 0 ? suggestions[chosen] : typedValue).toBe('acme/tools')
-    // The choice outlives the popup rather than depending on it.
-    expect(open).toBe(false)
+  it('opens the highlighted option when Open is pressed with the popup still up', () => {
+    expect(submitted(highlightSecond(), true)).toBe('acme/tools')
   })
 
-  it('submits the typed text once Escape has given the highlight up', () => {
-    const suggestions = ['acme/app', 'acme/tools']
-    const typedValue = 'acme'
+  it('opens the typed text after the field was left, not the abandoned highlight', () => {
+    highlightSecond()
+    // Leaving the field dismisses both: this is what the input's onBlur does.
+    const [active, visible] = [-1, false]
+    expect(submitted(active, visible)).toBe(typedValue)
+  })
 
-    let active = nextActiveOption('ArrowDown', -1, suggestions.length) ?? -1
-    active = nextActiveOption('Escape', active, suggestions.length) ?? active
-
-    const chosen = chosenSuggestion(active, suggestions.length)
-    expect(chosen).toBe(-1)
-    expect(chosen >= 0 ? suggestions[chosen] : typedValue).toBe('acme')
+  it('opens the typed text once Escape has given the highlight up', () => {
+    const active = nextActiveOption('Escape', highlightSecond(), suggestions.length) ?? -1
+    expect(active).toBe(-1)
+    expect(submitted(active, false)).toBe(typedValue)
   })
 })
 
