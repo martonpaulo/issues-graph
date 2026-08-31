@@ -62,6 +62,7 @@ import {
   titleForRoute,
   type RepoTarget,
 } from './route'
+import { difference, union } from './sets'
 import { asBoolean, asStringArray, readStored, writeStored } from './storage'
 import { buildSnapshotUrl, type SnapshotView } from './snapshot'
 import { readToken, writeToken } from './token'
@@ -785,9 +786,9 @@ function useCanvasShortcuts({
       if (event.key.toLowerCase() === 'f') {
         void fitView()
       } else if (event.key.toLowerCase() === 'd') {
-        setDimmed((current) => new Set([...current, ...selected]))
+        setDimmed((current) => union(current, selected))
       } else if (event.key.toLowerCase() === 'r') {
-        setDimmed((current) => new Set([...current].filter((id) => !selected.has(id))))
+        setDimmed((current) => difference(current, selected))
       } else if (event.key === 'Enter' && selected.size === 1) {
         const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
         if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
@@ -1154,11 +1155,11 @@ function Canvas({
   }, [])
 
   const dimSelected = useCallback(() => {
-    setDimmed((current) => new Set([...current, ...selected]))
+    setDimmed((current) => union(current, selected))
   }, [selected])
 
   const restoreSelected = useCallback(() => {
-    setDimmed((current) => new Set([...current].filter((id) => !selected.has(id))))
+    setDimmed((current) => difference(current, selected))
   }, [selected])
 
   /**
