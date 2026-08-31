@@ -7,9 +7,17 @@
 # Why this is a check rather than an instruction. The branch name and the `Closes` block are
 # produced mechanically and come out right; the title depends on an agent remembering a convention
 # and, measured across one repository's history, comes out right about half the time — including
-# for the operator. A check makes it deterministic, and in an orchestrated repository it does more
-# than report: a failing check is what Agent Orchestrator's own CI loop drives the worker to fix,
-# so the title is corrected without anyone being asked.
+# for the operator.
+#
+# Why the verdict is a commit status and the job always succeeds. This check re-runs when the title
+# is edited, which does not change the head commit, so a corrected pull request ends up with both a
+# failed and a passing run against the same SHA. GitHub resolves that by counting only the latest
+# run of each check name, but a rollup consumer that treats *any* failure-class context as failing
+# does not — Agent Orchestrator is one, and it held three corrected pull requests in Validating
+# with `ci_failed` while GitHub considered them green, nudging each worker to fix CI that was not
+# broken. Commit statuses do not have that problem: the rollup carries only the latest status per
+# context, so a corrected title replaces the failure rather than joining it. The required check to
+# configure is therefore the `pr-conventions` **context**, not this job.
 name: PR conventions
 
 on:
@@ -18,21 +26,26 @@ on:
 
 permissions:
   contents: read
+  statuses: write
+
+concurrency:
+  group: pr-conventions-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   conventions:
-    name: pr-conventions
+    name: pr-conventions-runner
     runs-on: ubuntu-latest
     steps:
       - name: Check the title and closing block
+        id: check
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
         run: |
-          python3 - <<'PY'
+          python3 - <<'PY' | tee "$GITHUB_STEP_SUMMARY"
           import os
           import re
-          import sys
 
           title = (os.environ.get("PR_TITLE") or "").strip()
           body = (os.environ.get("PR_BODY") or "").replace("\r\n", "\n")
@@ -76,6 +89,7 @@ jobs:
               )
 
           if failures:
+              summary = "; ".join(failures)
               print("Pull request conventions not met:\n")
               for failure in failures:
                   print("  - " + failure)
@@ -83,7 +97,32 @@ jobs:
                   "\nThe conventions are recorded in the project's AGENTS.md. Edit the pull "
                   "request title or body and this check re-runs on its own."
               )
-              sys.exit(1)
+          else:
+              summary = "Title and closing block agree on issue(s) %s." % sorted(set(title_issues))
+              print(summary)
 
-          print("Title and closing block agree on issue(s) %s." % sorted(set(title_issues)))
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("state=%s\n" % ("failure" if failures else "success"))
+              # A status description is capped at 140 characters by the API.
+              out.write("summary=%s\n" % summary.replace("\n", " ")[:140])
           PY
+
+      - name: Publish the verdict as a commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          STATE: ${{ steps.check.outputs.state }}
+          SUMMARY: ${{ steps.check.outputs.summary }}
+        run: |
+          # A step that never ran leaves no outputs; treat that as a failure rather than
+          # publishing success for a check that did not happen.
+          state="${STATE:-failure}"
+          summary="${SUMMARY:-the conventions check did not complete}"
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="$state" \
+            -f context=pr-conventions \
+            -f description="$summary" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            >/dev/null
+          [ "$state" = success ]
