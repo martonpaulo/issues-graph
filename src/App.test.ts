@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -16,6 +18,7 @@ import {
   graphBounds,
   nextIssueSelection,
   stopsForTokenChange,
+  TopChrome,
 } from './App'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
@@ -439,5 +442,116 @@ describe('stopping a load whose token is gone', () => {
 
     expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
     expect(carried.current).toBe('new')
+  })
+})
+
+/**
+ * The top chrome is a geometry check without a browser: what keeps the identity and the tools from
+ * overlapping is that they are siblings in one flow container, not two panels pinned to opposite
+ * corners with an offset large enough for today's font and today's repository name. These assert
+ * that structure and the declarations it rests on, so reintroducing the pinned pair fails here
+ * rather than at 320 CSS pixels in somebody's hand.
+ */
+describe('top chrome layout', () => {
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+
+  /** The declarations of the first rule with exactly this selector list. */
+  function ruleFor(selector: string): string {
+    const start = styles.indexOf(`\n${selector} {`) + 1
+    expect(start, `no rule for ${selector}`).toBeGreaterThan(0)
+    return styles.slice(start, styles.indexOf('}', start))
+  }
+
+  const longestSlug = `${'o'.repeat(39)}/${'r'.repeat(100)}`
+
+  function chrome(slug: string) {
+    return renderToStaticMarkup(
+      createElement(TopChrome, {
+        identity: {
+          slug,
+          nodeCount: 12,
+          dependentCount: 5,
+          blockingCount: 4,
+          onOpenExternal: () => {},
+        },
+        tools: {
+          labelCounts: [{ name: 'type: bug', count: 3 }],
+          highlight: new Set<string>(),
+          onToggleHighlight: () => {},
+          onClearHighlight: () => {},
+          onFitView: () => {},
+          onShare: () => {},
+          sharing: false,
+          onAskAgain: () => {},
+        },
+      }),
+    )
+  }
+
+  it('puts both bars in one panel, in order, so neither can be positioned over the other', () => {
+    const html = chrome('martonpaulo/issues-graph')
+
+    // One panel: two would be independently positioned again, which is the bug.
+    expect(html.match(/react-flow__panel/g)).toHaveLength(1)
+    expect(html).toContain('react-flow__panel topbar top left')
+    expect(html.indexOf('bar bar--identity')).toBeLessThan(html.indexOf('bar bar--tools'))
+  })
+
+  it('keeps the whole slug in the accessible name and in a hint however long the name is', () => {
+    const html = chrome(longestSlug)
+
+    expect(html).toContain(`<span class="bar__slugtext">${longestSlug}</span>`)
+    expect(html).toContain(`data-tip="${longestSlug}"`)
+  })
+
+  it('declares a strip that wraps, shrinks and lets the canvas be dragged through it', () => {
+    const topbar = ruleFor('.react-flow__panel.topbar')
+    expect(topbar).toContain('right: 0')
+    expect(topbar).toContain('flex-wrap: wrap')
+    expect(topbar).toContain('pointer-events: none')
+    expect(ruleFor('.topbar > .bar')).toContain('pointer-events: auto')
+
+    const bar = ruleFor('.bar')
+    expect(bar).toContain('flex-wrap: wrap')
+    expect(bar).toContain('min-width: 0')
+    expect(bar).toContain('max-width: 100%')
+
+    // Only the slug text is clipped, so no focus outline is drawn inside a clipped box.
+    expect(ruleFor('.bar__slugtext')).toContain('text-overflow: ellipsis')
+    for (const rule of styles.split('}')) {
+      if (!/\.(bar|topbar)\b/.test(rule) || /__slugtext/.test(rule)) continue
+      expect(rule, rule).not.toContain('overflow: hidden')
+    }
+  })
+
+  it('keeps the full-slug hint inside the window and lets an unbroken name wrap', () => {
+    const hint = ruleFor('.react-flow__panel .bar__slug[data-tip]::after')
+
+    // A repository name has no space to break at, so the hint must break mid-word...
+    expect(hint).toContain('overflow-wrap: anywhere')
+    // ...and is measured against the identity bar, which the window already bounds.
+    expect(hint).toContain('left: 0')
+    expect(hint).toContain('right: auto')
+    expect(hint).toContain('transform: none')
+    expect(hint).toContain('max-width: 100%')
+    // Without this the box is the bar's width *plus* its own padding, which leaves the window.
+    expect(hint).toContain('box-sizing: border-box')
+
+    expect(ruleFor('.bar--identity')).toContain('position: relative')
+    // The button opts out of being the hint's containing block, so the bar becomes it.
+    expect(styles).toMatch(/\.bar__slug \{[^}]*position: static/)
+
+    // The panel-side alignment rule matches this hint too and sets the same three properties at
+    // the same weight, so only source order decides which of them wins.
+    expect(styles.indexOf('.react-flow__panel .bar__slug[data-tip]::after')).toBeGreaterThan(
+      styles.indexOf('.react-flow__panel.left [data-tip]::after'),
+    )
+  })
+
+  it('positions neither bar with a fixed offset that a longer name or larger text invalidates', () => {
+    for (const rule of styles.split('}')) {
+      if (!/\.bar--tools|\.bar--identity/.test(rule)) continue
+      expect(rule, rule).not.toMatch(/(^|[^-\w])top:/)
+    }
   })
 })

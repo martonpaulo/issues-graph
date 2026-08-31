@@ -702,31 +702,38 @@ function useCanvasShortcuts({
   }, [graph, selected, fitView, openExternal, setSelected, setHidden])
 }
 
+type TopLeftBarProps = {
+  slug: string
+  nodeCount: number
+  dependentCount: number
+  blockingCount: number
+  onOpenExternal: (url: string, label: string) => void
+}
+
 function TopLeftBar({
   slug,
   nodeCount,
   dependentCount,
   blockingCount,
   onOpenExternal,
-}: {
-  slug: string
-  nodeCount: number
-  dependentCount: number
-  blockingCount: number
-  onOpenExternal: (url: string, label: string) => void
-}) {
+}: TopLeftBarProps) {
   return (
-    <Panel position="top-left" className="bar">
+    <div className="bar bar--identity">
       {/* The wordmark is not worth the width here: the icon alone is the way back. */}
       <a className="iconbutton" href={BASE} data-tip="Choose another repository">
         <Icon name="graph" />
       </a>
+      {/* The slug is the one piece of chrome whose width the repository decides, so it is the
+          piece that gives way. The text stays whole in the DOM — the button's accessible name is
+          the full slug however narrow the window is — and the hint carries it for a reader who
+          only has the ellipsis. */}
       <button
         className="bar__slug"
         type="button"
+        data-tip={slug}
         onClick={() => onOpenExternal(`https://github.com/${slug}`, slug)}
       >
-        {slug}
+        <span className="bar__slugtext">{slug}</span>
         <Icon name="external" size={11} />
       </button>
       <span className="bar__divider" />
@@ -734,8 +741,19 @@ function TopLeftBar({
         <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong> depend on others ·{' '}
         <strong>{blockingCount}</strong> block others
       </span>
-    </Panel>
+    </div>
   )
+}
+
+type TopRightBarProps = {
+  labelCounts: { name: string; count: number }[]
+  highlight: ReadonlySet<string>
+  onToggleHighlight: (label: string) => void
+  onClearHighlight: () => void
+  onFitView: () => void
+  onShare: () => void
+  sharing: boolean
+  onAskAgain: () => void
 }
 
 function TopRightBar({
@@ -747,18 +765,9 @@ function TopRightBar({
   onShare,
   sharing,
   onAskAgain,
-}: {
-  labelCounts: { name: string; count: number }[]
-  highlight: ReadonlySet<string>
-  onToggleHighlight: (label: string) => void
-  onClearHighlight: () => void
-  onFitView: () => void
-  onShare: () => void
-  sharing: boolean
-  onAskAgain: () => void
-}) {
+}: TopRightBarProps) {
   return (
-    <Panel position="top-right" className="bar bar--tools">
+    <div className="bar bar--tools">
       <LabelPicker
         labels={labelCounts}
         active={highlight}
@@ -788,6 +797,28 @@ function TopRightBar({
       <button className="button button--small" type="button" onClick={onAskAgain}>
         <Icon name="reload" size={12} /> Read latest from GitHub
       </button>
+    </div>
+  )
+}
+
+/**
+ * Both top bars in one panel, because two panels pinned to opposite corners cannot see each other:
+ * a repository name long enough, or a window narrow enough, and the tools slide underneath the
+ * identity. Laid out in ordinary flex flow they push each other along the line and wrap when the
+ * line runs out, which no breakpoint offset can promise. The strip itself lets gestures through;
+ * only the bars catch them.
+ */
+export function TopChrome({
+  identity,
+  tools,
+}: {
+  identity: TopLeftBarProps
+  tools: TopRightBarProps
+}) {
+  return (
+    <Panel position="top-left" className="topbar">
+      <TopLeftBar {...identity} />
+      <TopRightBar {...tools} />
     </Panel>
   )
 }
@@ -1162,23 +1193,24 @@ function Canvas({
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
-      <TopLeftBar
-        slug={slug}
-        nodeCount={graph.nodes.length}
-        dependentCount={counts.dependent}
-        blockingCount={counts.blocking}
-        onOpenExternal={openExternal}
-      />
-
-      <TopRightBar
-        labelCounts={labelCounts}
-        highlight={highlight}
-        onToggleHighlight={toggleHighlight}
-        onClearHighlight={() => setHighlight(new Set())}
-        onFitView={fitView}
-        onShare={share}
-        sharing={sharing}
-        onAskAgain={onAskAgain}
+      <TopChrome
+        identity={{
+          slug,
+          nodeCount: graph.nodes.length,
+          dependentCount: counts.dependent,
+          blockingCount: counts.blocking,
+          onOpenExternal: openExternal,
+        }}
+        tools={{
+          labelCounts,
+          highlight,
+          onToggleHighlight: toggleHighlight,
+          onClearHighlight: () => setHighlight(new Set()),
+          onFitView: fitView,
+          onShare: share,
+          sharing,
+          onAskAgain,
+        }}
       />
 
       <SelectionBar
