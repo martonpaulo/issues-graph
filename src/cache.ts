@@ -6,7 +6,7 @@ import {
   retained,
   touchRepository,
 } from './retention'
-import { readStored, writeStoredText, type StorageWriteResult } from './storage'
+import { clearStored, readStored, writeStoredText, type StorageWriteResult } from './storage'
 
 /**
  * A saved copy of one repository's graph data.
@@ -255,6 +255,19 @@ export function writeCache(slug: string, data: RepositoryGraphData): StorageWrit
     result = writeStoredText(key, payload)
   }
 
-  if (result.ok) recordCacheSize(slug, payload.length)
+  if (!result.ok) return result
+
+  // The write is not finished until the index knows about it. A graph key the index never
+  // recorded is invisible to every budget — `retained()` falls back to reading the keys only when
+  // there is no valid index at all — so it would sit there unbounded and undiscoverable while
+  // this reported success. Rather than leave that, the key is taken back out and the failure is
+  // reported, which is what puts the sentence about it on screen. Losing a copy that can be read
+  // again from GitHub is the cheaper half of that trade.
+  const indexed = recordCacheSize(slug, payload.length)
+  if (!indexed.ok) {
+    clearStored(key)
+    return indexed
+  }
+
   return result
 }

@@ -2,6 +2,7 @@ import { canonicalSlug } from './route'
 import {
   asStringArray,
   clearStored,
+  hasStored,
   readStored,
   storedKeys,
   writeStored,
@@ -248,8 +249,18 @@ export function rememberRepository(slug: string): void {
 }
 
 /** Records that a saved graph of this size is now held for the repository. */
-export function recordCacheSize(identity: string, chars: number): void {
-  promote(identity, (existing) => ({
+/**
+ * Records that a saved graph of this size is now held for the repository, and reports whether the
+ * index took it.
+ *
+ * The caller has to know. A saved graph the index never learned about is worse than no saved
+ * graph: `retained()` reads the keys themselves only when there is no valid index at all, so a
+ * key written alongside a refused index update is not merely unbudgeted, it is undiscoverable for
+ * as long as the index stays readable — the unbounded growth this module exists to end, returning
+ * through the one door it left open.
+ */
+export function recordCacheSize(identity: string, chars: number): StorageWriteResult {
+  return promote(identity, (existing) => ({
     slug: existing?.slug ?? identity,
     usedAt: Date.now(),
     chars,
@@ -280,6 +291,27 @@ export function touchRepository(identity: string): void {
  * cleared. It is registered without being marked as opened, so it is counted and clearable
  * without the shared link turning into a suggestion.
  */
+/**
+ * Records that a repository no longer has dimmed cards.
+ *
+ * An empty set is not a preference, and a key holding one is not worth a retention slot. Without
+ * this, dimming a card on a shared link and then restoring it left the repository in the list
+ * forever: nothing to preserve, one of six slots occupied, able to evict a saved copy somebody
+ * actually wanted, and still offering to clear data that no longer existed.
+ *
+ * The entry goes only when nothing else is held under it. A repository with a saved graph stays,
+ * because the graph is what its slot is for.
+ */
+export function releaseDimmed(identity: string): void {
+  const key = canonicalSlug(identity)
+  clearStored(dimmedKey(key))
+  if (hasStored(cacheKey(key))) return
+
+  const entries = retained()
+  const kept = entries.filter((entry) => canonicalSlug(entry.slug) !== key)
+  if (kept.length !== entries.length) save(kept)
+}
+
 export function registerDimmed(identity: string): void {
   promote(identity, (existing) => ({
     slug: existing?.slug ?? identity,

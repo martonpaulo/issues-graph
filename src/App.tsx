@@ -49,7 +49,7 @@ import {
   type SessionFailure,
   type SessionState,
 } from './graphSession'
-import { dimmedKey, holdsData, registerDimmed } from './retention'
+import { dimmedKey, holdsData, registerDimmed, releaseDimmed } from './retention'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
@@ -1205,7 +1205,13 @@ function Canvas({
   // reachable by no clear control. A repository that does hold dimmed cards is registered with
   // retention, which is what makes it counted and clearable.
   useEffect(() => {
-    if (dimmed.size === 0 && !holdsData(identity)) return
+    // Restoring the last card is not the same as never having dimmed one, but what it leaves
+    // behind should be: an empty set is not a preference, so the key goes rather than being
+    // written as `[]`, and a repository held by nothing else gives its retention slot back.
+    if (dimmed.size === 0) {
+      if (holdsData(identity)) releaseDimmed(identity)
+      return
+    }
 
     writeStored(dimmedKey(identity), [...dimmed])
     registerDimmed(identity)

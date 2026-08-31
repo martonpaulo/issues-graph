@@ -98,6 +98,15 @@ export function writeStoredText(key: string, text: string): StorageWriteResult {
   }
 }
 
+/** Whether a key currently holds anything, without paying to parse what it holds. */
+export function hasStored(key: string): boolean {
+  try {
+    return window.localStorage.getItem(key) !== null
+  } catch {
+    return false
+  }
+}
+
 /**
  * Every key currently in storage, or nothing when the browser will not enumerate them.
  *

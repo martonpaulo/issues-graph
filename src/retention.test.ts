@@ -12,6 +12,7 @@ import {
   openedSlugs,
   recordCacheSize,
   registerDimmed,
+  releaseDimmed,
   rememberRepository,
   retained,
   touchRepository,
@@ -202,6 +203,58 @@ describe('registerDimmed', () => {
     for (let index = 1; index <= MAX_ENTRIES + 1; index += 1) registerDimmed(`shared/r${index}`)
 
     expect(retained()).toHaveLength(MAX_ENTRIES)
+  })
+})
+
+describe('releaseDimmed', () => {
+  /* Dimming a card on a shared link and then restoring it used to leave the repository in the
+     list forever: nothing left to preserve, one of six slots held, able to evict a saved copy
+     somebody wanted, and still offering to clear data that no longer existed. */
+
+  it('gives the slot back when nothing else is held for the repository', () => {
+    registerDimmed('shared/link')
+    expect(slugs()).toEqual(['shared/link'])
+
+    releaseDimmed('shared/link')
+
+    expect(retained()).toEqual([])
+    expect(holdsData('shared/link')).toBe(false)
+  })
+
+  it('removes the dimmed key rather than leaving an empty one', () => {
+    store.set(dimmedKey('shared/link'), '["issue-1"]')
+    registerDimmed('shared/link')
+
+    releaseDimmed('shared/link')
+
+    expect(store.has(dimmedKey('shared/link'))).toBe(false)
+  })
+
+  it('keeps a repository whose saved graph is what its slot is for', () => {
+    hold('o/one')
+
+    releaseDimmed('o/one')
+
+    expect(slugs()).toEqual(['o/one'])
+    expect(store.has(cacheKey('o/one'))).toBe(true)
+    expect(store.has(dimmedKey('o/one'))).toBe(false)
+  })
+
+  it('leaves every other repository where it was', () => {
+    hold('o/keeps')
+    registerDimmed('shared/link')
+
+    releaseDimmed('shared/link')
+
+    expect(slugs()).toEqual(['o/keeps'])
+  })
+
+  it('works under any spelling of the repository', () => {
+    registerDimmed('Shared/Link')
+
+    releaseDimmed('SHARED/LINK')
+
+    expect(retained()).toEqual([])
   })
 })
 

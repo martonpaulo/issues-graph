@@ -420,6 +420,48 @@ describe('writeCache', () => {
     expect(writeCache('martonpaulo/tabelo', graph())).toMatchObject({ reason: 'quota' })
   })
 
+  /* A saved graph the index never learned about is worse than none: `retained()` reads the keys
+     themselves only when there is no valid index, so such a key is unbudgeted *and*
+     undiscoverable for as long as the index stays readable. Reporting success would leave it
+     growing there silently, which is the whole failure this module exists to prevent. */
+
+  it('does not report a copy as saved when the index would not record it', () => {
+    writeCache('martonpaulo/tabelo', graph())
+
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          entries.set(key, value)
+        },
+      },
+      entries,
+    )
+
+    expect(writeCache('o/fresh', graph())).toMatchObject({ ok: false, reason: 'quota' })
+  })
+
+  it('leaves behind no graph key the index does not know about', () => {
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          entries.set(key, value)
+        },
+      },
+      entries,
+    )
+
+    writeCache('o/fresh', graph())
+
+    expect(entries.has(cacheKey('o/fresh'))).toBe(false)
+    expect(retained().some((entry) => entry.slug === 'o/fresh')).toBe(false)
+  })
+
   it('reports a quota it cannot free rather than looping', () => {
     writeCache('martonpaulo/tabelo', graph())
     installStorage(
