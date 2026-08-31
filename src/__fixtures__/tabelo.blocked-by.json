@@ -38,7 +38,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 39,
@@ -82,7 +89,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "78": [
@@ -124,7 +138,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 70,
@@ -168,7 +189,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 3
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 71,
@@ -208,7 +236,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 82,
@@ -248,7 +283,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 72,
@@ -288,7 +330,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 73,
@@ -328,7 +377,14 @@
     "total_blocked_by": 1,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 75,
@@ -368,7 +424,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 93,
@@ -412,7 +475,14 @@
     "total_blocked_by": 0,
     "blocking": 3,
     "total_blocking": 4
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 81,
@@ -456,7 +526,14 @@
     "total_blocked_by": 1,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 30,
@@ -500,7 +577,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "85": [
@@ -542,7 +626,14 @@
     "total_blocked_by": 10,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 72,
@@ -582,7 +673,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 73,
@@ -622,7 +720,14 @@
     "total_blocked_by": 1,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 93,
@@ -666,7 +771,14 @@
     "total_blocked_by": 0,
     "blocking": 3,
     "total_blocking": 4
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 75,
@@ -706,7 +818,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 30,
@@ -750,7 +869,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 70,
@@ -794,7 +920,14 @@
     "total_blocked_by": 0,
     "blocking": 2,
     "total_blocking": 3
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 46,
@@ -834,7 +967,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 81,
@@ -878,7 +1018,14 @@
     "total_blocked_by": 1,
     "blocking": 2,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 140,
@@ -922,7 +1069,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 53,
@@ -962,7 +1116,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 155,
@@ -1002,7 +1163,14 @@
     "total_blocked_by": 2,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 149,
@@ -1046,7 +1214,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 203,
@@ -1090,7 +1265,14 @@
     "total_blocked_by": 2,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/150"
   },
   {
    "number": 151,
@@ -1130,7 +1312,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 201,
@@ -1174,7 +1363,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/147"
   },
   {
    "number": 157,
@@ -1214,7 +1410,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 145,
@@ -1254,7 +1457,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 200,
@@ -1298,7 +1508,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/147"
   },
   {
    "number": 204,
@@ -1342,7 +1559,14 @@
     "total_blocked_by": 2,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": "https://api.github.com/repos/martonpaulo/tabelo/issues/150"
   },
   {
    "number": 54,
@@ -1382,7 +1606,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 137,
@@ -1430,7 +1661,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 142,
@@ -1474,7 +1712,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 160,
@@ -1518,7 +1763,14 @@
     "total_blocked_by": 3,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 146,
@@ -1562,7 +1814,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 56,
@@ -1598,7 +1857,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 135,
@@ -1638,7 +1904,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 139,
@@ -1682,7 +1955,14 @@
     "total_blocked_by": 2,
     "blocking": 1,
     "total_blocking": 2
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 55,
@@ -1722,7 +2002,14 @@
     "total_blocked_by": 1,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 141,
@@ -1766,7 +2053,163 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 5
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
+  },
+  {
+   "number": 144,
+   "title": "Find and replace across the table",
+   "state": "closed",
+   "state_reason": "completed",
+   "html_url": "https://github.com/martonpaulo/tabelo/issues/144",
+   "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+   "labels": [
+    {
+     "name": "priority: P2",
+     "color": "FBCA04"
+    },
+    {
+     "name": "evidence: confirmed",
+     "color": "0E8A16"
+    },
+    {
+     "name": "area: design-system",
+     "color": "F9D0C4"
+    },
+    {
+     "name": "area: grid",
+     "color": "006B75"
+    },
+    {
+     "name": "effort: L",
+     "color": "6E8CA0"
+    },
+    {
+     "name": "type: feature",
+     "color": "c5def5"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 1,
+    "blocking": 1,
+    "total_blocking": 1
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
+  },
+  {
+   "number": 276,
+   "title": "Source display settings get a global default and a per-pane override",
+   "state": "open",
+   "state_reason": null,
+   "html_url": "https://github.com/martonpaulo/tabelo/issues/276",
+   "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+   "labels": [
+    {
+     "name": "type: improvement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "priority: P1",
+     "color": "D93F0B"
+    },
+    {
+     "name": "evidence: confirmed",
+     "color": "0E8A16"
+    },
+    {
+     "name": "area: persistence",
+     "color": "0052CC"
+    },
+    {
+     "name": "area: workspace",
+     "color": "1D76DB"
+    },
+    {
+     "name": "area: design-system",
+     "color": "F9D0C4"
+    },
+    {
+     "name": "area: source-editor",
+     "color": "D4C5F9"
+    },
+    {
+     "name": "effort: XL",
+     "color": "4C5B63"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 0,
+    "blocking": 1,
+    "total_blocking": 1
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
+  },
+  {
+   "number": 287,
+   "title": "Escape sequences in source views are unreadable and take the room of five characters",
+   "state": "closed",
+   "state_reason": "completed",
+   "html_url": "https://github.com/martonpaulo/tabelo/issues/287",
+   "repository_url": "https://api.github.com/repos/martonpaulo/tabelo",
+   "labels": [
+    {
+     "name": "type: improvement",
+     "color": "a2eeef"
+    },
+    {
+     "name": "priority: P2",
+     "color": "FBCA04"
+    },
+    {
+     "name": "evidence: confirmed",
+     "color": "0E8A16"
+    },
+    {
+     "name": "area: design-system",
+     "color": "F9D0C4"
+    },
+    {
+     "name": "area: source-editor",
+     "color": "D4C5F9"
+    },
+    {
+     "name": "effort: M",
+     "color": "A9BFD0"
+    }
+   ],
+   "issue_dependencies_summary": {
+    "blocked_by": 0,
+    "total_blocked_by": 1,
+    "blocking": 1,
+    "total_blocking": 1
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "187": [
@@ -1812,7 +2255,14 @@
     "total_blocked_by": 0,
     "blocking": 3,
     "total_blocking": 4
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "195": [
@@ -1850,7 +2300,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   },
   {
    "number": 194,
@@ -1886,7 +2343,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "266": [
@@ -1932,7 +2396,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 3
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "268": [
@@ -1966,7 +2437,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "277": [
@@ -2008,7 +2486,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "297": [
@@ -2046,7 +2531,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 2,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ],
  "306": [
@@ -2088,7 +2580,14 @@
     "total_blocked_by": 0,
     "blocking": 1,
     "total_blocking": 1
-   }
+   },
+   "assignees": [],
+   "sub_issues_summary": {
+    "total": 0,
+    "completed": 0,
+    "percent_completed": 0
+   },
+   "parent_issue_url": null
   }
  ]
 }

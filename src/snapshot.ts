@@ -13,6 +13,7 @@
 
 import { fromStored, toStored, type StoredGraph } from './cache'
 import type { RepositoryGraphData } from './github'
+import { canonicalSlug } from './route'
 
 /** The fragment key. Short because every character of it is charged to the length budget. */
 const KEY = 'g'
@@ -246,7 +247,9 @@ export async function readSnapshot(hash: string, slug: string): Promise<Snapshot
   if (!isRecord(payload) || payload.v !== 1 || typeof payload.shown !== 'boolean') {
     return { kind: 'invalid', reason: 'This shared link was made by a different version.' }
   }
-  if (payload.slug !== slug) {
+  // Case-insensitively: the sender's address bar and the recipient's need not agree on spelling,
+  // and rejecting a link over that would be rejecting the repository it does hold.
+  if (typeof payload.slug !== 'string' || canonicalSlug(payload.slug) !== canonicalSlug(slug)) {
     return {
       kind: 'invalid',
       reason: `This shared link holds ${String(payload.slug)}, not ${slug}.`,

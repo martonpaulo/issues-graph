@@ -10,11 +10,14 @@ import {
   buildGraph,
   cardHeight,
   chipRows,
+  dependencyCounts,
   deriveState,
   MAX_NODE_HEIGHT,
   MAX_TITLE_LINES,
   NODE_WIDTH,
+  parentNodeId,
   repoOf,
+  subIssuesOf,
   titleLineCount,
 } from './graph'
 
@@ -53,7 +56,9 @@ const TABELO = { owner: 'martonpaulo', repo: 'tabelo' }
 const NODES_AW = 25
 const EDGES_AW = 40
 const NODES_TABELO = 46
-const EDGES_TABELO = 5
+/** Six `blocked_by` edges plus the two sub-issues tabelo #294 was split into. */
+const EDGES_TABELO = 8
+const HIERARCHY_TABELO = 2
 
 function issue(over: Partial<IssuePayload> = {}): IssuePayload {
   return {
@@ -168,16 +173,126 @@ describe('deriveState', () => {
     )
   })
 
+  it('reads in-review as delivered rather than as available', async () => {
+    // The costly error: a change already written, rendered as something to pick up.
+    expect(deriveState(issue({ labels: [{ name: 'in-review', color: '8B949E' }] }))).toBe('in-review')
+    // Matched against the whole name, case-insensitively, exactly as the orchestrator matches it.
+    expect(deriveState(issue({ labels: [{ name: 'In-Review', color: '8B949E' }] }))).toBe('in-review')
+    expect(deriveState(issue({ labels: [{ name: 'status: in-review', color: '8B949E' }] }))).toBe(
+      'attention',
+    )
+  })
+
+  it('reads in-progress from the label itself, not from the status namespace', async () => {
+    const inProgress = [{ name: 'in-progress', color: '8B949E' }]
+    expect(deriveState(issue({ labels: inProgress }))).toBe('in-progress')
+
+    // The pair is a parked issue, and parked is the fact worth showing. Removing either label
+    // still leaves the other correct, which is what reading them independently buys.
+    const parked = [...inProgress, { name: 'status: needs-decision', color: '57606A' }]
+    expect(deriveState(issue({ labels: parked }))).toBe('attention')
+    expect(deriveState(issue({ labels: [{ name: 'status: blocked', color: '24292F' }] }))).toBe(
+      'attention',
+    )
+  })
+
+  it('separates an unassigned issue from one that is free to start', async () => {
+    expect(deriveState(issue({ assignees: [] }))).toBe('unassigned')
+    expect(deriveState(issue({ assignees: [{ login: 'martonpaulo' }] }))).toBe('ready')
+  })
+
+  it('treats a payload carrying no assignee field as unknown rather than unassigned', async () => {
+    // A cached copy or a shared snapshot written before assignees were read. It has to render as
+    // whatever it used to render as, not claim that nobody is on the issue.
+    expect(deriveState(issue())).toBe('ready')
+  })
+
+  it('orders the open states so the fact that decides the issue wins', async () => {
+    const blocked = { blocked_by: 1, total_blocked_by: 1, blocking: 0, total_blocking: 0 }
+    const every = [
+      { name: 'in-review', color: '8B949E' },
+      { name: 'in-progress', color: '8B949E' },
+      { name: 'status: needs-decision', color: '57606A' },
+    ]
+    expect(
+      deriveState(issue({ labels: every, assignees: [], issue_dependencies_summary: blocked })),
+    ).toBe('in-review')
+    expect(
+      deriveState(
+        issue({ labels: every.slice(1), assignees: [], issue_dependencies_summary: blocked }),
+      ),
+    ).toBe('attention')
+    expect(
+      deriveState(
+        issue({ labels: every.slice(1, 2), assignees: [], issue_dependencies_summary: blocked }),
+      ),
+    ).toBe('in-progress')
+    // Blocked outranks unassigned: nobody can pick it up, assigned or not.
+    expect(deriveState(issue({ assignees: [], issue_dependencies_summary: blocked }))).toBe(
+      'blocked',
+    )
+  })
+
   it('prefers closed over every open state', async () => {
     expect(
       deriveState(
         issue({
           state: 'closed',
           state_reason: 'completed',
-          labels: [{ name: 'status: needs-decision', color: 'ededed' }],
+          labels: [
+            { name: 'status: needs-decision', color: 'ededed' },
+            { name: 'in-review', color: '8B949E' },
+          ],
+          assignees: [],
         }),
       ),
     ).toBe('completed')
+  })
+})
+
+describe('dependencyCounts', () => {
+  it('counts ordering only, so a parent neither waits nor holds anything up', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    const counted = dependencyCounts(graph.edges)
+
+    const ordering = graph.edges.filter((edge) => edge.kind === 'dependency')
+    expect(counted).toEqual({
+      dependent: new Set(ordering.map((edge) => edge.target)).size,
+      blocking: new Set(ordering.map((edge) => edge.source)).size,
+    })
+    // Dropping every hierarchy edge must not move either figure.
+    expect(dependencyCounts(ordering)).toEqual(counted)
+    expect(
+      dependencyCounts(graph.edges.filter((edge) => edge.kind === 'hierarchy')),
+    ).toEqual({ dependent: 0, blocking: 0 })
+  })
+})
+
+describe('subIssuesOf', () => {
+  it('reports a parent\'s progress and nothing for an issue that is not one', async () => {
+    expect(
+      subIssuesOf(issue({ sub_issues_summary: { total: 5, completed: 2, percent_completed: 40 } })),
+    ).toEqual({ completed: 2, total: 5 })
+    // GitHub sends a zeroed summary on every issue, parent or not; only a real total is progress.
+    expect(
+      subIssuesOf(issue({ sub_issues_summary: { total: 0, completed: 0, percent_completed: 0 } })),
+    ).toBeNull()
+    expect(subIssuesOf(issue())).toBeNull()
+  })
+})
+
+describe('parentNodeId', () => {
+  it('reads the node a parent URL names, whatever repository it lives in', async () => {
+    expect(parentNodeId('https://api.github.com/repos/martonpaulo/tabelo/issues/294')).toBe(
+      'martonpaulo/tabelo#294',
+    )
+    expect(parentNodeId('https://api.github.com/repos/other/lib/issues/7')).toBe('other/lib#7')
+  })
+
+  it('reads nothing from an absent or unrecognized parent', async () => {
+    expect(parentNodeId(null)).toBeNull()
+    expect(parentNodeId(undefined)).toBeNull()
+    expect(parentNodeId('https://api.github.com/repos/acme/app')).toBeNull()
   })
 })
 
@@ -227,6 +342,50 @@ describe('buildGraph against captured GitHub data', () => {
     expect(graph.edges).toHaveLength(EDGES_TABELO)
   })
 
+  it('draws the tabelo split as containment, alongside the ordering it also has', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    const hierarchy = graph.edges.filter((edge) => edge.kind === 'hierarchy')
+
+    // #294 was split into #296 and #297. It also blocks #297, and that is a different assertion:
+    // one edge says "contains", the other says "first". Both are drawn, neither is inferred.
+    expect(hierarchy.map((edge) => edge.id).sort()).toEqual([
+      'martonpaulo/tabelo#294=>martonpaulo/tabelo#296',
+      'martonpaulo/tabelo#294=>martonpaulo/tabelo#297',
+    ])
+    expect(hierarchy).toHaveLength(HIERARCHY_TABELO)
+    expect(hierarchy.every((edge) => edge.source === 'martonpaulo/tabelo#294')).toBe(true)
+    expect(
+      graph.edges.some(
+        (edge) =>
+          edge.kind === 'dependency' &&
+          edge.source === 'martonpaulo/tabelo#294' &&
+          edge.target === 'martonpaulo/tabelo#297',
+      ),
+    ).toBe(true)
+
+    const parent = graph.nodes.find((node) => node.number === 294)!
+    expect(parent.subIssues).toEqual({ completed: 0, total: 2 })
+    expect(graph.nodes.filter((node) => node.subIssues !== null)).toHaveLength(1)
+  })
+
+  it('reads every tabelo card as unassigned, because none of them is assigned', async () => {
+    // The whole open backlog carries an empty assignee list, which is exactly the case the state
+    // exists for: unqueued work that used to render as available.
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    expect(new Set(graph.nodes.map((node) => node.state))).toEqual(new Set(['unassigned', 'blocked']))
+  })
+
+  it('leaves a repository captured before these fields existed exactly as it was', async () => {
+    // The agent-workflows capture carries no assignees, no sub-issue summary and no parent, which
+    // is what an older cached copy or a shared snapshot looks like. Nothing new may appear.
+    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    expect(graph.edges.every((edge) => edge.kind === 'dependency')).toBe(true)
+    expect(graph.nodes.every((node) => node.subIssues === null)).toBe(true)
+    expect(graph.nodes.some((node) => node.state === 'ready')).toBe(true)
+    expect(graph.nodes.some((node) => node.state === 'unassigned')).toBe(false)
+    expect(graph.groups.every((group) => group.kind !== 'breakdown')).toBe(true)
+  })
+
   it('omits presentation metadata from an external blocker', async () => {
     const localIssue = tabeloIssues[0] as IssuePayload
     const externalIssue = awIssues[0] as IssuePayload
@@ -250,6 +409,7 @@ describe('buildGraph against captured GitHub data', () => {
     expect(local.labels).not.toHaveLength(0)
     expect(graph.edges).toContainEqual({
       id: `${external.id}->${local.id}`,
+      kind: 'dependency',
       source: external.id,
       target: local.id,
       points: expect.any(Array),
@@ -478,7 +638,12 @@ describe('buildGraph edge cases not present in the captured data', () => {
     })
     expect(graph.nodes.find((node) => node.number === 5)!.external).toBe(false)
     expect(graph.edges).toMatchObject([
-      { id: 'other/lib#30->acme/app#5', source: 'other/lib#30', target: 'acme/app#5' },
+      {
+        id: 'other/lib#30->acme/app#5',
+        kind: 'dependency',
+        source: 'other/lib#30',
+        target: 'acme/app#5',
+      },
     ])
   })
 
@@ -553,6 +718,73 @@ describe('buildGraph edge cases not present in the captured data', () => {
     expect(graph.edges).toHaveLength(1)
   })
 
+  it('draws a sub-issue as containment, from the child, at no request cost', async () => {
+    const parent = issue({
+      number: 5,
+      sub_issues_summary: { total: 2, completed: 1, percent_completed: 50 },
+    })
+    const child = issue({
+      number: 6,
+      parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
+    })
+
+    const graph = await buildGraph(dataFrom([parent, child], {}), { owner: 'acme', repo: 'app' })
+
+    expect(graph.edges).toMatchObject([
+      { id: 'acme/app#5=>acme/app#6', kind: 'hierarchy', source: 'acme/app#5', target: 'acme/app#6' },
+    ])
+    expect(graph.nodes.find((node) => node.number === 5)!.subIssues).toEqual({
+      completed: 1,
+      total: 2,
+    })
+    expect(graph.nodes.find((node) => node.number === 6)!.subIssues).toBeNull()
+  })
+
+  it('frames a containment-only set as a breakdown rather than as a chain', async () => {
+    const parent = issue({
+      number: 5,
+      sub_issues_summary: { total: 1, completed: 0, percent_completed: 0 },
+    })
+    const child = issue({
+      number: 6,
+      parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
+    })
+
+    const graph = await buildGraph(dataFrom([parent, child], {}), { owner: 'acme', repo: 'app' })
+
+    // A parent and its children have no order between them, so calling the frame a chain would
+    // assert the one thing containment does not say.
+    expect(graph.groups).toMatchObject([{ kind: 'breakdown', label: 'Breakdown · 2 issues' }])
+  })
+
+  it('drops a parent that lives in another repository instead of fetching it', async () => {
+    // Several of this owner's sub-issues point at a parent in a different repository. Reaching it
+    // would cost the outbound request `blocking` is deliberately not spending either.
+    const child = issue({
+      number: 6,
+      parent_issue_url: 'https://api.github.com/repos/other/lib/issues/9',
+    })
+
+    const graph = await buildGraph(dataFrom([child], {}), { owner: 'acme', repo: 'app' })
+    expect(graph.nodes).toHaveLength(1)
+    expect(graph.edges).toHaveLength(0)
+  })
+
+  it('drops a parent whose issue is closed and therefore not drawn', async () => {
+    const child = issue({
+      number: 6,
+      parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
+    })
+    const closedParent = issue({ number: 5, state: 'closed', state_reason: 'completed' })
+
+    const graph = await buildGraph(dataFrom([closedParent, child], {}), {
+      owner: 'acme',
+      repo: 'app',
+    })
+    expect(graph.nodes.map((node) => node.number)).toEqual([6])
+    expect(graph.edges).toHaveLength(0)
+  })
+
   it('carries incompleteness through to the graph so the canvas cannot claim to be whole', async () => {
     const graph = await buildGraph(
       dataFrom(awIssues, awBlockedBy, {
@@ -566,5 +798,176 @@ describe('buildGraph edge cases not present in the captured data', () => {
     expect(graph.complete).toBe(false)
     expect(graph.rateLimited).toBe(true)
     expect(graph.unresolved).toHaveLength(1)
+  })
+})
+
+/**
+ * GitHub resolves `owner` and `repo` case-insensitively and serves a renamed repository through a
+ * redirect, so the spelling in the address is not necessarily the spelling in the payloads. The
+ * graph's identity comes from the payloads, and these cases are what that has to buy.
+ *
+ * https://docs.github.com/en/rest/issues/issue-dependencies
+ */
+describe('repository identity is canonical, not what the address happened to spell', () => {
+  function blockedPair() {
+    const blocked = issue({
+      number: 5,
+      issue_dependencies_summary: {
+        blocked_by: 1,
+        total_blocked_by: 1,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    })
+    const blocker = issue({ number: 2, title: 'Lands first' })
+    return dataFrom([blocked, blocker], { 5: [blocker] })
+  }
+
+  it('draws the same graph from a mixed-case route as from the canonical one', async () => {
+    // Both payloads say `acme/app`; only the address disagrees.
+    const mixed = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+    const exact = await buildGraph(blockedPair(), { owner: 'acme', repo: 'app' })
+
+    expect(mixed.nodes.map((node) => node.id).sort()).toEqual(
+      exact.nodes.map((node) => node.id).sort(),
+    )
+    expect(mixed.edges).toMatchObject([
+      { id: 'acme/app#2->acme/app#5', source: 'acme/app#2', target: 'acme/app#5' },
+    ])
+    expect(mixed.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('keeps local issues local when the address spells the repository differently', async () => {
+    const graph = await buildGraph(blockedPair(), { owner: 'ACME', repo: 'APP' })
+
+    for (const node of graph.nodes) {
+      expect(node.external).toBe(false)
+      expect(node.repoLabel).toBe('')
+      // A local card still carries workflow state; an external one has none.
+      expect(node.state).not.toBeNull()
+    }
+  })
+
+  it('joins the graph when a rename redirected a trusted read to another name', async () => {
+    // GitHub answers `acme/old-app` under its current name, so the payloads and the address share
+    // no spelling at all. A read this browser just made may say which repository it is of.
+    const graph = await buildGraph(
+      blockedPair(),
+      { owner: 'acme', repo: 'old-app' },
+      { trustedIdentity: true },
+    )
+
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('reports the identity it drew, so what leaves this browser is bound to it', async () => {
+    // A trusted read through an old alias answers with the current repository, and that is what
+    // the cards belong to. A shared link or a hidden-card key built from the address instead would
+    // name a repository none of these nodes are qualified with.
+    const redirected = await buildGraph(
+      blockedPair(),
+      { owner: 'acme', repo: 'old-app' },
+      { trustedIdentity: true },
+    )
+    expect(redirected.identity).toBe('acme/app')
+    expect(redirected.nodes.every((node) => node.id.startsWith('acme/app#'))).toBe(true)
+
+    // Untrusted data does not get to name it, so the identity is the address, canonically.
+    const untrusted = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+    expect(untrusted.identity).toBe('acme/app')
+  })
+
+  it('does not let untrusted data name the repository being drawn', async () => {
+    // The shape of a crafted shared link: its path and its own slug field say `acme/app`, which is
+    // all `readSnapshot` checks, while the issues inside it come from somewhere else entirely.
+    // Those issues must not be drawn as this repository's own.
+    const crafted = dataFrom(
+      [
+        issue({
+          number: 5,
+          repository_url: 'https://api.github.com/repos/evil/repo',
+          html_url: 'https://github.com/evil/repo/issues/5',
+        }),
+      ],
+      {},
+    )
+
+    const graph = await buildGraph(crafted, { owner: 'acme', repo: 'app' })
+
+    expect(graph.nodes).toHaveLength(1)
+    expect(graph.nodes[0]).toMatchObject({
+      id: 'evil/repo#5',
+      external: true,
+      repoLabel: 'evil/repo',
+      // An external card carries no local workflow state and no label chips.
+      state: null,
+      labels: [],
+    })
+  })
+
+  it('still folds casing without trusting the data to name the repository', async () => {
+    // The default path: the address owns the identity, and canonical comparison is what makes
+    // `Acme/App` and the payloads' `acme/app` one repository rather than two.
+    const graph = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('still qualifies a cross-repository blocker by its own repository', async () => {
+    const blocked = issue({
+      number: 5,
+      issue_dependencies_summary: {
+        blocked_by: 2,
+        total_blocked_by: 2,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    })
+    const sibling = issue({
+      number: 7,
+      repository_url: 'https://api.github.com/repos/acme/other',
+      html_url: 'https://github.com/acme/other/issues/7',
+    })
+    const foreign = issue({
+      number: 30,
+      repository_url: 'https://api.github.com/repos/other/lib',
+      html_url: 'https://github.com/other/lib/issues/30',
+    })
+
+    const graph = await buildGraph(dataFrom([blocked], { 5: [sibling, foreign] }), {
+      owner: 'Acme',
+      repo: 'App',
+    })
+
+    const byNumber = new Map(graph.nodes.map((node) => [node.number, node]))
+    expect(byNumber.get(7)).toMatchObject({ id: 'acme/other#7', external: true, repoLabel: 'other' })
+    expect(byNumber.get(30)).toMatchObject({
+      id: 'other/lib#30',
+      external: true,
+      repoLabel: 'other/lib',
+    })
+    expect(graph.edges.map((edge) => edge.id).sort()).toEqual([
+      'acme/other#7->acme/app#5',
+      'other/lib#30->acme/app#5',
+    ])
+  })
+
+  it('draws the captured repositories whole from a mixed-case address', async () => {
+    const aw = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+      owner: 'MartonPaulo',
+      repo: 'Agent-Workflows',
+    })
+    expect(aw.nodes).toHaveLength(NODES_AW)
+    expect(aw.edges).toHaveLength(EDGES_AW)
+
+    const tabelo = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), {
+      owner: 'MARTONPAULO',
+      repo: 'Tabelo',
+    })
+    expect(tabelo.nodes).toHaveLength(NODES_TABELO)
+    expect(tabelo.edges).toHaveLength(EDGES_TABELO)
+    expect(tabelo.nodes.filter((node) => node.external)).toHaveLength(0)
   })
 })

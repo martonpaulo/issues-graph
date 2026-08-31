@@ -1,0 +1,128 @@
+# Enforces the pull request naming conventions this project records, on the pull request itself.
+#
+# Copied verbatim into a consuming repository as `.github/workflows/pr-conventions.yml` by
+# project-setup's agent-orchestration opt-in. It is deliberately language-agnostic: it reads the
+# pull request's title and body and nothing else, so it is the same file in every repository.
+#
+# Why this is a check rather than an instruction. The branch name and the `Closes` block are
+# produced mechanically and come out right; the title depends on an agent remembering a convention
+# and, measured across one repository's history, comes out right about half the time — including
+# for the operator.
+#
+# Why the verdict is a commit status and the job always succeeds. This check re-runs when the title
+# is edited, which does not change the head commit, so a corrected pull request ends up with both a
+# failed and a passing run against the same SHA. GitHub resolves that by counting only the latest
+# run of each check name, but a rollup consumer that treats *any* failure-class context as failing
+# does not — Agent Orchestrator is one, and it held three corrected pull requests in Validating
+# with `ci_failed` while GitHub considered them green, nudging each worker to fix CI that was not
+# broken. Commit statuses do not have that problem: the rollup carries only the latest status per
+# context, so a corrected title replaces the failure rather than joining it. The required check to
+# configure is therefore the `pr-conventions` **context**, not this job.
+name: PR conventions
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: pr-conventions-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventions:
+    name: pr-conventions-runner
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title and closing block
+        id: check
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY' | tee "$GITHUB_STEP_SUMMARY"
+          import os
+          import re
+
+          title = (os.environ.get("PR_TITLE") or "").strip()
+          body = (os.environ.get("PR_BODY") or "").replace("\r\n", "\n")
+
+          failures = []
+
+          # `Issue #12 - Description` for one, `Issues #70, #73 - Description` for several.
+          single = re.fullmatch(r"Issue #(\d+) - (\S.*)", title)
+          plural = re.fullmatch(r"Issues ((?:#\d+, )+#\d+) - (\S.*)", title)
+          if single:
+              title_issues = [int(single.group(1))]
+          elif plural:
+              title_issues = [int(n) for n in re.findall(r"#(\d+)", plural.group(1))]
+          else:
+              title_issues = []
+              failures.append(
+                  "title must read 'Issue #<n> - <description>', or "
+                  "'Issues #<a>, #<b> - <description>' when it closes several; got: " + repr(title)
+              )
+
+          if title_issues != sorted(set(title_issues)):
+              failures.append("title issue numbers must be deduplicated and sorted numerically")
+
+          # The closing block is one `Closes #<n>` per line, at the very top of the body.
+          closes = []
+          for line in body.split("\n"):
+              match = re.fullmatch(r"Closes #(\d+)", line.strip())
+              if match:
+                  closes.append(int(match.group(1)))
+              elif closes:
+                  break
+              elif line.strip():
+                  break
+
+          if not closes:
+              failures.append("body must start with one `Closes #<n>` line for every issue it closes")
+          elif sorted(set(closes)) != sorted(set(title_issues)) and title_issues:
+              failures.append(
+                  "the title's issues %s and the closing block's %s must name the same set"
+                  % (sorted(set(title_issues)), sorted(set(closes)))
+              )
+
+          if failures:
+              summary = "; ".join(failures)
+              print("Pull request conventions not met:\n")
+              for failure in failures:
+                  print("  - " + failure)
+              print(
+                  "\nThe conventions are recorded in the project's AGENTS.md. Edit the pull "
+                  "request title or body and this check re-runs on its own."
+              )
+          else:
+              summary = "Title and closing block agree on issue(s) %s." % sorted(set(title_issues))
+              print(summary)
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write("state=%s\n" % ("failure" if failures else "success"))
+              # A status description is capped at 140 characters by the API.
+              out.write("summary=%s\n" % summary.replace("\n", " ")[:140])
+          PY
+
+      - name: Publish the verdict as a commit status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          STATE: ${{ steps.check.outputs.state }}
+          SUMMARY: ${{ steps.check.outputs.summary }}
+        run: |
+          # A step that never ran leaves no outputs; treat that as a failure rather than
+          # publishing success for a check that did not happen.
+          state="${STATE:-failure}"
+          summary="${SUMMARY:-the conventions check did not complete}"
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state="$state" \
+            -f context=pr-conventions \
+            -f description="$summary" \
+            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            >/dev/null
+          [ "$state" = success ]

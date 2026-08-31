@@ -70,6 +70,18 @@ export interface DependencySummaryPayload {
   total_blocking: number
 }
 
+/** GitHub's own count of an issue's native sub-issues. Absent on an issue that has none. */
+export interface SubIssuesSummaryPayload {
+  total: number
+  completed: number
+  percent_completed: number
+}
+
+/** Only the login is read; the rest of GitHub's user object is not consumed anywhere. */
+export interface AssigneePayload {
+  login: string
+}
+
 export interface IssuePayload {
   number: number
   title: string
@@ -79,6 +91,24 @@ export interface IssuePayload {
   repository_url: string
   labels: LabelPayload[]
   issue_dependencies_summary?: DependencySummaryPayload
+  /**
+   * Who the issue is queued to. Optional on this type because a cache or a snapshot written
+   * before assignees were read carries no such field, and an absent list is not an empty one:
+   * the state derivation treats it as unknown rather than as unassigned.
+   */
+  assignees?: AssigneePayload[]
+  /**
+   * Native sub-issue progress, on the parent. Rides on the issue list response that already
+   * produced this payload, so hierarchy costs no request of its own.
+   * https://docs.github.com/en/rest/issues/sub-issues
+   */
+  sub_issues_summary?: SubIssuesSummaryPayload
+  /**
+   * The parent's API URL, on the child. The hierarchy is therefore readable from the same list
+   * as the nodes, with no per-parent request; a parent in another repository is named here and
+   * simply is not a node, for the same reason outbound `blocking` edges are not fetched.
+   */
+  parent_issue_url?: string | null
   /** Present only on pull requests, which the issues endpoint returns alongside issues. */
   pull_request?: unknown
 }
@@ -269,7 +299,9 @@ async function request(url: string, options: LoadOptions, count: RequestCounter)
     throw new RequestFailure({
       kind: 'unexpected',
       status: response.status,
-      message: `GitHub answered ${response.status}.`,
+      // No trailing period: this sentence is composed into longer copy — the stage notice and the
+      // per-issue list of unresolved blockers — which supplies its own punctuation.
+      message: `GitHub returned error ${response.status}`,
     })
   }
 

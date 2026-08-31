@@ -36,8 +36,15 @@ export type IssueNode = Node<IssueCardData, 'issue'>
  */
 export const STATE_TEXT: Record<IssueState, string> = {
   ready: 'ready',
+  // Nobody is on it, which is not the same as free to start: it is unqueued.
+  unassigned: 'unassigned',
   blocked: 'blocked',
+  'in-progress': 'in progress',
   attention: 'needs attention',
+  // The word is "delivered", not "in review", because the reader is asking what to pick up next
+  // and picking this one up implements a change that is already written. It also has to stay short
+  // enough to share the head row with a parent's progress count on the widest issue number.
+  'in-review': 'delivered',
   completed: 'closed',
   'not-planned': 'not planned',
 }
@@ -100,6 +107,12 @@ function CardBody({
           {node.external && <span className="card__repo">{node.repoLabel}</span>}
           <span className="card__number">#{node.number}</span>
         </span>
+        {/* A parent's own progress, in words: colour says nothing a count can. */}
+        {node.subIssues && (
+          <span className="card__progress">
+            {node.subIssues.completed} of {node.subIssues.total} done
+          </span>
+        )}
         {node.state && <span className="card__state">{STATE_TEXT[node.state]}</span>}
       </span>
 

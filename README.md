@@ -1,8 +1,8 @@
 # issues-graph
 
 A hosted dependency graph for GitHub Issues. Point it at any public repository and it renders that
-repository's open issues and the native `blocked by` relationships between them, as a graph you can
-read.
+repository's open issues, the native `blocked by` relationships between them, and the native
+sub-issue hierarchy, as a graph you can read.
 
 ```
 https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>
@@ -10,8 +10,10 @@ https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>
 
 It is a static page. There is no backend, no credential of its own, and no generated graph file in
 the repository being rendered — every read goes straight to the public GitHub REST API from the
-browser, and the `blocked by` / `blocking` relationships GitHub already tracks are the only source
-of truth for the edges.
+browser, and the relationships GitHub already tracks are the only source of truth for the edges:
+`blocked by` for the solid arrows, and the sub-issue hierarchy for the dashed ones. Each card names
+its own state in words — `ready`, `unassigned`, `blocked`, `in progress`, `needs attention`,
+`delivered` — read from the issue's own labels, assignees and dependency counts.
 
 ## Reading it without the picture
 

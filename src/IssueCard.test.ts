@@ -19,6 +19,7 @@ function issueNode(overrides: Partial<GraphNode>): GraphNode {
     repoLabel: '',
     labels: [],
     allLabels: [],
+    subIssues: null,
     titleLines: 1,
     height: 100,
     position: { x: 0, y: 0 },
@@ -97,6 +98,34 @@ describe('IssueCard', () => {
       'Hide other/lib#30',
     ])
     expect(html).toContain('<span class="card__repo">other/lib</span>')
+  })
+
+  it('writes every state as a word, so colour is never the only carrier', () => {
+    const words: Record<string, string> = {
+      ready: 'ready',
+      unassigned: 'unassigned',
+      blocked: 'blocked',
+      'in-progress': 'in progress',
+      attention: 'needs attention',
+      'in-review': 'delivered',
+      completed: 'closed',
+      'not-planned': 'not planned',
+    }
+
+    for (const [state, word] of Object.entries(words)) {
+      const html = renderCard(issueNode({ state: state as GraphNode['state'] }))
+      expect(html).toContain(`<span class="card__state">${word}</span>`)
+      expect(html).toContain(`card--${state}`)
+    }
+    // "delivered", not "in review": the reader is asking what to pick up, and this one is written.
+    expect(words['in-review']).not.toBe(words.ready)
+  })
+
+  it('shows a parent its own progress in words, and shows nothing on an issue with no children', () => {
+    expect(renderCard(issueNode({ subIssues: { completed: 2, total: 5 } }))).toContain(
+      '<span class="card__progress">2 of 5 done</span>',
+    )
+    expect(renderCard(issueNode({}))).not.toContain('card__progress')
   })
 
   it('keeps the repository casing GitHub reported, still naming it once', () => {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { IssuePayload, RepositoryGraphData } from './github'
+import { buildGraph } from './graph'
 import { buildSnapshotUrl, readSnapshot, SNAPSHOT_URL_LIMIT } from './snapshot'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
@@ -227,6 +228,80 @@ describe('readSnapshot', () => {
     const read = await readSnapshot(cut, 'martonpaulo/tabelo')
 
     expect(read.kind).toBe('invalid')
+  })
+
+  it('reproduces the graph it was made from when a rename redirected the read', async () => {
+    // The regression this guards: the sender read `acme/old-app`, GitHub answered under the
+    // current name, and a link built from the address the sender was on would arrive bound to
+    // `acme/old-app`. The recipient does not trust the payload to name its own repository, so it
+    // would fall back to that address, find no issue belonging to it, and draw every card as
+    // external with no edge between them.
+    const blocked = {
+      number: 5,
+      title: 'Waits for one thing',
+      state: 'open',
+      state_reason: null,
+      html_url: 'https://github.com/acme/app/issues/5',
+      repository_url: 'https://api.github.com/repos/acme/app',
+      labels: [],
+      issue_dependencies_summary: {
+        blocked_by: 1,
+        total_blocked_by: 1,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    }
+    const blocker = { ...blocked, number: 2, title: 'Lands first' }
+    const data: RepositoryGraphData = {
+      issues: [blocked, blocker],
+      blockers: new Map([[5, [blocker]]]),
+      complete: true,
+      unresolved: [],
+      rateLimited: false,
+      rateLimitReset: null,
+      requestCount: 2,
+      rateLimit: null,
+      includedClosed: false,
+    }
+
+    // What the sender sees: a trusted read reached through the old alias.
+    const drawn = await buildGraph(data, { owner: 'acme', repo: 'old-app' }, { trustedIdentity: true })
+    expect(drawn.edges).toHaveLength(1)
+
+    // The link is bound to the repository the cards belong to, not to the address in the sender's
+    // address bar, and its path names the same repository its payload does.
+    const link = await share(drawn.identity, data, false)
+    expect(link.url).toContain('dependencies/acme/app#')
+
+    // What the recipient gets, at the address that link puts them on, trusting nothing in it.
+    const read = await readSnapshot(fragmentOf(link.url), drawn.identity)
+    expect(read.kind).toBe('snapshot')
+    if (read.kind !== 'snapshot') return
+
+    const redrawn = await buildGraph(read.view.data, { owner: 'acme', repo: 'app' })
+    expect(redrawn.edges.map((edge) => edge.id)).toEqual(drawn.edges.map((edge) => edge.id))
+    expect(redrawn.nodes.every((node) => !node.external)).toBe(true)
+
+    // And what binding the link to the sender's address does instead, which is why it does not:
+    // the recipient falls back to `acme/old-app`, no issue in the payload belongs to it, and the
+    // graph arrives as a set of foreign cards with nothing joining them.
+    const misbound = await share('acme/old-app', data, false)
+    const readOld = await readSnapshot(fragmentOf(misbound.url), 'acme/old-app')
+    expect(readOld.kind).toBe('snapshot')
+    if (readOld.kind !== 'snapshot') return
+
+    const broken = await buildGraph(readOld.view.data, { owner: 'acme', repo: 'old-app' })
+    expect(broken.edges).toHaveLength(0)
+    expect(broken.nodes.every((node) => node.external)).toBe(true)
+  })
+
+  it('opens a link whose slug differs from the page only in case', async () => {
+    // Owner and repository are not case-sensitive on GitHub, so the sender's address bar and the
+    // recipient's can spell one repository differently. That is not a different repository.
+    const link = await share('martonpaulo/tabelo', tabelo)
+    const read = await readSnapshot(fragmentOf(link.url), 'MartonPaulo/Tabelo')
+
+    expect(read.kind).toBe('snapshot')
   })
 
   it('rejects a link whose payload names a different repository', async () => {
