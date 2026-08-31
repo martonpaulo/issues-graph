@@ -8,14 +8,11 @@ import { describe, expect, it } from 'vitest'
 import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
-  abortOnTokenChange,
-  acceptsDrawResult,
   App,
   blockerStateText,
   DependencyTable,
   DIRECTION_LEGEND,
   budgetParts,
-  decideSavedCopyOpen,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -24,9 +21,9 @@ import {
   graphBounds,
   nextIssueSelection,
   SelectionBar,
-  stopsForTokenChange,
   TopChrome,
 } from './App'
+import { decideSavedCopyOpen } from './graphSession'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -327,15 +324,18 @@ describe('what the reader is told about the budget', () => {
     expect(text.body).toContain('Try again')
   })
 
-  it('separates a failed drawing from a failed read, which is not the reader’s repository', () => {
-    const text = failureText(target, { kind: 'draw', message: 'chunk load failed' }, false)
+  /**
+   * A layout failure is not a request failure: GitHub already answered. Reporting it as one sent
+   * the reader to check the connection that had just worked.
+   */
+  it('blames the drawing, not GitHub, when the layout is what failed', () => {
+    const text = failureText(target, { kind: 'layout', message: 'the worker stopped.' }, false)
 
-    expect(text.title).toContain('drawn')
-    // Nothing about the repository or the token is at fault, and saying so would send the reader
-    // to correct something that is already correct.
-    expect(text.body).toContain('read')
-    expect(text.body).toContain('Try again')
-    expect(text.body).not.toContain('token')
+    expect(text.title).not.toContain('GitHub')
+    expect(text.body).toContain('were read')
+    expect(text.body).toContain('the worker stopped')
+    // One period, not the two that carrying the message's own would produce.
+    expect(text.body).not.toContain('stopped..')
   })
 
   it('keeps every top-level failure’s guidance distinct', () => {
@@ -345,7 +345,7 @@ describe('what the reader is told about the budget', () => {
       failureText(target, { kind: 'unexpected', status: 500, message: 'GitHub returned error 500' }, false),
       failureText(target, { kind: 'not-found' }, false),
       failureText(target, { kind: 'network', message: 'Failed to fetch' }, false),
-      failureText(target, { kind: 'draw', message: 'chunk load failed' }, false),
+      failureText(target, { kind: 'layout', message: 'the worker stopped' }, false),
     ].map((text) => `${text.title}. ${text.body}`)
 
     expect(new Set(bodies).size).toBe(bodies.length)
@@ -390,132 +390,6 @@ describe('describeUnresolved', () => {
 
   it('says so plainly when the loader recorded no reason at all', () => {
     expect(describeUnresolved([])).toBe('Some blocker data is missing, and GitHub did not say why.')
-  })
-})
-
-/**
- * A load carries the token it started with, so changing one mid-flight has to stop the other.
- * Anything that is not in flight is left alone: nothing of its is still in the air.
- */
-/**
- * ELK cannot be stopped once it is laying a graph out, so the only control left is whether the
- * result may land. Every draw goes through this, which is why it is worth proving on its own.
- */
-describe('which finished layout is allowed on screen', () => {
-  it('publishes the draw the page is still waiting for', () => {
-    expect(acceptsDrawResult(3, 3, true)).toBe(true)
-  })
-
-  it('discards a draw that a later one has superseded', () => {
-    // The reader reloaded, or opened the saved copy instead: ticket 2 finishing after ticket 3
-    // started would otherwise put the older graph on screen.
-    expect(acceptsDrawResult(3, 2, true)).toBe(false)
-  })
-
-  it('discards a draw that finishes after the page is gone', () => {
-    expect(acceptsDrawResult(1, 1, false)).toBe(false)
-  })
-})
-
-describe('what a token change interrupts', () => {
-  it('stops a read that is under way', () => {
-    expect(stopsForTokenChange('listing')).toBe(true)
-    expect(stopsForTokenChange('confirm')).toBe(true)
-    expect(stopsForTokenChange('resolving')).toBe(true)
-    expect(stopsForTokenChange('drawing')).toBe(true)
-  })
-
-  it('leaves a gate, a drawn graph, and a reported failure alone', () => {
-    expect(stopsForTokenChange('gate')).toBe(false)
-    expect(stopsForTokenChange('ready')).toBe(false)
-    expect(stopsForTokenChange('failed')).toBe(false)
-  })
-})
-
-/**
- * The abort is what actually stops requests carrying a credential the viewer has replaced, so it
- * is worth proving on its own: the component's effect is one call to this.
- */
-describe('stopping a load whose token is gone', () => {
-  function active(): { current: AbortController | null } {
-    return { current: new AbortController() }
-  }
-
-  function draws(current = 0): { current: number } {
-    return { current }
-  }
-
-  it('aborts what is in flight and remembers the token that replaced it', () => {
-    const carried = { current: 'old' }
-    const controller = active()
-
-    expect(abortOnTokenChange(carried, 'new', controller, draws())).toBe(true)
-    expect(controller.current?.signal.aborted).toBe(true)
-    expect(carried.current).toBe('new')
-  })
-
-  it('aborts when the token is removed, which is the case that leaks a credential', () => {
-    const carried = { current: 'a-token' }
-    const controller = active()
-
-    expect(abortOnTokenChange(carried, '', controller, draws())).toBe(true)
-    expect(controller.current?.signal.aborted).toBe(true)
-  })
-
-  it('leaves an unchanged token alone, so an unrelated render cannot stop a load', () => {
-    const carried = { current: 'same' }
-    const controller = active()
-    const generation = draws(4)
-
-    expect(abortOnTokenChange(carried, 'same', controller, generation)).toBe(false)
-    expect(controller.current?.signal.aborted).toBe(false)
-    // A draw in flight under the token it was started with is still the one the page wants.
-    expect(generation.current).toBe(4)
-  })
-
-  it('aborts once, not on every call after the change', () => {
-    const carried = { current: 'old' }
-    const first = active()
-    abortOnTokenChange(carried, 'new', first, draws())
-
-    const second = active()
-    expect(abortOnTokenChange(carried, 'new', second, draws())).toBe(false)
-    expect(second.current?.signal.aborted).toBe(false)
-  })
-
-  it('does not fail when nothing is in flight', () => {
-    const carried = { current: 'old' }
-    const nothing = { current: null }
-
-    expect(abortOnTokenChange(carried, 'new', nothing, draws())).toBe(true)
-    expect(carried.current).toBe('new')
-  })
-
-  /**
-   * The regression: the page said the read was stopped and went back to the gate, and then a
-   * layout started before the token changed finished and put the graph up anyway. An abort stops
-   * requests, but a running layout is not a request, and the saved copy and the shared link have
-   * no controller for an abort to reach at all — so the generation is what has to move.
-   */
-  it('retires a layout already running, which no abort can reach', () => {
-    const carried = { current: 'old' }
-    const generation = draws(7)
-    const ticket = generation.current
-
-    expect(acceptsDrawResult(generation.current, ticket, true)).toBe(true)
-
-    abortOnTokenChange(carried, 'new', active(), generation)
-
-    expect(generation.current).toBe(8)
-    expect(acceptsDrawResult(generation.current, ticket, true)).toBe(false)
-  })
-
-  it('retires a draw that carries no controller, such as the saved copy', () => {
-    const carried = { current: 'old' }
-    const generation = draws(2)
-
-    expect(abortOnTokenChange(carried, '', { current: null }, generation)).toBe(true)
-    expect(acceptsDrawResult(generation.current, 2, true)).toBe(false)
   })
 })
 
