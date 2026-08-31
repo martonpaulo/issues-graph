@@ -9,7 +9,8 @@ import { chipText } from './labels'
 export interface IssueCardData extends Record<string, unknown> {
   node: GraphNode
   selected: boolean
-  hidden: boolean
+  /** Drained of colour and attention, but still on the canvas and still in the reading order. */
+  dimmed: boolean
   /** Carries a label the reader asked to pick out. */
   highlighted: boolean
   /** A highlight is on and this card is not part of it. */
@@ -21,7 +22,7 @@ export interface IssueCardData extends Record<string, unknown> {
    */
   description: string
   onSelect: (id: string, additive: boolean) => void
-  onToggleHidden: (id: string) => void
+  onToggleDimmed: (id: string) => void
   onOpen: (url: string, label: string) => void
 }
 
@@ -50,14 +51,14 @@ export const STATE_TEXT: Record<IssueState, string> = {
 }
 
 function cardClasses(data: IssueCardData): string {
-  const { node, selected, hidden, highlighted, faded } = data
+  const { node, selected, dimmed, highlighted, faded } = data
 
   return [
     'card',
     node.state ? `card--${node.state}` : '',
     node.external ? 'card--external' : '',
     selected ? 'card--selected' : '',
-    hidden ? 'card--hidden' : '',
+    dimmed ? 'card--dimmed' : '',
     highlighted ? 'card--highlight' : '',
     faded ? 'card--faded' : '',
   ]
@@ -141,10 +142,10 @@ function CardBody({
 function CardActions({
   node,
   label,
-  hidden,
-  onToggleHidden,
+  dimmed,
+  onToggleDimmed,
   onOpen,
-}: Pick<IssueCardData, 'node' | 'hidden' | 'onToggleHidden' | 'onOpen'> & { label: string }) {
+}: Pick<IssueCardData, 'node' | 'dimmed' | 'onToggleDimmed' | 'onOpen'> & { label: string }) {
   return (
     <span className="card__actions nodrag nopan">
       <button
@@ -159,19 +160,19 @@ function CardActions({
       <button
         type="button"
         className="iconbutton"
-        aria-label={hidden ? `Show ${label}` : `Hide ${label}`}
-        aria-pressed={hidden}
-        data-tip={hidden ? 'Show this issue · S' : 'Hide this issue · H'}
-        onClick={() => onToggleHidden(node.id)}
+        aria-label={dimmed ? `Restore ${label}` : `Dim ${label}`}
+        aria-pressed={dimmed}
+        data-tip={dimmed ? 'Restore this issue · R' : 'Dim this issue · D'}
+        onClick={() => onToggleDimmed(node.id)}
       >
-        <Icon name={hidden ? 'eye-off' : 'eye'} size={12} />
+        <Icon name={dimmed ? 'eye-off' : 'eye'} size={12} />
       </button>
     </span>
   )
 }
 
 export function IssueCard({ data }: NodeProps<IssueNode>) {
-  const { node, selected, hidden, description, onSelect, onToggleHidden, onOpen } = data
+  const { node, selected, dimmed, description, onSelect, onToggleDimmed, onOpen } = data
   const label = issueRef(node)
   /**
    * React's own per-instance id rather than one spelled out of `node.id`.
@@ -207,8 +208,8 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
       <CardActions
         node={node}
         label={label}
-        hidden={hidden}
-        onToggleHidden={onToggleHidden}
+        dimmed={dimmed}
+        onToggleDimmed={onToggleDimmed}
         onOpen={onOpen}
       />
 
