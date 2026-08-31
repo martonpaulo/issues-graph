@@ -13,6 +13,7 @@ import {
   DependencyTable,
   DIRECTION_LEGEND,
   budgetParts,
+  canvasShortcut,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -658,5 +659,78 @@ describe('top chrome layout', () => {
       if (!/\.bar--tools|\.bar--identity/.test(rule)) continue
       expect(rule, rule).not.toMatch(/(^|[^-\w])top:/)
     }
+  })
+})
+
+describe('what a key press asks of the canvas', () => {
+  const free = { captured: false, onControl: false }
+  const onControl = { captured: false, onControl: true }
+
+  function press(
+    key: string,
+    modifiers: Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>> = {},
+  ) {
+    return { key, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...modifiers }
+  }
+
+  it('keeps the shortcuts the canvas has always had', () => {
+    expect(canvasShortcut(press('Escape'), free, 0)).toBe('clear')
+    expect(canvasShortcut(press('a', { metaKey: true }), free, 0)).toBe('select-all')
+    expect(canvasShortcut(press('A', { shiftKey: true }), free, 0)).toBe('select-all')
+    expect(canvasShortcut(press('f'), free, 3)).toBe('fit')
+    expect(canvasShortcut(press('D'), free, 3)).toBe('dim')
+    expect(canvasShortcut(press('r'), free, 3)).toBe('restore')
+    expect(canvasShortcut(press('Enter'), free, 1)).toBe('open')
+  })
+
+  it('stands down on Enter while a control has the focus, so one press has one outcome', () => {
+    expect(canvasShortcut(press('Enter'), onControl, 1)).toBeNull()
+  })
+
+  /* The other four share no key with an activation: a button ignores D, so the canvas may have it
+     even while that button is focused, and taking it away would make the bar's own hints wrong. */
+  it('still answers the keys a focused control does not act on', () => {
+    expect(canvasShortcut(press('f'), onControl, 1)).toBe('fit')
+    expect(canvasShortcut(press('d'), onControl, 1)).toBe('dim')
+    expect(canvasShortcut(press('r'), onControl, 1)).toBe('restore')
+    expect(canvasShortcut(press('Escape'), onControl, 1)).toBe('clear')
+  })
+
+  it('says nothing at all while a field or a dialog is waiting on an answer', () => {
+    const captured = { captured: true, onControl: false }
+    for (const key of ['Escape', 'a', 'f', 'd', 'r', 'Enter']) {
+      expect(canvasShortcut(press(key), captured, 1), key).toBeNull()
+    }
+  })
+
+  it('opens only when the selection is exactly one issue', () => {
+    expect(canvasShortcut(press('Enter'), free, 0)).toBeNull()
+    expect(canvasShortcut(press('Enter'), free, 2)).toBeNull()
+  })
+
+  it('leaves the browser its own chords', () => {
+    expect(canvasShortcut(press('f', { metaKey: true }), free, 1)).toBeNull()
+    expect(canvasShortcut(press('r', { ctrlKey: true }), free, 1)).toBeNull()
+    expect(canvasShortcut(press('d', { altKey: true }), free, 1)).toBeNull()
+  })
+})
+
+describe('where the focus ring is allowed to show', () => {
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+
+  /**
+   * The wrappers stopped being tab stops in the markup rather than in the stylesheet: React Flow
+   * is told not to make them focusable at all. A rule that hides their ring would only be there to
+   * hide a stop that still exists, which is the fault this replaced.
+   */
+  it('suppresses no ring on a React Flow wrapper', () => {
+    for (const rule of styles.split('}')) {
+      if (!/\.react-flow(__(pane|node|renderer))?:focus/.test(rule)) continue
+      expect(rule, rule).not.toMatch(/outline:\s*none/)
+    }
+  })
+
+  it('shows the card icons whenever one of them takes the focus', () => {
+    expect(styles).toMatch(/\.card__actions:focus-within[^{]*\{[^}]*opacity: 1/)
   })
 })

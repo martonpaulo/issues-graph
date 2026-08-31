@@ -439,20 +439,6 @@ code {
   color: var(--dots);
 }
 
-/* React Flow makes the pane and every node wrapper focusable, and a browser draws a hard dark
-   ring around whichever one was last clicked. The controls inside a card carry their own focus
-   ring, so these wrappers do not need one. */
-.react-flow__pane:focus,
-.react-flow__pane:focus-visible,
-.react-flow__node:focus,
-.react-flow__node:focus-visible,
-.react-flow__renderer:focus,
-.react-flow__renderer:focus-visible,
-.react-flow:focus,
-.react-flow:focus-visible {
-  outline: none;
-}
-
 /* Thin and slightly transparent: on a dense graph a dozen crossings read as texture rather than
    as a wall, and the one edge under the pointer or attached to a selection still stands out. */
 .react-flow__edge-path {
