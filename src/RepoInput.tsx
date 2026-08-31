@@ -15,8 +15,21 @@ import { mergeSuggestions } from './suggestions'
 
 /** Long enough that a word typed at speed costs one search, not one per keystroke. */
 const DEBOUNCE_MS = 350
-/** The blur has to outlive the click that caused it, or the option is gone before it can be chosen. */
-const BLUR_GRACE_MS = 120
+
+/** The one wording of the failure, so the message and the test that reads it cannot drift apart. */
+export const INVALID_TARGET = 'Name the repository as owner/repo — the owner is never assumed.'
+
+/**
+ * What a validation failure adds to the input: the invalid state, and the description that says
+ * why. Both are absent while the value is acceptable, so a corrected value leaves nothing behind
+ * for a screen reader to announce.
+ */
+export function describeValidation(
+  error: string | null,
+  errorId: string,
+): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
+  return error ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
+}
 
 /**
  * The two suggestion sources merged for the text currently typed: repositories opened before, and
@@ -50,41 +63,50 @@ function useRepoSuggestions(typed: string, token: string): string[] {
 }
 
 /**
+ * Where a key press leaves the highlighted option: the arrows wrap in both directions, Escape
+ * gives up the highlight, and every other key leaves it alone. `null` means the key was not one
+ * the listbox owns, so the event keeps its default behavior.
+ */
+export function nextActiveOption(
+  key: string,
+  active: number,
+  count: number,
+): number | null {
+  if (key === 'Escape') return -1
+  if (count === 0) return null
+  if (key === 'ArrowDown') return (active + 1) % count
+  if (key === 'ArrowUp') return active <= 0 ? count - 1 : active - 1
+  return null
+}
+
+/**
  * The open/closed and highlighted-option state of the listbox, with the keyboard contract a
- * combobox owes: arrows wrap through the options, Escape closes without choosing, and the close
- * on blur is delayed so a click on an option still lands.
+ * combobox owes: arrows wrap through the options and Escape closes without choosing. Focus never
+ * leaves the input, so a pointer press on an option cannot close the popup before the click lands.
  */
 function useComboboxNavigation(count: number) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
-  const blurTimer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(blurTimer.current), [])
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'ArrowDown' && count > 0) {
-        event.preventDefault()
-        setOpen(true)
-        setActive((index) => (index + 1) % count)
-      } else if (event.key === 'ArrowUp' && count > 0) {
-        event.preventDefault()
-        setOpen(true)
-        setActive((index) => (index <= 0 ? count - 1 : index - 1))
-      } else if (event.key === 'Escape') {
+      const next = nextActiveOption(event.key, active, count)
+      if (next === null) return
+
+      if (event.key === 'Escape') {
         setOpen(false)
-        setActive(-1)
+      } else {
+        event.preventDefault()
+        setOpen(true)
       }
+      setActive(next)
     },
-    [count],
+    [active, count],
   )
 
   const show = useCallback(() => setOpen(true), [])
   const close = useCallback(() => setOpen(false), [])
   const reset = useCallback(() => setActive(-1), [])
-  const onBlur = useCallback(() => {
-    blurTimer.current = window.setTimeout(() => setOpen(false), BLUR_GRACE_MS)
-  }, [])
 
   const visible = open && count > 0
 
@@ -98,11 +120,10 @@ function useComboboxNavigation(count: number) {
     close,
     reset,
     onKeyDown,
-    onBlur,
   }
 }
 
-function SuggestionList({
+export function SuggestionList({
   listId,
   suggestions,
   active,
@@ -118,15 +139,22 @@ function SuggestionList({
   return (
     <ul className="repoinput__list" id={listId} role="listbox" aria-label="Repository suggestions">
       {suggestions.map((slug, index) => (
-        <li key={slug} id={`${listId}-${index}`} role="option" aria-selected={index === active}>
-          <button
-            type="button"
-            className={`repoinput__option${index === active ? ' is-active' : ''}`}
-            onMouseEnter={() => onHover(index)}
-            onClick={() => onChoose(slug)}
-          >
-            {slug}
-          </button>
+        // The option is the whole list item: a focusable descendant would be a second widget
+        // inside a role the listbox pattern reserves for one.
+        // https://www.w3.org/WAI/ARIA/apg/patterns/listbox/
+        <li
+          key={slug}
+          id={`${listId}-${index}`}
+          role="option"
+          aria-selected={index === active}
+          className={`repoinput__option${index === active ? ' is-active' : ''}`}
+          // Keeping the press from reaching the document is what keeps focus on the input, so the
+          // option is still mounted when the click arrives and no timer has to outlive a blur.
+          onMouseDown={(event) => event.preventDefault()}
+          onMouseEnter={() => onHover(index)}
+          onClick={() => onChoose(slug)}
+        >
+          {slug}
         </li>
       ))}
     </ul>
@@ -150,6 +178,8 @@ export function RepoInput({
   const [value, setValue] = useState(initial)
   const [error, setError] = useState<string | null>(null)
   const listId = useId()
+  const errorId = `${listId}-error`
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const typed = value.trim()
   // Opening the repository already open does nothing, so the control that would do it is off.
@@ -162,7 +192,10 @@ export function RepoInput({
     (raw: string) => {
       const target = parseTargetInput(raw)
       if (!target) {
-        setError('Name the repository as owner/repo — the owner is never assumed.')
+        setError(INVALID_TARGET)
+        // The message describes the input, so the input is where the reading has to be, whether
+        // the submit came from the button or from Enter.
+        inputRef.current?.focus()
         return
       }
       setError(null)
@@ -186,6 +219,7 @@ export function RepoInput({
         <label className="repoinput__field">
           <Icon name="search" />
           <input
+            ref={inputRef}
             className="repoinput__input"
             value={value}
             placeholder="owner/repo"
@@ -195,16 +229,18 @@ export function RepoInput({
             aria-controls={listId}
             aria-autocomplete="list"
             aria-activedescendant={list.active >= 0 ? `${listId}-${list.active}` : undefined}
+            {...describeValidation(error, errorId)}
             autoComplete="off"
             spellCheck={false}
             autoFocus={initial.length === 0}
             onChange={(event) => {
               setValue(event.target.value)
+              setError(null)
               list.reset()
               list.show()
             }}
             onFocus={list.show}
-            onBlur={list.onBlur}
+            onBlur={list.close}
             onKeyDown={list.onKeyDown}
           />
         </label>
@@ -230,7 +266,11 @@ export function RepoInput({
         />
       )}
 
-      {error && <p className="notice notice--error">{error}</p>}
+      {error && (
+        <p className="notice notice--error" id={errorId} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
