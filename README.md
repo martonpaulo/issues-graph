@@ -23,6 +23,22 @@ opens the whole relationship set as a table, one row per drawn edge, with the bl
 beside it. Both are derived from the same edges the canvas draws, so they say what the picture
 says. The direction an arrowhead carries is written out too: **arrow: blocker → dependent**.
 
+## Keyboard shortcuts
+
+On the canvas, with nothing focused in a field and no dialog open:
+
+| Key | What it does |
+| --- | --- |
+| `Esc` | Clear the selection |
+| `⌘A` or `Shift`+`A` | Select every issue |
+| `F` | Fit the whole graph back on screen |
+| `D` | Dim the selected issues |
+| `R` | Restore the selected issues from dimmed |
+| `Enter` | Open the selected issue on GitHub, when exactly one is selected |
+
+A key pressed inside an input, a text area, or an open overlay belongs to that control, and
+anything held with `Alt` or `Ctrl` is left to the browser.
+
 ## Rate limit
 
 Unauthenticated GitHub requests share 60 per hour per IP address, and reading a repository costs
@@ -72,7 +88,7 @@ Three repositories divide this work, and the boundary between them is deliberate
 | Repository | Owns |
 | --- | --- |
 | [`martonpaulo/skills`](https://github.com/martonpaulo/skills) | The agent skills that capture, plan, groom and implement issues — including the ones that **create and verify** the GitHub issue dependencies this viewer renders |
-| [`martonpaulo/agent-workflows`](https://github.com/martonpaulo/agent-workflows) | The reusable GitHub Actions engine that lets AI agents implement issues and review pull requests, driven by GitHub Projects |
+| [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro) | The local-first board that drives those issues through planning, implementation, CI and review with AI agents |
 | **`martonpaulo/issues-graph`** (this one) | The visualization. It reads; it never writes |
 
 The data flows one way, and this repository is the last step:
@@ -102,9 +118,18 @@ npm run dev
 | `npm run lint` | ESLint |
 | `npm test` | Vitest, against captured API fixtures |
 
-Tests run against fixtures captured from the live API by `scripts/capture-fixtures.mjs`. Capture a
-payload rather than hand-writing one — a hand-written payload asserts what somebody assumed the API
-returns.
+Tests run against fixtures in `src/__fixtures__/`, captured from the live API rather than written by
+hand — a hand-written payload asserts what somebody assumed the API returns. Recapture them with an
+authenticated `gh` CLI:
+
+```bash
+node scripts/capture-fixtures.mjs <owner>/<repo> [<owner>/<repo>...]
+```
+
+Each repository stores a projected issue list, its `blocked_by` pages, and one complete unprojected
+issue payload that proves the projection drops no field the client reads. A slug GitHub has renamed
+is refused rather than followed silently, so a fixture is never written under a name that no longer
+exists.
 
 Card heights are computed without a browser, so `src/interMetrics.ts` holds the label-chip character
 advances captured from the shipped Inter face by `scripts/capture-chip-metrics.mjs`. Regenerate it
@@ -113,9 +138,8 @@ cards a row too short and the chips hang out of them.
 
 ## History
 
-Extracted from [`martonpaulo/agent-workflows`](https://github.com/martonpaulo/agent-workflows), where
-it lived as `web/`, so that repository stays what its name says it is. The commit history came with
-it.
+Extracted from [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro), where it lived as
+`web/`, so that repository stays what its name says it is. The commit history came with it.
 
 ## Versioning
 
