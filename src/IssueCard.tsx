@@ -1,5 +1,5 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { useId, useRef } from 'react'
+import { memo, useId, useRef } from 'react'
 
 import { issueRef } from './dependencies'
 import type { GraphNode, IssueState } from './graph'
@@ -189,7 +189,13 @@ function CardActions({
   )
 }
 
-export function IssueCard({ data }: NodeProps<IssueNode>) {
+/**
+ * One card. Memoized because the canvas rebuilds its node list on every selection, dimming and
+ * highlight change: `reuse` keeps the `data` object of an untouched card identical across those
+ * rebuilds, and this is what turns that identity into a skipped render rather than an identical
+ * one recomputed.
+ */
+export const IssueCard = memo(function IssueCard({ data }: NodeProps<IssueNode>) {
   const { node, selected, dimmed, description, onSelect, onToggleDimmed, onOpen } = data
   const label = issueRef(node)
   /**
@@ -234,4 +240,4 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
       <Handle type="source" position={Position.Bottom} className="card__handle" />
     </div>
   )
-}
+})
