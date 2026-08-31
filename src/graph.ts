@@ -5,8 +5,9 @@ import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
  * Turns GitHub's payloads into a laid-out graph. Pure: no network, no React, no DOM. Every
- * dependency edge here comes from a native `blocked_by` relationship — issue prose is never read,
- * so a body claiming "depends on #123" cannot invent an edge.
+ * dependency edge here comes from a native `blocked_by` relationship and every hierarchy edge from
+ * a native `parent_issue_url` — issue prose is never read, so a body claiming "depends on #123"
+ * cannot invent an edge.
  */
 
 /** Every card is the same width; the height follows its title. */
@@ -132,7 +133,15 @@ export function cardHeight(titleLines: number, rows: number): number {
 /** The tallest a card is expected to get, which is what a bounding estimate has to assume. */
 export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, 2)
 
-export type IssueState = 'ready' | 'blocked' | 'attention' | 'completed' | 'not-planned'
+export type IssueState =
+  | 'ready'
+  | 'unassigned'
+  | 'blocked'
+  | 'in-progress'
+  | 'attention'
+  | 'in-review'
+  | 'completed'
+  | 'not-planned'
 
 export interface GraphNode {
   id: string
@@ -153,15 +162,33 @@ export interface GraphNode {
   labels: CardChip[]
   /** Every label on the issue, which is what the highlight picker offers. */
   allLabels: string[]
+  /**
+   * How far this issue's native sub-issues have got, or null when it has none. Null is also what
+   * an external card carries: the count belongs to a repository this view is not reading.
+   */
+  subIssues: SubIssuesProgress | null
   /** Lines the title is allowed, and the height that leaves the card. */
   titleLines: number
   height: number
   position: { x: number; y: number }
 }
 
+/** What one edge asserts. The two are different relations and are drawn differently. */
+export type EdgeKind = 'dependency' | 'hierarchy'
+
+export interface SubIssuesProgress {
+  completed: number
+  total: number
+}
+
 export interface GraphEdge {
   id: string
-  /** The blocker: it has to land first. */
+  /**
+   * `dependency`: the source has to land first. `hierarchy`: the source contains the target.
+   * Containment carries no ordering, which is why it never shares a style with a dependency.
+   */
+  kind: EdgeKind
+  /** The blocker for a dependency, the parent for a hierarchy edge. */
   source: string
   target: string
   /** The orthogonal route the layout reserved for this edge, in canvas coordinates. */
@@ -172,12 +199,13 @@ export interface GraphEdge {
  * A frame drawn behind a set of cards.
  *
  * `chain` is one weakly-connected set of dependencies: work that has to be finished as a unit, in
- * the order the arrows give. `free` is everything with no dependency at all, which can be picked
- * up in any order.
+ * the order the arrows give. `breakdown` is a set held together only by containment — a parent and
+ * its sub-issues, which have no order between them. `free` is everything connected to nothing at
+ * all, which can be picked up in any order.
  */
 export interface GraphGroup {
   id: string
-  kind: 'chain' | 'free'
+  kind: 'chain' | 'breakdown' | 'free'
   label: string
   members: string[]
   position: { x: number; y: number }
@@ -228,18 +256,70 @@ export function isOpen(issue: IssuePayload): boolean {
 }
 
 /**
+ * The two bare label names the orchestrator matches, case-insensitively, against the whole label
+ * name. Neither carries a `:`, so neither reaches a card slot and neither can be found by asking
+ * for a namespace.
+ * https://github.com/martonpaulo/skills — `.ao/worker-rules.md` documents both.
+ */
+const IN_PROGRESS_LABEL = 'in-progress'
+const IN_REVIEW_LABEL = 'in-review'
+
+function hasLabel(issue: IssuePayload, name: string): boolean {
+  return issue.labels.some((label) => label.name.trim().toLowerCase() === name)
+}
+
+/**
  * State comes from GitHub, never from inference.
  *
- * `blocked_by` counts blockers that are still **open**, while `total_blocked_by` counts open and
- * closed ones. So `blocked_by > 0` is exactly "has an unfinished blocker", and an issue whose
- * blockers have all closed reads as ready even though its total stays non-zero.
+ * The order below is the order the facts override one another, and each step answers the same
+ * question: what will actually happen to this issue next?
+ *
+ * 1. `in-review` first, because an issue whose change is already written and waiting is the one
+ *    error that costs somebody a second implementation of finished work.
+ * 2. A `status:` label next. Its description says `in-progress` travels with every one of them, so
+ *    the pair means the issue is parked on a human, and parked is the fact worth showing.
+ * 3. `in-progress` alone: a worker is holding it right now.
+ * 4. `blocked_by` counts blockers that are still **open**, while `total_blocked_by` counts open and
+ *    closed ones. So `blocked_by > 0` is exactly "has an unfinished blocker", and an issue whose
+ *    blockers have all closed reads as ready even though its total stays non-zero.
+ * 5. Unassigned, which is not the same as free to start: with nobody on it the issue is unqueued,
+ *    and reading it as ready is what makes an untouched backlog look like a work queue. An issue
+ *    payload carrying no `assignees` field at all — an older cached copy or a shared snapshot —
+ *    is unknown rather than empty, and falls through to what it used to render as.
+ *
+ * Each label is read on its own terms, so removing one leaves the other correct.
  */
 export function deriveState(issue: IssuePayload): IssueState {
   if (issue.state === 'closed') {
     return issue.state_reason === 'not_planned' ? 'not-planned' : 'completed'
   }
+  if (hasLabel(issue, IN_REVIEW_LABEL)) return 'in-review'
   if (hasNamespace(issue.labels, 'status')) return 'attention'
-  return (issue.issue_dependencies_summary?.blocked_by ?? 0) > 0 ? 'blocked' : 'ready'
+  if (hasLabel(issue, IN_PROGRESS_LABEL)) return 'in-progress'
+  if ((issue.issue_dependencies_summary?.blocked_by ?? 0) > 0) return 'blocked'
+  if (issue.assignees?.length === 0) return 'unassigned'
+  return 'ready'
+}
+
+/** A parent's progress, or null when the issue is not a parent. */
+export function subIssuesOf(issue: IssuePayload): SubIssuesProgress | null {
+  const summary = issue.sub_issues_summary
+  if (!summary || summary.total <= 0) return null
+  return { completed: summary.completed, total: summary.total }
+}
+
+/**
+ * `https://api.github.com/repos/owner/name/issues/294` -> the node id it would have.
+ *
+ * Returns null for anything else, which includes the absent field an issue without a parent
+ * carries. The parent may well live in another repository — several of this owner's do — and that
+ * id simply matches no node, which is exactly the outcome wanted: the edge is dropped rather than
+ * paid for with a request into a repository this view is not reading.
+ */
+export function parentNodeId(parentIssueUrl: string | null | undefined): string | null {
+  if (!parentIssueUrl) return null
+  const match = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(parentIssueUrl)
+  return match ? nodeId(match[1], Number(match[2])) : null
 }
 
 function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
@@ -263,6 +343,7 @@ function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
     repoLabel,
     labels,
     allLabels: issue.labels.map((label) => label.name),
+    subIssues: external ? null : subIssuesOf(issue),
     titleLines,
     height: cardHeight(titleLines, rows),
     position: { x: 0, y: 0 },
@@ -382,11 +463,18 @@ function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
   return [...groups.values()]
 }
 
+const GROUP_WORD: Record<GraphGroup['kind'], string> = {
+  chain: 'Chain',
+  breakdown: 'Breakdown',
+  free: 'Independent',
+}
+
 function groupLabel(kind: GraphGroup['kind'], count: number): string {
   const issues = `${count} issue${count === 1 ? '' : 's'}`
-  // The two frames mean opposite things, so each says which it is rather than leaving the reader
-  // to infer it from a border style.
-  return kind === 'chain' ? `Chain · ${issues}` : `Independent · ${issues}`
+  // The frames mean different things, so each says which it is rather than leaving the reader to
+  // infer it from a border style. A breakdown is emphatically not a chain: its members contain one
+  // another and can be picked up in any order.
+  return `${GROUP_WORD[kind]} · ${issues}`
 }
 
 /** Frames a set of cards from where they actually landed. */
@@ -461,6 +549,17 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
   let drawnHeight = 0
   let drawnWidth = NODE_WIDTH * 4
 
+  // A component held together only by containment is not a chain, and saying so is the whole point
+  // of drawing the two relations differently in the first place.
+  const ordered = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind !== 'dependency') continue
+    ordered.add(edge.source)
+    ordered.add(edge.target)
+  }
+  const kindOf = (component: GraphNode[]): GraphGroup['kind'] =>
+    component.some((node) => ordered.has(node.id)) ? 'chain' : 'breakdown'
+
   if (connected.length > 0) {
     const members = connected.flat()
     const ids = new Set(members.map((node) => node.id))
@@ -495,7 +594,7 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
     }
 
     for (const component of connected) {
-      groups.push(frameOf(component.map((node) => placed.get(node.id)!), 'chain'))
+      groups.push(frameOf(component.map((node) => placed.get(node.id)!), kindOf(component)))
     }
 
     drawnWidth = Math.max(drawnWidth, ...groups.map((group) => group.position.x + group.width))
@@ -517,6 +616,23 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
   }
 
   return { nodes: nodes.map((node) => placed.get(node.id)!), groups, routes }
+}
+
+/**
+ * How many issues wait on something, and how many hold something up.
+ *
+ * Counted from the dependency edges alone. Containment is not ordering: a parent holds none of its
+ * children up and waits on none of them, so a hierarchy edge must reach neither figure.
+ */
+export function dependencyCounts(edges: GraphEdge[]): { dependent: number; blocking: number } {
+  const dependent = new Set<string>()
+  const blocking = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind !== 'dependency') continue
+    dependent.add(edge.target)
+    blocking.add(edge.source)
+  }
+  return { dependent: dependent.size, blocking: blocking.size }
 }
 
 export interface BuildOptions {
@@ -593,8 +709,26 @@ export async function buildGraph(
       const id = `${blockerNode.id}->${targetId}`
       if (seen.has(id)) continue
       seen.add(id)
-      edges.push({ id, source: blockerNode.id, target: targetId })
+      edges.push({ id, kind: 'dependency', source: blockerNode.id, target: targetId })
     }
+  }
+
+  // Hierarchy is read off the children, which is where GitHub puts it, so it costs no request of
+  // its own. Only a parent that is already a node produces an edge: a parent in another repository
+  // is named by the child and is deliberately not fetched, exactly as an outbound `blocking` edge
+  // is not. Closed parents are absent for the same reason closed blockers are.
+  for (const issue of data.issues) {
+    if (!isOpen(issue)) continue
+    const childId = nodeId(repoOf(issue.repository_url), issue.number)
+    if (!nodes.has(childId)) continue
+
+    const parentId = parentNodeId(issue.parent_issue_url)
+    if (!parentId || parentId === childId || !nodes.has(parentId)) continue
+
+    const id = `${parentId}=>${childId}`
+    if (seen.has(id)) continue
+    seen.add(id)
+    edges.push({ id, kind: 'hierarchy', source: parentId, target: childId })
   }
 
   const laid = await layout([...nodes.values()], edges)

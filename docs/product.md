@@ -42,6 +42,11 @@ saved browser copy stays explicitly identified by its age and dependency coverag
 
 - Renders the open issues of any public repository and the blocking edges between them, laid out so
   the chains and the roots are legible rather than merely drawn.
+- Draws the native sub-issue hierarchy as a second, visibly different relation, because containment
+  and ordering answer different questions and one edge style cannot carry both.
+- Says what will actually happen to each issue next, in words on the card, from the labels,
+  assignees and dependency counts GitHub already holds. An issue whose change is written and
+  waiting on a review must never read as one to pick up.
 - Makes the reading aids local to the reader: selecting, hiding, and highlighting change what you
   see and nothing else.
 - Keeps closed blockers available behind a switch, because the reason an issue is unblocked is often

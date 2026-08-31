@@ -22,7 +22,7 @@ import {
 } from 'react'
 
 import { readCache, writeCache, type CachedGraph } from './cache'
-import { buildGraph, NODE_WIDTH, type IssueGraph } from './graph'
+import { buildGraph, dependencyCounts, NODE_WIDTH, type IssueGraph } from './graph'
 import {
   AUTHENTICATED_HOURLY_LIMIT,
   loadRepositoryGraph,
@@ -1016,18 +1016,10 @@ function Canvas({
   }, [selected])
 
   /**
-   * How many issues wait on something, and how many hold something up. Both are counted from the
-   * edges actually drawn, so they describe this picture rather than GitHub's own summary.
+   * How many issues wait on something, and how many hold something up. Counted from the edges
+   * actually drawn, so they describe this picture rather than GitHub's own summary.
    */
-  const counts = useMemo(() => {
-    const dependent = new Set<string>()
-    const blocking = new Set<string>()
-    for (const edge of graph.edges) {
-      dependent.add(edge.target)
-      blocking.add(edge.source)
-    }
-    return { dependent: dependent.size, blocking: blocking.size }
-  }, [graph])
+  const counts = useMemo(() => dependencyCounts(graph.edges), [graph])
 
   /** Every label in the graph, alphabetically: what the highlight picker offers. */
   const labelCounts = useMemo(() => {
@@ -1106,6 +1098,7 @@ function Canvas({
       graph.edges.map((edge) => {
         const dimmed = hidden.has(edge.source) || hidden.has(edge.target)
         const lit = !dimmed && (selected.has(edge.source) || selected.has(edge.target))
+        const hierarchy = edge.kind === 'hierarchy'
         return {
           id: edge.id,
           source: edge.source,
@@ -1114,8 +1107,19 @@ function Canvas({
           data: { points: edge.points },
           // A lit edge is drawn last so it crosses over the ones it shares a channel with.
           zIndex: lit ? 5 : 0,
-          className: dimmed ? 'edge--dim' : lit ? 'edge--lit' : undefined,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+          className: [
+            // Dashed and paler, so containment reads as a different relation before the reader
+            // has looked for an arrowhead.
+            hierarchy ? 'edge--hierarchy' : null,
+            dimmed ? 'edge--dim' : lit ? 'edge--lit' : null,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
+          // No arrowhead on a hierarchy edge: an arrow is what says "this one first", and a parent
+          // says nothing of the sort about its children.
+          markerEnd: hierarchy
+            ? undefined
+            : { type: MarkerType.ArrowClosed, width: 15, height: 15 },
         }
       }),
     [graph, selected, hidden],

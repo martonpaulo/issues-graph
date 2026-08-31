@@ -43,9 +43,26 @@ const project = (issue) => ({
   repository_url: issue.repository_url,
   labels: (issue.labels ?? []).map((label) => ({ name: label.name, color: label.color })),
   issue_dependencies_summary: issue.issue_dependencies_summary,
+  assignees: (issue.assignees ?? []).map((assignee) => ({ login: assignee.login })),
+  sub_issues_summary: issue.sub_issues_summary,
+  parent_issue_url: issue.parent_issue_url ?? null,
 })
 
+/**
+ * GitHub follows a renamed repository silently, so `repos/<old>/issues` answers with the new
+ * repository's issues and the capture would be written under a name that no longer exists — every
+ * captured issue then reads as external to the target the tests name. Verified the hard way:
+ * `martonpaulo/agent-workflows` is now `martonpaulo/arbaro`.
+ */
+const assertNotRenamed = (slug) => {
+  const actual = JSON.parse(execFileSync('gh', ['api', `repos/${slug}`])).full_name
+  if (actual !== slug) {
+    throw new Error(`${slug} has been renamed to ${actual}; capture it under its current name.`)
+  }
+}
+
 for (const slug of process.argv.slice(2)) {
+  assertNotRenamed(slug)
   const name = slug.split('/')[1]
   const raw = listIssues(slug).filter((i) => !i.pull_request)
 
