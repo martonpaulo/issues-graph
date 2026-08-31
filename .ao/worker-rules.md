@@ -44,6 +44,11 @@ then **put the question to the owner and wait**. A parked session stays open on 
 that is what puts it in the board's *needs you* column. Ending cleanly hides it behind an idle
 worker nobody looks at.
 
+**Ask through your question-asking tool, not in prose.** A decision card written as Markdown is a
+message, and a message ends the turn: the session goes idle and the board shows it as finished.
+Only an unanswered question raised through the tool holds the session in *needs you*. Write the
+card for the record, then raise the same question through the tool.
+
 - **Blocked on a human choice** — apply `status: needs-decision`, post one comment stating exactly
   which choice is open and what is already established, then ask the owner and wait.
 - **Blocked on a missing phase** — post one comment naming the missing phase, no label change,
