@@ -1,0 +1,50 @@
+# Fails the build when the site's Lighthouse accessibility score drops below the recorded floor.
+# Runs entirely against a locally served build: no Lighthouse CI app, no token, no secret.
+#
+# The floor is 1.0 because that is what both routes actually score, measured rather than assumed.
+# #22 fixed the two contrast tokens that had been holding them at 0.95 and 0.96, and with those gone
+# no accessibility audit fails on either route. A floor set below the observed score would let the
+# first regression through, which is the one thing this gate exists to catch.
+name: Accessibility
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    name: Lighthouse accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Pinned exactly: a Lighthouse minor bump can move a category score, and an unpinned gate
+      # would then fail on a build that changed nothing in this repository.
+      - name: Assert the accessibility score
+        run: npx --yes @lhci/cli@0.15.1 autorun
+
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/
+          retention-days: 7
