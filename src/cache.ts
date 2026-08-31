@@ -14,7 +14,7 @@ import { readStored, writeStored } from './storage'
 
 const KEY_PREFIX = 'issue-graph:cache:'
 
-interface StoredIssue {
+export interface StoredIssue {
   number: number
   title: string
   state: string
@@ -25,7 +25,7 @@ interface StoredIssue {
   issue_dependencies_summary?: IssuePayload['issue_dependencies_summary']
 }
 
-interface StoredGraph {
+export interface StoredGraph {
   version: 1
   savedAt: number
   issues: StoredIssue[]
@@ -54,32 +54,15 @@ function project(issue: IssuePayload): StoredIssue {
   }
 }
 
-export function readCache(slug: string): CachedGraph | null {
-  const stored = readStored<StoredGraph | null>(`${KEY_PREFIX}${slug}`, null)
-  if (!stored || stored.version !== 1) return null
-
+/**
+ * The reduced shape and its inverse are exported because a shared snapshot travels under the same
+ * constraint this cache was written for: only the fields the graph consumes are small enough to
+ * carry. One projection keeps the two from drifting apart.
+ */
+export function toStored(data: RepositoryGraphData, savedAt: number): StoredGraph {
   return {
-    savedAt: new Date(stored.savedAt),
-    data: {
-      issues: stored.issues,
-      blockers: new Map(stored.blockers),
-      complete: stored.complete,
-      unresolved: stored.unresolved,
-      includedClosed: stored.includedClosed,
-      requestCount: stored.requestCount,
-      // A saved copy spent its requests when it was read, not now, and the budget it saw then
-      // says nothing about the budget today.
-      rateLimited: false,
-      rateLimitReset: null,
-      rateLimit: null,
-    },
-  }
-}
-
-export function writeCache(slug: string, data: RepositoryGraphData): void {
-  const stored: StoredGraph = {
     version: 1,
-    savedAt: Date.now(),
+    savedAt,
     issues: data.issues.map(project),
     blockers: [...data.blockers].map(([number, list]) => [number, list.map(project)]),
     complete: data.complete,
@@ -87,5 +70,31 @@ export function writeCache(slug: string, data: RepositoryGraphData): void {
     includedClosed: data.includedClosed,
     requestCount: data.requestCount,
   }
-  writeStored(`${KEY_PREFIX}${slug}`, stored)
+}
+
+export function fromStored(stored: StoredGraph): RepositoryGraphData {
+  return {
+    issues: stored.issues,
+    blockers: new Map(stored.blockers),
+    complete: stored.complete,
+    unresolved: stored.unresolved,
+    includedClosed: stored.includedClosed,
+    requestCount: stored.requestCount,
+    // A copy spent its requests when it was read, not now, and the budget it saw then says
+    // nothing about the budget today.
+    rateLimited: false,
+    rateLimitReset: null,
+    rateLimit: null,
+  }
+}
+
+export function readCache(slug: string): CachedGraph | null {
+  const stored = readStored<StoredGraph | null>(`${KEY_PREFIX}${slug}`, null)
+  if (!stored || stored.version !== 1) return null
+
+  return { savedAt: new Date(stored.savedAt), data: fromStored(stored) }
+}
+
+export function writeCache(slug: string, data: RepositoryGraphData): void {
+  writeStored(`${KEY_PREFIX}${slug}`, toStored(data, Date.now()))
 }
