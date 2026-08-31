@@ -1323,7 +1323,7 @@ function Canvas({
           source: edge.source,
           target: edge.target,
           type: 'dependency' as const,
-          data: { points: edge.points },
+          data: { points: edge.points, inverted: edge.inverted },
           // A lit edge is drawn last so it crosses over the ones it shares a channel with.
           zIndex: lit ? 5 : 0,
           className: [
@@ -1334,8 +1334,9 @@ function Canvas({
           ]
             .filter(Boolean)
             .join(' ') || undefined,
-          // No arrowhead on a hierarchy edge: an arrow is what says "this one first", and a parent
-          // says nothing of the sort about its children.
+          // No shared arrowhead on a hierarchy edge: an arrow is what says "this one first", and a
+          // parent says nothing of the sort about its children. An inverted one draws its own head
+          // in the containment stroke instead, which `DependencyEdge` owns.
           markerEnd: hierarchy
             ? undefined
             : { type: MarkerType.ArrowClosed, width: 15, height: 15 },

@@ -465,9 +465,31 @@ code {
   stroke-dasharray: 5 4;
 }
 
+/* A parent blocked by the sub-issues it was split into asks for two contradicting directions at
+   once, and only one of them can point down the canvas. Ordering wins it, because an arrowhead
+   still says which end comes first wherever it is drawn while a bare dashed line says nothing but
+   where its ends sit. So the containment edge is the one drawn upwards, and it is given the head
+   its ordinary style does without: the reader sees which end is the parent instead of inferring it
+   from a position that is no longer true. */
+.edge__arrow {
+  fill: var(--hierarchy-edge);
+  stroke: none;
+  opacity: 0.75;
+}
+
+.react-flow__edge:hover .edge__arrow {
+  fill: var(--text);
+  opacity: 1;
+}
+
 .edge--lit .react-flow__edge-path {
   stroke: var(--accent);
   stroke-width: 2;
+  opacity: 1;
+}
+
+.edge--lit .edge__arrow {
+  fill: var(--accent);
   opacity: 1;
 }
 

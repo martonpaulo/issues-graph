@@ -565,24 +565,63 @@ describe('buildGraph against captured GitHub data', () => {
   ])('puts every %s blocker above what it blocks', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-    // arbaro #18 is blocked by the three sub-issues it was split into, so hierarchy wants the
-    // parent above its children and dependency wants them above the parent. No layout satisfies
-    // both, and the pairs holding that contradiction are the only ones exempt here. Wrapping a
-    // wide rank into sub-rows must still not let any other edge point back up the canvas.
-    const contradictory = new Set<string>()
+    // No exemption. arbaro #18 is blocked by the three sub-issues it was split into, and ordering
+    // wins that contradiction outright: the only edge allowed to point back up the canvas is the
+    // containment edge that says so with a head of its own. Wrapping a wide rank into sub-rows must
+    // not let any other edge point back up either.
     for (const edge of graph.edges) {
-      const reverse = graph.edges.find(
-        (other) => other.source === edge.target && other.target === edge.source,
-      )
-      if (reverse) {
-        contradictory.add(edge.id)
-        contradictory.add(reverse.id)
-      }
+      if (edge.inverted) continue
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeLessThan(byId.get(edge.target)!.position.y)
     }
+  })
+
+  it('draws every arbaro dependency downwards, contradicted or not', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+
+    // #18 is blocked by #37, #38 and #39, which are also its sub-issues. Before the contradiction
+    // was decided here rather than left to ELK, those three blockers were laid out below what they
+    // block, so the reader scanning downwards for "what unlocks what" read them backwards.
+    const blockers = ['arbaro#37', 'arbaro#38', 'arbaro#39'].map((id) => `martonpaulo/${id}`)
+    const parent = byId.get('martonpaulo/arbaro#18')!
+    for (const blocker of blockers) {
+      expect(byId.get(blocker)!.position.y, blocker).toBeLessThan(parent.position.y)
+    }
+
     for (const edge of graph.edges) {
-      if (contradictory.has(edge.id)) continue
-      expect(byId.get(edge.source)!.position.y).toBeLessThan(byId.get(edge.target)!.position.y)
+      if (edge.kind !== 'dependency') continue
+      expect(edge.inverted, edge.id).toBeUndefined()
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeLessThan(byId.get(edge.target)!.position.y)
     }
+  })
+
+  it('marks exactly the contradicted arbaro containment edges, and only those', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const marked = graph.edges.filter((edge) => edge.inverted)
+
+    expect(marked.map((edge) => edge.id).sort()).toEqual(
+      [37, 38, 39].map((child) => `martonpaulo/arbaro#18=>martonpaulo/arbaro#${child}`),
+    )
+    // Marked because it is drawn upwards, and drawn upwards is what the mark has to mean.
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+    for (const edge of marked) {
+      expect(edge.kind).toBe('hierarchy')
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeGreaterThan(byId.get(edge.target)!.position.y)
+    }
+  })
+
+  it('leaves a repository with no such contradiction unmarked', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    expect(graph.edges.some((edge) => edge.inverted)).toBe(false)
   })
 
   it.each([
