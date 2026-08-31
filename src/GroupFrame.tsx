@@ -1,4 +1,5 @@
 import type { Node, NodeProps } from '@xyflow/react'
+import { memo } from 'react'
 
 import type { GraphGroup } from './graph'
 
@@ -18,7 +19,7 @@ export type GroupNode = Node<GroupFrameData, 'frame'>
  * The frame behind a set of cards. It is a node so React Flow pans and zooms it with everything
  * else; it sits at a negative z-index so edges and cards draw over it.
  */
-export function GroupFrame({ data }: NodeProps<GroupNode>) {
+export const GroupFrame = memo(function GroupFrame({ data }: NodeProps<GroupNode>) {
   const { group, selected, onSelect } = data
 
   return (
@@ -33,4 +34,4 @@ export function GroupFrame({ data }: NodeProps<GroupNode>) {
       </button>
     </div>
   )
-}
+})
