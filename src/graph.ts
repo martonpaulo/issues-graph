@@ -157,9 +157,6 @@ export function cardHeight(titleLines: number, rows: number): number {
   return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + chips
 }
 
-/** The tallest a card is expected to get, which is what a bounding estimate has to assume. */
-export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, 2)
-
 export type IssueState =
   | 'ready'
   | 'unassigned'

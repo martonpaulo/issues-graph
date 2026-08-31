@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { cardLabels, CARD_SLOT_COUNT, needsAttention, parseLabel } from './labels'
+import { cardLabels, needsAttention, parseLabel } from './labels'
 
 const label = (name: string) => ({ name, color: 'cccccc' })
 
@@ -37,7 +37,7 @@ describe('cardLabels on a backlog that keeps the convention', () => {
         'evidence: confirmed',
         'type: bug',
         'priority: P0',
-      ]),
+      ]).slice(0, 3),
     ).toEqual(['type: bug', 'priority: P0', 'effort: M'])
   })
 
@@ -50,17 +50,26 @@ describe('cardLabels on a backlog that keeps the convention', () => {
     })
   })
 
-  it('keeps the rest of a heavily labelled issue off the card', () => {
-    const chips = cardLabels([
-      label('type: bug'),
-      label('priority: P0'),
-      label('effort: M'),
-      label('area: grid'),
-      label('evidence: confirmed'),
-      label('enhancement'),
+  it('still draws the rest of a heavily labelled issue, after the three', () => {
+    // The card is the primary view of an issue: a label it drops is metadata the reader has not
+    // got. `graph.ts` pays for the rows these wrap onto.
+    expect(
+      texts([
+        'area: grid',
+        'type: bug',
+        'evidence: confirmed',
+        'priority: P0',
+        'enhancement',
+        'effort: M',
+      ]),
+    ).toEqual([
+      'type: bug',
+      'priority: P0',
+      'effort: M',
+      'area: grid',
+      'evidence: confirmed',
+      'enhancement',
     ])
-    expect(chips).toHaveLength(CARD_SLOT_COUNT)
-    expect(chips.some((chip) => chip.text === 'area: grid')).toBe(false)
   })
 })
 
@@ -101,15 +110,14 @@ describe('cardLabels on a backlog that does not', () => {
     expect(texts([long, '🐛 bug', 'C++ / stdlib'])).toEqual([long, '🐛 bug', 'C++ / stdlib'])
   })
 
-  it('never draws more chips than the card is sized for', () => {
+  it('draws every label, in the order GitHub reported them', () => {
     const many = Array.from({ length: 12 }, (_, index) => `label-${index}`)
-    expect(texts(many)).toHaveLength(CARD_SLOT_COUNT)
-    expect(texts(many)).toEqual(['label-0', 'label-1', 'label-2'])
+    expect(texts(many)).toEqual(many)
   })
 
   it('marks a namespace slot as canonical and every other chip as plain', () => {
     const chips = cardLabels([label('type: bug'), label('priority: P1'), label('enhancement')])
-    expect(chips.map((chip) => chip.namespace)).toEqual(['type', 'priority', 'effort'])
+    expect(chips.map((chip) => chip.namespace)).toEqual(['type', 'priority', 'effort', null])
     expect(cardLabels([label('enhancement')]).map((chip) => chip.namespace)).toEqual([null])
   })
 })

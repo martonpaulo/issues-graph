@@ -11,7 +11,6 @@ import {
   chipRows,
   dependencyCounts,
   deriveState,
-  MAX_NODE_HEIGHT,
   MAX_TITLE_LINES,
   NODE_WIDTH,
   parentNodeId,
@@ -160,7 +159,6 @@ describe('chipRows and cardHeight', () => {
     expect(cardHeight(2, 0) - bare).toBe(cardHeight(3, 0) - cardHeight(2, 0))
     expect(cardHeight(1, 1)).toBeGreaterThan(bare)
     expect(cardHeight(1, 2)).toBeGreaterThan(cardHeight(1, 1))
-    expect(cardHeight(MAX_TITLE_LINES, 2)).toBe(MAX_NODE_HEIGHT)
   })
 })
 
@@ -325,9 +323,14 @@ describe('a card built from a repository this viewer knows nothing about', () =>
     const [node] = graph.nodes
     const texts = node.labels.map((chip) => chip.text)
 
-    expect(texts).toEqual(['bug', 'good first issue', 'help wanted'])
+    expect(texts).toEqual([
+      'bug',
+      'good first issue',
+      'help wanted',
+      '\u{1F41B} needs repro',
+      'status: backlog',
+    ])
     expect(node.height).toBe(cardHeight(node.titleLines, chipRows(texts)))
-    expect(node.height).toBeLessThanOrEqual(cardHeight(MAX_TITLE_LINES, 3))
   })
 
   it('still reads state from GitHub\'s own facts when no label means anything here', () => {
@@ -413,7 +416,7 @@ describe('buildGraph against captured GitHub data', () => {
     expect(issue13.titleLines).toBe(2)
   })
 
-  it('sizes every card to its own title, within the allowed range', async () => {
+  it('sizes every card to its own title and its own chips', async () => {
     const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     const heights = new Set(graph.nodes.map((node) => node.height))
 
@@ -422,7 +425,11 @@ describe('buildGraph against captured GitHub data', () => {
       expect(node.titleLines).toBeGreaterThanOrEqual(1)
       expect(node.titleLines).toBeLessThanOrEqual(MAX_TITLE_LINES)
       expect(node.height).toBeGreaterThanOrEqual(cardHeight(1, 0))
-      expect(node.height).toBeLessThanOrEqual(cardHeight(MAX_TITLE_LINES, 3))
+      // The card pays for exactly the rows its own chips wrap onto. No fixed ceiling: a tabelo
+      // issue carries up to eight labels and the card is drawn for all of them.
+      expect(node.height).toBe(
+        cardHeight(node.titleLines, chipRows(node.labels.map((chip) => chip.text))),
+      )
     }
   })
 

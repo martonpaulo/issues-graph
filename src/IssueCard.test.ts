@@ -147,7 +147,7 @@ describe('IssueCard', () => {
   })
 
   /** The chips a repository keeping the `namespace: value` convention produces. */
-  it('draws the three canonical slots, marking the one the issue has no label for', () => {
+  it('leads with the canonical slots, marks the missing one, and still draws the rest', () => {
     const html = renderCard(
       issueNode({
         labels: cardLabels([
@@ -158,7 +158,7 @@ describe('IssueCard', () => {
       }),
     )
 
-    expect(chips(html)).toEqual(['type: bug', 'priority: P1', 'effort'])
+    expect(chips(html)).toEqual(['type: bug', 'priority: P1', 'effort', 'area: grid'])
     // The gap is drawn as a gap, so the missing estimate reads as missing rather than as absent.
     expect(html).toContain('<span class="chip chip--empty">effort</span>')
     expect(html).toContain('<span class="chip">type: bug</span>')

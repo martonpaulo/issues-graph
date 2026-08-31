@@ -40,15 +40,6 @@ export interface CardChip {
 }
 
 /**
- * How many chips a card shows.
- *
- * A fixed budget rather than every label: the card is sized in `graph.ts` for the rows its chips
- * wrap onto, and a tabelo issue carrying eight labels would otherwise be half chips. Everything
- * that does not fit stays reachable through the label highlight, which is offered the full set.
- */
-export const CARD_SLOT_COUNT = 3
-
-/**
  * How many of the three namespaces an issue must carry before a missing one is drawn as a gap.
  *
  * One is not evidence. A repository whose only `namespace: value` label is `effort: M` is not
@@ -106,12 +97,13 @@ export function needsAttention(labels: LabelPayload[]): boolean {
 }
 
 /**
- * The chips a card draws, at most `CARD_SLOT_COUNT` of them.
+ * Every label the issue carries, as chips.
  *
- * The canonical namespaces come first and in their reading order, because on a backlog that keeps
- * them that ordering is the whole value of the row. Whatever budget they leave is filled with the
- * issue's other labels in GitHub's own order, so a repository this viewer knows nothing about
- * still gets a card that says what its issues are.
+ * All of them, in one order: the canonical namespaces first and in their reading order, because on
+ * a backlog that keeps them that ordering is the value of the row, then the rest in GitHub's own
+ * order. A card is the primary view of an issue, so a label it does not draw is metadata the
+ * reader does not have; the highlight picker filters the graph and is not a second place to read
+ * one issue. `graph.ts` sizes the card for however many rows these wrap onto.
  *
  * A chip draws GitHub's text verbatim rather than a re-rendered `namespace: value`, so a label
  * spelled `Type: Bug` is shown the way its repository spells it.
@@ -138,5 +130,5 @@ export function cardLabels(labels: LabelPayload[]): CardChip[] {
     .filter((label) => !taken.has(label.raw))
     .map((label) => ({ text: label.raw, namespace: null, empty: false }))
 
-  return [...slots, ...rest].slice(0, CARD_SLOT_COUNT)
+  return [...slots, ...rest]
 }
