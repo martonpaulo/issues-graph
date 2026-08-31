@@ -441,11 +441,15 @@ describe('stopping a load whose token is gone', () => {
     return { current: new AbortController() }
   }
 
+  function draws(current = 0): { current: number } {
+    return { current }
+  }
+
   it('aborts what is in flight and remembers the token that replaced it', () => {
     const carried = { current: 'old' }
     const controller = active()
 
-    expect(abortOnTokenChange(carried, 'new', controller)).toBe(true)
+    expect(abortOnTokenChange(carried, 'new', controller, draws())).toBe(true)
     expect(controller.current?.signal.aborted).toBe(true)
     expect(carried.current).toBe('new')
   })
@@ -454,25 +458,28 @@ describe('stopping a load whose token is gone', () => {
     const carried = { current: 'a-token' }
     const controller = active()
 
-    expect(abortOnTokenChange(carried, '', controller)).toBe(true)
+    expect(abortOnTokenChange(carried, '', controller, draws())).toBe(true)
     expect(controller.current?.signal.aborted).toBe(true)
   })
 
   it('leaves an unchanged token alone, so an unrelated render cannot stop a load', () => {
     const carried = { current: 'same' }
     const controller = active()
+    const generation = draws(4)
 
-    expect(abortOnTokenChange(carried, 'same', controller)).toBe(false)
+    expect(abortOnTokenChange(carried, 'same', controller, generation)).toBe(false)
     expect(controller.current?.signal.aborted).toBe(false)
+    // A draw in flight under the token it was started with is still the one the page wants.
+    expect(generation.current).toBe(4)
   })
 
   it('aborts once, not on every call after the change', () => {
     const carried = { current: 'old' }
     const first = active()
-    abortOnTokenChange(carried, 'new', first)
+    abortOnTokenChange(carried, 'new', first, draws())
 
     const second = active()
-    expect(abortOnTokenChange(carried, 'new', second)).toBe(false)
+    expect(abortOnTokenChange(carried, 'new', second, draws())).toBe(false)
     expect(second.current?.signal.aborted).toBe(false)
   })
 
@@ -480,8 +487,35 @@ describe('stopping a load whose token is gone', () => {
     const carried = { current: 'old' }
     const nothing = { current: null }
 
-    expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
+    expect(abortOnTokenChange(carried, 'new', nothing, draws())).toBe(true)
     expect(carried.current).toBe('new')
+  })
+
+  /**
+   * The regression: the page said the read was stopped and went back to the gate, and then a
+   * layout started before the token changed finished and put the graph up anyway. An abort stops
+   * requests, but a running layout is not a request, and the saved copy and the shared link have
+   * no controller for an abort to reach at all — so the generation is what has to move.
+   */
+  it('retires a layout already running, which no abort can reach', () => {
+    const carried = { current: 'old' }
+    const generation = draws(7)
+    const ticket = generation.current
+
+    expect(acceptsDrawResult(generation.current, ticket, true)).toBe(true)
+
+    abortOnTokenChange(carried, 'new', active(), generation)
+
+    expect(generation.current).toBe(8)
+    expect(acceptsDrawResult(generation.current, ticket, true)).toBe(false)
+  })
+
+  it('retires a draw that carries no controller, such as the saved copy', () => {
+    const carried = { current: 'old' }
+    const generation = draws(2)
+
+    expect(abortOnTokenChange(carried, '', { current: null }, generation)).toBe(true)
+    expect(acceptsDrawResult(generation.current, 2, true)).toBe(false)
   })
 })
 

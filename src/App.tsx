@@ -1496,21 +1496,31 @@ export function stopsForTokenChange(kind: Phase['kind']): boolean {
 }
 
 /**
- * Aborts whatever is in flight when the token it was started with is no longer the current one,
+ * Stops whatever is in flight when the token it was started with is no longer the current one,
  * and records the token the next load will carry.
  *
  * The comparison lives in a ref rather than in state because the render-phase block below
  * synchronizes its own copy before any effect commits: an effect comparing against that state
- * would always find the two already equal and would never abort. Returns whether it aborted.
+ * would always find the two already equal and would never abort. Returns whether it stopped
+ * anything.
+ *
+ * Retiring the draw is part of the same operation, not a caller's responsibility. Aborting the
+ * controller stops the requests, but a layout already running is not a request and cannot be
+ * stopped at all: the page returns to the gate saying the read was stopped, and then ELK finishes
+ * and publishes the graph the page just said it was not showing. Advancing the generation here is
+ * what makes "stopped" true for every draw, including the saved copy and the shared link, which
+ * carry no controller for an abort to reach.
  */
 export function abortOnTokenChange(
   carried: { current: string },
   token: string,
   active: { current: AbortController | null },
+  draws: { current: number },
 ): boolean {
   if (carried.current === token) return false
   carried.current = token
   active.current?.abort()
+  draws.current += 1
   return true
 }
 
@@ -1553,12 +1563,17 @@ function GraphLoad({
   // Every draw takes the next ticket; only the holder of the current one may publish. `mounted`
   // makes navigating away the same case as being superseded, because for a running layout it is.
   const draws = useRef(0)
-  const settled = useRef(0)
   const mounted = useRef(true)
-  // The highest ticket whose layout has finished, one way or the other. Compared against the
-  // highest ticket issued, it says whether anything is still running when the page goes away.
-  const done = (ticket: number) => {
-    if (ticket > settled.current) settled.current = ticket
+  // How many layouts have not settled yet. A retired draw keeps running — ELK offers no
+  // cancellation — so this counts real work rather than tickets, which is what decides whether
+  // leaving the page has anything to terminate.
+  const running = useRef(0)
+  const startDraw = () => {
+    running.current += 1
+    return (draws.current += 1)
+  }
+  const endDraw = () => {
+    running.current -= 1
   }
 
   // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
@@ -1593,7 +1608,7 @@ function GraphLoad({
       // Leaving with a layout still running: nobody is waiting for it, so the worker carrying it
       // is terminated rather than left to finish a graph that has nowhere to go. A page that
       // settled its last draw keeps its engine, because the next repository will want it.
-      if (settled.current < draws.current) discardLayoutEngine()
+      if (running.current > 0) discardLayoutEngine()
     }
   }, [])
 
@@ -1608,7 +1623,7 @@ function GraphLoad({
    */
   useEffect(() => {
     if (!sharedLink) return
-    const ticket = (draws.current += 1)
+    const ticket = startDraw()
     const current = () => acceptsDrawResult(draws.current, ticket, mounted.current)
 
     // A link that could not be read is not worth retrying on the next reload, and leaving it in
@@ -1655,14 +1670,14 @@ function GraphLoad({
         if (!current()) return
         giveUp('This shared link could not be read.')
       })
-      .finally(() => done(ticket))
+      .finally(endDraw)
 
     return () => {
       // Taking the ticket away is what retires this draw: the layout it started cannot be stopped,
       // so the only thing left to control is whether its result is allowed to land. A draw that
       // already finished, or one another draw has already superseded, is not retired again — that
       // would leave a ticket outstanding that nothing is working on.
-      if (draws.current === ticket && settled.current < ticket) draws.current += 1
+      if (draws.current === ticket) draws.current += 1
     }
   }, [sharedLink, fragment, identity, target])
 
@@ -1693,7 +1708,7 @@ function GraphLoad({
   // Aborting is what actually stops the requests. Keyed on the token alone, and comparing against
   // a ref, so the state adjustment above cannot hide the change from it.
   useEffect(() => {
-    abortOnTokenChange(carriedToken, token, abort)
+    abortOnTokenChange(carriedToken, token, abort, draws)
   }, [token])
 
   const start = useCallback(
@@ -1737,7 +1752,7 @@ function GraphLoad({
           if (result.ok) {
             rememberTarget(target)
             writeCache(identity, result.data)
-            const ticket = (draws.current += 1)
+            const ticket = startDraw()
             setPhase({ kind: 'drawing' })
             // Read from GitHub just now, so the payloads may name the repository they came from.
             const graph = await buildGraph(result.data, target, {
@@ -1749,8 +1764,15 @@ function GraphLoad({
               }
               return null
             })
-            done(ticket)
-            if (graph && acceptsDrawResult(draws.current, ticket, mounted.current)) {
+            endDraw()
+            // The controller is this draw's other identity: the load it belongs to may have been
+            // stopped without the generation moving on, and a result from a stopped load is void
+            // whatever ticket it holds.
+            if (
+              graph &&
+              !controller.signal.aborted &&
+              acceptsDrawResult(draws.current, ticket, mounted.current)
+            ) {
               setPhase({
                 kind: 'ready',
                 graph,
@@ -1787,7 +1809,7 @@ function GraphLoad({
       const decision = decideSavedCopyOpen(copy, showClosed)
       if (decision.kind !== 'open') return
 
-      const ticket = (draws.current += 1)
+      const ticket = startDraw()
       setPhase({ kind: 'drawing' })
       // This browser's own copy of a read it made from GitHub, under this repository's key. It
       // spends no budget, which is exactly why an unhandled rejection here used to leave the page
@@ -1806,7 +1828,7 @@ function GraphLoad({
           if (!acceptsDrawResult(draws.current, ticket, mounted.current)) return
           setPhase({ kind: 'failed', failure: drawFailure(error) })
         })
-        .finally(() => done(ticket))
+        .finally(endDraw)
     },
     [target, showClosed],
   )
