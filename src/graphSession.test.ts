@@ -594,6 +594,28 @@ describe('a shared link in the fragment', () => {
     expect(harness.session.getState().phase.kind).toBe('gate')
   })
 
+  /**
+   * The other half of an invalidated run: giving up on the link rewrites the address bar. Doing
+   * that after the viewer has been moved to the gate would strip a fragment the page is no longer
+   * acting on, and would replace the notice explaining why they were moved.
+   */
+  it('leaves the address bar alone when the run it belonged to was ended', async () => {
+    const held = deferred<SnapshotRead>()
+    const harness = open({ readSnapshot: () => held.promise }, { fragment })
+    harness.session.begin()
+
+    harness.session.setToken('ghp_new')
+    held.resolve({ kind: 'invalid', reason: 'This link is for another repository.' })
+    await settle()
+
+    expect(harness.fragmentsCleared).toBe(0)
+    expect(harness.session.getState()).toMatchObject({
+      phase: { kind: 'gate' },
+      linkProblem: null,
+      stopped: 'The read was stopped when the token changed. Nothing further was sent without it.',
+    })
+  })
+
   it('drops a snapshot that arrives after the session closed', async () => {
     const held = deferred<SnapshotRead>()
     const harness = open({ readSnapshot: () => held.promise }, { fragment })
