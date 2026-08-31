@@ -1525,7 +1525,8 @@ function GraphLoad({
             )}
           </dl>
           <p className="stage__note">
-            Reading costs GitHub requests: 1 per 100 issues, then 1 per issue with blockers.
+            Reading costs GitHub requests: 1 per 100 issues, then 1 per 100 blockers of each
+            blocked issue.
           </p>
           <label className="check">
             <input
@@ -1582,7 +1583,8 @@ function GraphLoad({
             />
           </dl>
           <p className="stage__note">
-            {phase.cost} {phase.cost === 1 ? 'issue has' : 'issues have'} blockers.
+            Reading the blockers costs {phase.cost}{' '}
+            {phase.cost === 1 ? 'request' : 'requests'}.
           </p>
           {phase.status !== null && phase.status.remaining < phase.cost && (
             <p className="notice notice--error">

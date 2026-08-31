@@ -44,6 +44,17 @@ export const AUTHENTICATED_HOURLY_LIMIT = 5000
  */
 export const DEPENDENCY_CONCURRENCY = 6
 
+/**
+ * How many blockers one dependency request asks for.
+ *
+ * The endpoint defaults to 30 and accepts up to 100, and it paginates like every other list: an
+ * issue with more blockers than one page holds answers with a `rel="next"` link and nothing else to
+ * say that the list was cut short. Asking for the maximum is what keeps the common case at one
+ * request while the loop below stays correct for the rest.
+ * https://docs.github.com/en/rest/issues/issue-dependencies
+ */
+export const DEPENDENCY_PAGE_SIZE = 100
+
 export interface RateLimitStatus {
   limit: number
   remaining: number
@@ -313,6 +324,71 @@ export function issuesNeedingBlockers(
 }
 
 /**
+ * What the dependency phase will actually cost, in requests rather than in issues.
+ *
+ * An issue needing blockers costs one request per page of them, so the quote the viewer approves
+ * has to read the same summary count the dependency loop will page through. Quoting one request per
+ * issue understated the spend for exactly the repositories this matters in: an issue with 101
+ * blockers costs two requests, not one.
+ *
+ * The floor of one request is deliberate. The summary count is GitHub's, the list is GitHub's, and
+ * they can legitimately disagree — a blocker in a repository this reader cannot see is counted and
+ * not listed — so the quote must never promise fewer requests than the loop will send.
+ */
+export function dependencyRequestCost(issues: IssuePayload[], includeClosed = false): number {
+  return issuesNeedingBlockers(issues, includeClosed)
+    .map((issue) => plannedPages(issue, includeClosed))
+    .reduce((total, pages) => total + pages, 0)
+}
+
+/** The pages `dependencyRequestCost` quotes for one issue, kept per issue for progress reporting. */
+function plannedPages(issue: IssuePayload, includeClosed: boolean): number {
+  const key = includeClosed ? 'total_blocked_by' : 'blocked_by'
+  const count = issue.issue_dependencies_summary?.[key] ?? 0
+  return Math.max(1, Math.ceil(count / DEPENDENCY_PAGE_SIZE))
+}
+
+/**
+ * Every page of one issue's blockers, up to the number of requests the viewer approved for it.
+ *
+ * Two authorities are in play and neither may override the other. `rel="next"` is the only thing
+ * that knows whether another page exists, so it is the loop condition. The quote derived from the
+ * summary count is what the viewer agreed to spend, so it is the ceiling: the summary was read
+ * before the dependency phase began and the repository can have moved since — an issue that grew
+ * from 100 blockers to 101 offers a second page nobody approved.
+ *
+ * When `rel="next"` survives the last approved page, the extra request is not sent. The issue is
+ * reported as `exhausted` and the caller records it unresolved, because a list cut short at the
+ * quote is the same silent truncation as one cut short at 30, and spending an unquoted request to
+ * avoid it is the thing the viewer was asked about in the first place.
+ */
+async function fetchBlockedBy(
+  target: RepoTarget,
+  issueNumber: number,
+  options: LoadOptions,
+  count: RequestCounter,
+  approvedPages: number,
+  onPage: () => void,
+): Promise<{ blockers: IssuePayload[]; exhausted: boolean }> {
+  const blockers: IssuePayload[] = []
+  let spent = 0
+  let url: string | null =
+    `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
+    `/issues/${issueNumber}/dependencies/blocked_by?per_page=${DEPENDENCY_PAGE_SIZE}`
+
+  while (url) {
+    if (spent === approvedPages) return { blockers, exhausted: true }
+    const response = await request(url, options, count)
+    spent += 1
+    blockers.push(...((await response.json()) as IssuePayload[]))
+    onPage()
+    url = nextPageUrl(response.headers.get('link'))
+  }
+
+  return { blockers, exhausted: false }
+}
+
+/**
  * Every dependency edge inside one repository appears as some issue's `blocked_by`, so fetching
  * only that direction yields the complete intra-repository graph. Outbound cross-repository edges
  * are deliberately not fetched: `blocking` would roughly double the request count against a 60/hour
@@ -332,10 +408,14 @@ export async function loadRepositoryGraph(
     throw error
   }
 
-  const needBlockers = issuesNeedingBlockers(issues, options.includeClosed)
+  const includeClosed = options.includeClosed === true
+  const needBlockers = issuesNeedingBlockers(issues, includeClosed)
+  // Quoted, spent and reported in the same unit: requests, not issues.
+  const planned = needBlockers.map((issue) => plannedPages(issue, includeClosed))
+  const plannedTotal = dependencyRequestCost(issues, includeClosed)
 
   if (needBlockers.length > 0 && options.confirmDependencies) {
-    const approved = await options.confirmDependencies(needBlockers.length)
+    const approved = await options.confirmDependencies(plannedTotal)
     if (!approved) return { ok: false, failure: { kind: 'cancelled' } }
   }
 
@@ -344,12 +424,26 @@ export async function loadRepositoryGraph(
   let rateLimited = false
   let rateLimitReset: Date | null = null
 
-  options.onProgress?.({ done: 0, total: needBlockers.length })
+  // Progress counts pages, since that is what the viewer approved and what the budget is spent in.
+  // Held per issue so it stays monotone under the parallel workers, and so an issue that finished
+  // in fewer pages than quoted still contributes everything it was quoted for.
+  const pagesDone: number[] = needBlockers.map(() => 0)
+  let reported = -1
+  const reportProgress = () => {
+    const done = pagesDone.reduce((total, pages) => total + pages, 0)
+    // Reconciling a finished issue to its quoted page count usually changes nothing; saying so
+    // again would only make the caller re-render for an unchanged number.
+    if (done === reported) return
+    reported = done
+    // The quote is a ceiling, not an estimate, so `done` can never exceed it.
+    options.onProgress?.({ done, total: plannedTotal })
+  }
+
+  reportProgress()
 
   // Kept per issue rather than appended on completion, so the report stays in issue order however
   // the parallel requests happen to finish.
   const failures: (UnresolvedDependency | null)[] = needBlockers.map(() => null)
-  let done = 0
   let nextIndex = 0
 
   const worker = async (): Promise<void> => {
@@ -365,17 +459,30 @@ export async function loadRepositoryGraph(
           reason: 'rate limit reached before it was read',
         }
       } else {
-        const url =
-          `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
-          `/issues/${issue.number}/dependencies/blocked_by`
-
         try {
-          const list = (await (await request(url, options, count)).json()) as IssuePayload[]
-          // Whatever GitHub returns is what the graph draws. A summary count that disagrees with the
-          // list is GitHub's own inconsistency — a blocker in a repository this reader cannot see,
-          // for one — and reporting it as a gap only tells the reader something they can do nothing
-          // with.
-          blockers.set(issue.number, list)
+          const page = await fetchBlockedBy(
+            target,
+            issue.number,
+            options,
+            count,
+            planned[index],
+            () => {
+              pagesDone[index] += 1
+              reportProgress()
+            },
+          )
+          if (page.exhausted) {
+            failures[index] = {
+              number: issue.number,
+              reason: 'more blockers than the approved requests could read',
+            }
+          } else {
+            // Whatever GitHub returns is what the graph draws. A summary count that disagrees with
+            // the list is GitHub's own inconsistency — a blocker in a repository this reader cannot
+            // see, for one — and reporting it as a gap only tells the reader something they can do
+            // nothing with.
+            blockers.set(issue.number, page.blockers)
+          }
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') throw error
           if (!(error instanceof RequestFailure)) throw error
@@ -396,8 +503,10 @@ export async function loadRepositoryGraph(
         }
       }
 
-      done += 1
-      options.onProgress?.({ done, total: needBlockers.length })
+      // Finished either way: an issue that failed on page two, or was skipped once the budget was
+      // gone, still accounts for every page it was quoted for, so the bar reaches its total.
+      pagesDone[index] = Math.max(pagesDone[index], planned[index])
+      reportProgress()
     }
   }
 
@@ -420,7 +529,7 @@ export async function loadRepositoryGraph(
       rateLimitReset,
       requestCount: count.requests,
       rateLimit: count.status,
-      includedClosed: options.includeClosed === true,
+      includedClosed: includeClosed,
     },
   }
 }

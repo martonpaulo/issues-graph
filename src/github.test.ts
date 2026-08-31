@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from 'vitest'
 import rawIssue from './__fixtures__/agent-workflows.raw-issue.json'
 import {
   DEPENDENCY_CONCURRENCY,
+  DEPENDENCY_PAGE_SIZE,
+  dependencyRequestCost,
   issuesNeedingBlockers,
   loadRepositoryGraph,
   nextPageUrl,
@@ -288,11 +290,190 @@ describe('loadRepositoryGraph', () => {
   })
 })
 
+describe('paginated blockers', () => {
+  const blockerPage = (from: number, size: number) =>
+    Array.from({ length: size }, (_, offset) => issue(from + offset))
+
+  /**
+   * One repository whose single issue reports `count` blockers, answering the dependency endpoint
+   * in pages of 100 exactly as GitHub does, with a `rel="next"` link while more remain.
+   */
+  const repositoryWith = (count: number, failOnPage?: number) => {
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      seen.push(href)
+      if (!href.includes('/dependencies/blocked_by')) return json([issue(1, count)])
+
+      const page = Number(new URL(href).searchParams.get('page') ?? '1')
+      if (page === failOnPage) return json({ message: 'boom' }, { status: 500 })
+
+      const size = Math.min(DEPENDENCY_PAGE_SIZE, Math.max(0, count - (page - 1) * DEPENDENCY_PAGE_SIZE))
+      const body = blockerPage(page * 1000, size)
+      const more = page * DEPENDENCY_PAGE_SIZE < count
+      return json(body, {
+        headers: more
+          ? {
+              link:
+                `<https://api.github.com/repos/acme/app/issues/1/dependencies/blocked_by` +
+                `?per_page=100&page=${page + 1}>; rel="next"`,
+            }
+          : {},
+      })
+    })
+    return { seen, fetchImpl: fetchImpl as unknown as typeof fetch }
+  }
+
+  it('asks for the largest page GitHub allows', async () => {
+    const { seen, fetchImpl } = repositoryWith(1)
+
+    await loadRepositoryGraph(TARGET, { fetchImpl })
+
+    const dependencyCalls = seen.filter((url) => url.includes('/dependencies/blocked_by'))
+    expect(dependencyCalls).toHaveLength(1)
+    expect(dependencyCalls[0]).toContain('per_page=100')
+  })
+
+  it.each([
+    [0, 0, 0],
+    [30, 1, 30],
+    [31, 1, 31],
+    [100, 1, 100],
+    [101, 2, 101],
+    [201, 3, 201],
+  ])(
+    'reads every page of %i blockers in %i request(s)',
+    async (count, requests, expected) => {
+      const { seen, fetchImpl } = repositoryWith(count)
+      const asked: number[] = []
+
+      const result = await loadRepositoryGraph(TARGET, {
+        fetchImpl,
+        confirmDependencies: (cost) => {
+          asked.push(cost)
+          return true
+        },
+      })
+
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(seen.filter((url) => url.includes('/dependencies/blocked_by'))).toHaveLength(requests)
+      expect(result.data.blockers.get(1) ?? []).toHaveLength(expected)
+      expect(result.data.complete).toBe(true)
+      // One list request plus every dependency page.
+      expect(result.data.requestCount).toBe(1 + requests)
+      // Nothing is asked for when nothing has a blocker.
+      expect(asked).toEqual(requests === 0 ? [] : [requests])
+    },
+  )
+
+  it('leaves the graph incomplete when a later page fails, rather than drawing half a list', async () => {
+    const { fetchImpl } = repositoryWith(101, 2)
+
+    const result = await loadRepositoryGraph(TARGET, { fetchImpl })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.complete).toBe(false)
+    expect(result.data.blockers.has(1)).toBe(false)
+    expect(result.data.unresolved).toEqual([{ number: 1, reason: 'GitHub answered 500.' }])
+    expect(result.data.requestCount).toBe(3)
+  })
+
+  it('stops on a rate limit met on a later page', async () => {
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      seen.push(href)
+      if (!href.includes('/dependencies/blocked_by')) return json([issue(1, 101), issue(2, 1)])
+      if (href.includes('page=2')) return rateLimited()
+      return json(blockerPage(1000, DEPENDENCY_PAGE_SIZE), {
+        headers: {
+          link:
+            '<https://api.github.com/repos/acme/app/issues/1/dependencies/blocked_by' +
+            '?per_page=100&page=2>; rel="next"',
+        },
+      })
+    })
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.rateLimited).toBe(true)
+    expect(result.data.complete).toBe(false)
+    expect(result.data.unresolved.map((u) => u.reason)).toContain('rate limit reached')
+  })
+
+  it('never spends a request the viewer did not approve, however many pages GitHub offers', async () => {
+    // The summary was read before the dependency phase began; the issue grew from 100 blockers to
+    // 101 in between, so GitHub now offers a second page that nobody agreed to pay for.
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      seen.push(href)
+      if (!href.includes('/dependencies/blocked_by')) return json([issue(1, 100)])
+      return json(blockerPage(1000, DEPENDENCY_PAGE_SIZE), {
+        headers: {
+          link:
+            '<https://api.github.com/repos/acme/app/issues/1/dependencies/blocked_by' +
+            '?per_page=100&page=2>; rel="next"',
+        },
+      })
+    })
+    const asked: number[] = []
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      confirmDependencies: (cost) => {
+        asked.push(cost)
+        return true
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(asked).toEqual([1])
+    // Exactly what was quoted: one list request and the one approved dependency page.
+    expect(seen.filter((url) => url.includes('/dependencies/blocked_by'))).toHaveLength(1)
+    expect(result.data.requestCount).toBe(2)
+    // And the truncation is reported rather than drawn.
+    expect(result.data.blockers.has(1)).toBe(false)
+    expect(result.data.complete).toBe(false)
+    expect(result.data.unresolved).toEqual([
+      { number: 1, reason: 'more blockers than the approved requests could read' },
+    ])
+  })
+
+  it('counts progress in pages, and reaches its total even when a page fails', async () => {
+    const { fetchImpl } = repositoryWith(201, 3)
+    const progress: { done: number; total: number }[] = []
+
+    await loadRepositoryGraph(TARGET, { fetchImpl, onProgress: (p) => progress.push(p) })
+
+    expect(progress[0]).toEqual({ done: 0, total: 3 })
+    expect(progress.at(-1)).toEqual({ done: 3, total: 3 })
+  })
+})
+
 describe('the budget the load will spend', () => {
   it('counts only issues with an open blocker, because closed ones are not drawn', () => {
     const issues = [issue(1), issue(2, 1), issue(3, 0, 4)]
     expect(issuesNeedingBlockers(issues).map((i) => i.number)).toEqual([2])
     expect(issuesNeedingBlockers(issues, true).map((i) => i.number)).toEqual([2, 3])
+  })
+
+  it('quotes one request per page of blockers, not one per issue', () => {
+    expect(dependencyRequestCost([])).toBe(0)
+    expect(dependencyRequestCost([issue(1)])).toBe(0)
+    expect(dependencyRequestCost([issue(1, 1), issue(2, 100)])).toBe(2)
+    expect(dependencyRequestCost([issue(1, 101)])).toBe(2)
+    expect(dependencyRequestCost([issue(1, 101), issue(2, 250)])).toBe(5)
+    // Closed blockers are quoted from the total, under the same switch that fetches them.
+    expect(dependencyRequestCost([issue(1, 0, 150)])).toBe(0)
+    expect(dependencyRequestCost([issue(1, 0, 150)], true)).toBe(2)
   })
 
   it('asks before spending the dependency phase, and reports the exact cost', async () => {
