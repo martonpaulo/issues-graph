@@ -151,6 +151,16 @@ export interface GraphNode {
   repo: string
   /** Local workflow presentation state. External repositories do not share this convention. */
   state: IssueState | null
+  /**
+   * Whether GitHub still has the issue open.
+   *
+   * Separate from `state` on purpose. `state` is this repository's own reading of a backlog —
+   * `ready`, `blocked`, `needs attention` — built from a label convention nobody else has agreed
+   * to, so it is withheld for an issue in another repository. Open or closed is GitHub's own fact
+   * and means the same everywhere, and it is the one thing that has to be said about a blocker:
+   * a closed one is no longer in the way.
+   */
+  open: boolean
   /** True when the issue lives in another repository and was reached as a blocker. */
   external: boolean
   /**
@@ -339,6 +349,7 @@ function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
     url: issue.html_url,
     repo,
     state,
+    open: isOpen(issue),
     external,
     repoLabel,
     labels,

@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { useRef } from 'react'
+import { useId, useRef } from 'react'
 
+import { issueRef } from './dependencies'
 import type { GraphNode, IssueState } from './graph'
 import { Icon } from './icons'
 import { chipText } from './labels'
@@ -13,6 +14,12 @@ export interface IssueCardData extends Record<string, unknown> {
   highlighted: boolean
   /** A highlight is on and this card is not part of it. */
   faded: boolean
+  /**
+   * The card's place in the dependency graph, said in words, e.g.
+   * `Issue #25. Blocked by #23 and #24. Blocks #31.` Derived from the drawn edges by
+   * `dependencies.ts`, and read to anyone who cannot trace the arrows.
+   */
+  description: string
   onSelect: (id: string, additive: boolean) => void
   onToggleHidden: (id: string) => void
   onOpen: (url: string, label: string) => void
@@ -27,7 +34,7 @@ export type IssueNode = Node<IssueCardData, 'issue'>
  * State is written on the card as words, not carried by colour alone, so the graph stays readable
  * for anyone who cannot separate the fills.
  */
-const STATE_TEXT: Record<IssueState, string> = {
+export const STATE_TEXT: Record<IssueState, string> = {
   ready: 'ready',
   // Nobody is on it, which is not the same as free to start: it is unqueued.
   unassigned: 'unassigned',
@@ -66,8 +73,9 @@ function cardClasses(data: IssueCardData): string {
 function CardBody({
   node,
   selected,
+  descriptionId,
   onSelect,
-}: Pick<IssueCardData, 'node' | 'selected' | 'onSelect'>) {
+}: Pick<IssueCardData, 'node' | 'selected' | 'onSelect'> & { descriptionId: string }) {
   const pressedAt = useRef<{ x: number; y: number } | null>(null)
 
   return (
@@ -75,6 +83,7 @@ function CardBody({
       type="button"
       className="card__body nodrag"
       aria-pressed={selected}
+      aria-describedby={descriptionId}
       onPointerDown={(event) => {
         pressedAt.current = { x: event.clientX, y: event.clientY }
       }}
@@ -162,14 +171,38 @@ function CardActions({
 }
 
 export function IssueCard({ data }: NodeProps<IssueNode>) {
-  const { node, selected, hidden, onSelect, onToggleHidden, onOpen } = data
-  const label = node.external ? `${node.repo}#${node.number}` : `#${node.number}`
+  const { node, selected, hidden, description, onSelect, onToggleHidden, onOpen } = data
+  const label = issueRef(node)
+  /**
+   * React's own per-instance id rather than one spelled out of `node.id`.
+   *
+   * The node id carries `/` and `#`, and any scheme that folds those into a safe character stops
+   * being injective: `acme/foo-bar#1` and `acme-foo/bar#1` are both identities GitHub can produce
+   * and both collapse to the same string. Two cards sharing a DOM id is not a cosmetic fault —
+   * `aria-describedby` resolves to whichever came first, so one card would be described by the
+   * other card's blockers.
+   */
+  const descriptionId = useId()
 
   return (
     <div className={cardClasses(data)}>
       <Handle type="target" position={Position.Top} className="card__handle" />
 
-      <CardBody node={node} selected={selected} onSelect={onSelect} />
+      <CardBody
+        node={node}
+        selected={selected}
+        descriptionId={descriptionId}
+        onSelect={onSelect}
+      />
+
+      {/* The arrows are geometry, and geometry is exactly what a screen reader cannot follow, so
+          the same fact is written out. Deliberately a sibling of the button rather than a child:
+          `.sr-only` is clipped from view but stays in the accessibility tree, and a button's name
+          is computed from its contents, so inside the button this sentence would land in the name
+          as well as in the description and be announced twice. */}
+      <span className="sr-only" id={descriptionId}>
+        {description}
+      </span>
 
       <CardActions
         node={node}

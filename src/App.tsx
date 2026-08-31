@@ -22,7 +22,20 @@ import {
 } from 'react'
 
 import { readCache, writeCache, type CachedGraph } from './cache'
-import { buildGraph, dependencyCounts, NODE_WIDTH, type IssueGraph } from './graph'
+import {
+  adjacencyOf,
+  dependencyRows,
+  describeNode,
+  issueRef,
+  type DependencyRow,
+} from './dependencies'
+import {
+  buildGraph,
+  dependencyCounts,
+  NODE_WIDTH,
+  type GraphNode,
+  type IssueGraph,
+} from './graph'
 import {
   AUTHENTICATED_HOURLY_LIMIT,
   loadRepositoryGraph,
@@ -35,7 +48,7 @@ import {
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
-import { IssueCard, type IssueNode } from './IssueCard'
+import { IssueCard, STATE_TEXT, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
 import {
   canonicalSlugOf,
@@ -554,6 +567,115 @@ function LabelPicker({
   )
 }
 
+/**
+ * What the table says about a blocker's state.
+ *
+ * Two facts, and the column needs whichever one it can get. `state` is this repository's own
+ * reading of its backlog and is deliberately absent for an issue in another repository, but open
+ * or closed is GitHub's and is there for every node — which is the fact this column exists for,
+ * since a closed blocker is one that is no longer in the way. Naming the repository here instead
+ * would answer a question the blocker's own cell already answered.
+ */
+export function blockerStateText(node: GraphNode): string {
+  if (node.state) return STATE_TEXT[node.state]
+  return node.open ? 'open' : 'closed'
+}
+
+/**
+ * Every drawn edge as a row: the blocker, whether it is finished, and what it holds up.
+ *
+ * A real table rather than a list of sentences, because a screen reader navigates a table by row
+ * and column and that is exactly the traversal a graph asks for. The blocker's state is its own
+ * column so a closed blocker — which is only in the picture at all when the reader asked for
+ * closed ones — is never mistaken for one still in the way.
+ */
+export function DependencyTable({ rows }: { rows: DependencyRow[] }) {
+  return (
+    <table className="deps__table">
+      {/* The legend is on the caption as well as in the top bar, so the direction is stated on
+          the surface a reader is actually traversing. */}
+      <caption className="deps__caption">
+        {rows.length} dependenc{rows.length === 1 ? 'y' : 'ies'} · {DIRECTION_LEGEND}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Blocker</th>
+          <th scope="col">State</th>
+          <th scope="col">Blocks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id}>
+            <td>
+              <span className="deps__ref">{issueRef(row.blocker)}</span>{' '}
+              <span className="deps__title">{row.blocker.title}</span>
+            </td>
+            <td className="deps__state">{blockerStateText(row.blocker)}</td>
+            <td>
+              <span className="deps__ref">{issueRef(row.dependent)}</span>{' '}
+              <span className="deps__title">{row.dependent.title}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/**
+ * The dependencies as a table.
+ *
+ * The arrows carry the whole point of this page and they carry it as geometry, which leaves anyone
+ * not reading the drawing with cards and no order between them. This is the same edge list the
+ * canvas draws, read row by row instead of traced: one row per drawn edge, so the two surfaces
+ * cannot disagree about which issue blocks which.
+ *
+ * Mounted only while open, because on a large backlog it is a row per edge and nobody pays for it
+ * until they ask.
+ */
+function DependencyList({ graph }: { graph: IssueGraph }) {
+  const [open, setOpen] = useState(false)
+  const rows = useMemo(() => dependencyRows(graph), [graph])
+
+  if (rows.length === 0) return null
+
+  return (
+    <span className="picker">
+      <button
+        className="iconbutton"
+        type="button"
+        aria-expanded={open}
+        aria-label={`List the ${rows.length} dependencies as text`}
+        data-tip="List the dependencies"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name="list" />
+      </button>
+
+      {open && (
+        <div className="picker__panel deps">
+          <div className="picker__head">
+            <span>Dependencies</span>
+            <button
+              className="iconbutton"
+              type="button"
+              aria-label="Close the dependency list"
+              data-tip="Close the dependency list"
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+          <div className="deps__scroll">
+            <DependencyTable rows={rows} />
+          </div>
+        </div>
+      )}
+    </span>
+  )
+}
+
 export function nextIssueSelection(
   current: ReadonlySet<string>,
   id: string,
@@ -702,6 +824,15 @@ function useCanvasShortcuts({
   }, [graph, selected, fitView, openExternal, setSelected, setHidden])
 }
 
+/**
+ * What an arrow means, said in words.
+ *
+ * The direction is the whole content of an edge — which of the two issues has to land first — and
+ * an arrowhead is the only place the drawing says it. Anyone not reading the drawing needs it
+ * written down, and anyone reading it for the first time benefits from the same line.
+ */
+export const DIRECTION_LEGEND = 'Arrow: blocker \u2192 dependent'
+
 type TopLeftBarProps = {
   slug: string
   nodeCount: number
@@ -741,11 +872,14 @@ function TopLeftBar({
         <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong> depend on others ·{' '}
         <strong>{blockingCount}</strong> block others
       </span>
+      <span className="bar__divider" />
+      <span className="bar__legend">{DIRECTION_LEGEND}</span>
     </div>
   )
 }
 
 type TopRightBarProps = {
+  graph: IssueGraph
   labelCounts: { name: string; count: number }[]
   highlight: ReadonlySet<string>
   onToggleHighlight: (label: string) => void
@@ -757,6 +891,7 @@ type TopRightBarProps = {
 }
 
 function TopRightBar({
+  graph,
   labelCounts,
   highlight,
   onToggleHighlight,
@@ -768,6 +903,7 @@ function TopRightBar({
 }: TopRightBarProps) {
   return (
     <div className="bar bar--tools">
+      <DependencyList graph={graph} />
       <LabelPicker
         labels={labelCounts}
         active={highlight}
@@ -1052,6 +1188,13 @@ function Canvas({
    */
   const counts = useMemo(() => dependencyCounts(graph.edges), [graph])
 
+  /**
+   * What each card says about its own blockers and dependents. Derived from the drawn edges, in
+   * the same pass the canvas is built from, so no card can announce a relationship the picture
+   * does not show or stay silent about one it does.
+   */
+  const adjacency = useMemo(() => adjacencyOf(graph), [graph])
+
   /** Every label in the graph, alphabetically: what the highlight picker offers. */
   const labelCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -1101,6 +1244,7 @@ function Canvas({
           hidden: hidden.has(node.id),
           highlighted,
           faded: highlight.size > 0 && !highlighted,
+          description: describeNode(node, adjacency.get(node.id)),
           onSelect: selectIssue,
           onToggleHidden: toggleHidden,
           onOpen: openExternal,
@@ -1115,6 +1259,7 @@ function Canvas({
     return [...frames, ...cards]
   }, [
     graph,
+    adjacency,
     selected,
     hidden,
     highlight,
@@ -1202,6 +1347,7 @@ function Canvas({
           onOpenExternal: openExternal,
         }}
         tools={{
+          graph,
           labelCounts,
           highlight,
           onToggleHighlight: toggleHighlight,

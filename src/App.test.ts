@@ -9,6 +9,9 @@ import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
   abortOnTokenChange,
   App,
+  blockerStateText,
+  DependencyTable,
+  DIRECTION_LEGEND,
   budgetParts,
   decideSavedCopyOpen,
   describeSavedCopy,
@@ -23,7 +26,8 @@ import {
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { buildGraph, NODE_WIDTH } from './graph'
+import { dependencyRows, issueRef } from './dependencies'
+import { buildGraph, NODE_WIDTH, type GraphNode, type IssueGraph } from './graph'
 
 const narrowData: RepositoryGraphData = {
   issues: [],
@@ -445,6 +449,90 @@ describe('stopping a load whose token is gone', () => {
   })
 })
 
+describe('the dependencies as text', () => {
+  it('renders one row per drawn edge, both ends named', async () => {
+    const graph = await buildGraph(
+      {
+        issues: awIssues as IssuePayload[],
+        blockers: new Map(
+          Object.entries(awBlockedBy as Record<string, IssuePayload[]>).map(
+            ([number, list]) => [Number(number), list],
+          ),
+        ),
+        complete: true,
+        unresolved: [],
+        rateLimited: false,
+        rateLimitReset: null,
+        requestCount: 1,
+        rateLimit: null,
+        includedClosed: true,
+      },
+      { owner: 'martonpaulo', repo: 'agent-workflows' },
+    )
+
+    const rows = dependencyRows(graph)
+    const html = renderToStaticMarkup(createElement(DependencyTable, { rows }))
+
+    // Every edge the canvas draws is reachable without tracing it.
+    expect(rows).toHaveLength(graph.edges.length)
+    for (const edge of graph.edges) {
+      const blocker = graph.nodes.find((node) => node.id === edge.source)!
+      const dependent = graph.nodes.find((node) => node.id === edge.target)!
+      expect(
+        html,
+        edge.id,
+      ).toContain(
+        `<span class="deps__ref">${issueRef(blocker)}</span> <span class="deps__title">`,
+      )
+      expect(html, edge.id).toContain(
+        `<span class="deps__ref">${issueRef(dependent)}</span> <span class="deps__title">`,
+      )
+    }
+
+    // The direction an arrowhead carries, written down.
+    expect(html).toContain(DIRECTION_LEGEND)
+    expect(html).toContain('<th scope="col">Blocker</th>')
+    expect(html).toContain('<th scope="col">Blocks</th>')
+  })
+})
+
+describe('blockerStateText', () => {
+  const node = (over: Partial<GraphNode>): GraphNode => ({
+    id: 'other/lib#9',
+    number: 9,
+    title: 'A blocker',
+    url: 'https://github.com/other/lib/issues/9',
+    repo: 'other/lib',
+    state: null,
+    open: true,
+    subIssues: null,
+    external: true,
+    repoLabel: 'other/lib',
+    labels: [],
+    allLabels: [],
+    titleLines: 1,
+    height: 100,
+    position: { x: 0, y: 0 },
+    ...over,
+  })
+
+  it('says whether an external blocker is finished, which its repository never did', () => {
+    // The column exists to separate a blocker still in the way from one that is not, and naming
+    // the repository instead answered neither.
+    expect(blockerStateText(node({ open: false }))).toBe('closed')
+    expect(blockerStateText(node({ open: true }))).toBe('open')
+  })
+
+  it('prefers the local workflow state where the repository shares that convention', () => {
+    expect(
+      blockerStateText(node({ state: 'blocked', open: true, external: false })),
+    ).toBe('blocked')
+    expect(
+      blockerStateText(node({ state: 'not-planned', open: false, external: false })),
+    ).toBe('not planned')
+  })
+})
+
 /**
  * The top chrome is a geometry check without a browser: what keeps the identity and the tools from
  * overlapping is that they are siblings in one flow container, not two panels pinned to opposite
@@ -464,6 +552,19 @@ describe('top chrome layout', () => {
 
   const longestSlug = `${'o'.repeat(39)}/${'r'.repeat(100)}`
 
+  /** The toolbar needs a graph to offer a dependency list from; the geometry does not care. */
+  const emptyGraph: IssueGraph = {
+    nodes: [],
+    edges: [],
+    groups: [],
+    identity: 'acme/app',
+    complete: true,
+    unresolved: [],
+    rateLimited: false,
+    rateLimitReset: null,
+    requestCount: 0,
+  }
+
   function chrome(slug: string) {
     return renderToStaticMarkup(
       createElement(TopChrome, {
@@ -475,6 +576,7 @@ describe('top chrome layout', () => {
           onOpenExternal: () => {},
         },
         tools: {
+          graph: emptyGraph,
           labelCounts: [{ name: 'type: bug', count: 3 }],
           highlight: new Set<string>(),
           onToggleHighlight: () => {},

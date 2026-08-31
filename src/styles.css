@@ -425,7 +425,10 @@ code {
 /* The panels float over the canvas, so on a narrow screen the optional ones step aside rather
    than colliding with the repository name and the actions. */
 @media (max-width: 900px) {
-  .bar__counts {
+  .bar__counts,
+  /* The legend steps aside with the counts it explains. Nothing is lost: the dependency table
+     carries the same line on its caption, which is the surface a narrow window still reaches. */
+  .bar__legend {
     display: none;
   }
 }
@@ -1028,6 +1031,85 @@ code {
 .repoinput__option.is-active {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* Said, not drawn -----------------------------------------------------------
+   Text that exists for a screen reader and has a visible equivalent on screen already. Clipped
+   rather than hidden, because `display: none` and `visibility: hidden` remove it from the
+   accessibility tree too, which is the one place it is meant to be. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bar__legend {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/* The dependencies as text ------------------------------------------------- */
+
+.deps {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.deps__scroll {
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.deps__table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.deps__caption {
+  caption-side: top;
+  padding: 0 6px 6px;
+  text-align: left;
+  color: var(--muted);
+}
+
+.deps__table th,
+.deps__table td {
+  padding: 5px 6px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.deps__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-top: 0;
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deps__ref {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.deps__title {
+  color: var(--muted);
+}
+
+.deps__state {
+  white-space: nowrap;
+  color: var(--muted);
 }
 
 /* Label highlight picker --------------------------------------------------- */

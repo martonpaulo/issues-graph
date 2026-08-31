@@ -15,6 +15,14 @@ browser, and the relationships GitHub already tracks are the only source of trut
 its own state in words — `ready`, `unassigned`, `blocked`, `in progress`, `needs attention`,
 `delivered` — read from the issue's own labels, assignees and dependency counts.
 
+## Reading it without the picture
+
+The arrows are not the only way through the graph. Every card describes its own place in words —
+`Issue #25. Blocked by #23 and #24. Blocks #31.` — and the list button in the top-right corner
+opens the whole relationship set as a table, one row per drawn edge, with the blocker's state
+beside it. Both are derived from the same edges the canvas draws, so they say what the picture
+says. The direction an arrowhead carries is written out too: **arrow: blocker → dependent**.
+
 ## Rate limit
 
 Unauthenticated GitHub requests share 60 per hour per IP address, and reading a repository costs
