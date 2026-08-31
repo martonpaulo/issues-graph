@@ -254,6 +254,14 @@ code {
   transform: none;
 }
 
+/* The tools bar sits inside the left-hand panel now, so the rule above no longer reaches it; its
+   hints still belong on the side the bar is on. */
+.react-flow__panel .bar--tools [data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
 /* Floating chrome ---------------------------------------------------------
    Everything sits over the canvas rather than stacking bars above it, so the
    graph itself is the page. */
@@ -276,10 +284,48 @@ code {
   box-shadow: var(--shadow);
 }
 
+/* One strip across the top holding both bars, so they lay each other out instead of being pinned
+   to opposite corners and hoping the middle stays empty. The strip is transparent to the pointer;
+   the bars inside it are not, so a drag between them still pans the canvas. */
+.react-flow__panel.topbar {
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin: 0;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+.topbar > .bar {
+  pointer-events: auto;
+}
+
+/* Nothing here may push its neighbour off the window: a bar shrinks, then wraps inside itself. */
+.bar {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The tools keep the right-hand side on a line they share, and keep it on a line of their own. */
+.bar--tools {
+  margin-left: auto;
+}
+
+/* The identity stays one line whatever the repository is called: the slug is the part that gives
+   way, so a long name shortens the name rather than growing a three-line bar over the graph. It is
+   also what the slug's hint is measured against, below. */
+.bar--identity {
+  position: relative;
+  flex-wrap: nowrap;
+}
+
 .bar__slug {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font: inherit;
   padding: 2px 4px;
   border: 0;
@@ -290,8 +336,36 @@ code {
   cursor: pointer;
 }
 
+/* Only the text gives way, and only inside the button: an outline drawn on the button itself is
+   never clipped by this. */
+.bar__slugtext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bar__slug {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Every other hint is a phrase this project wrote, so 240px of centred text with the default
+     word breaking fits it. This one carries a repository name: up to 140 characters GitHub allows,
+     with no space in it to break at. So it is measured against the identity bar rather than the
+     button — the bar is already bounded by the window, so the hint cannot leave it — and it breaks
+     mid-word, which is the only way an unbroken name wraps at all. */
+  position: static;
+}
+
+/* Written at the panel-side alignment rule's own weight, and after it, so the alignment this hint
+   needs is decided here rather than by whichever of the two happens to come last. */
+.react-flow__panel .bar__slug[data-tip]::after {
+  left: 0;
+  right: auto;
+  /* Against the bar's own box, padding included, so 100% cannot become 100% plus the padding. */
+  box-sizing: border-box;
+  max-width: 100%;
+  transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .bar__slug:hover {
@@ -351,15 +425,11 @@ code {
 /* The panels float over the canvas, so on a narrow screen the optional ones step aside rather
    than colliding with the repository name and the actions. */
 @media (max-width: 900px) {
-  .bar__counts {
+  .bar__counts,
+  /* The legend steps aside with the counts it explains. Nothing is lost: the dependency table
+     carries the same line on its caption, which is the surface a narrow window still reaches. */
+  .bar__legend {
     display: none;
-  }
-}
-
-/* Keep the latest-read label visible on phones without letting the two fixed top panels overlap. */
-@media (max-width: 640px) {
-  .react-flow__panel.bar--tools {
-    top: 48px;
   }
 }
 

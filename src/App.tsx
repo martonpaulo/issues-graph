@@ -58,7 +58,7 @@ import {
   titleForRoute,
   type RepoTarget,
 } from './route'
-import { readStored, writeStored } from './storage'
+import { asBoolean, asStringArray, readStored, writeStored } from './storage'
 import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
 import { rememberTarget } from './suggestions'
 import { readToken, writeToken } from './token'
@@ -833,31 +833,38 @@ function useCanvasShortcuts({
  */
 export const DIRECTION_LEGEND = 'Arrow: blocker \u2192 dependent'
 
+type TopLeftBarProps = {
+  slug: string
+  nodeCount: number
+  dependentCount: number
+  blockingCount: number
+  onOpenExternal: (url: string, label: string) => void
+}
+
 function TopLeftBar({
   slug,
   nodeCount,
   dependentCount,
   blockingCount,
   onOpenExternal,
-}: {
-  slug: string
-  nodeCount: number
-  dependentCount: number
-  blockingCount: number
-  onOpenExternal: (url: string, label: string) => void
-}) {
+}: TopLeftBarProps) {
   return (
-    <Panel position="top-left" className="bar">
+    <div className="bar bar--identity">
       {/* The wordmark is not worth the width here: the icon alone is the way back. */}
       <a className="iconbutton" href={BASE} data-tip="Choose another repository">
         <Icon name="graph" />
       </a>
+      {/* The slug is the one piece of chrome whose width the repository decides, so it is the
+          piece that gives way. The text stays whole in the DOM — the button's accessible name is
+          the full slug however narrow the window is — and the hint carries it for a reader who
+          only has the ellipsis. */}
       <button
         className="bar__slug"
         type="button"
+        data-tip={slug}
         onClick={() => onOpenExternal(`https://github.com/${slug}`, slug)}
       >
-        {slug}
+        <span className="bar__slugtext">{slug}</span>
         <Icon name="external" size={11} />
       </button>
       <span className="bar__divider" />
@@ -867,8 +874,20 @@ function TopLeftBar({
       </span>
       <span className="bar__divider" />
       <span className="bar__legend">{DIRECTION_LEGEND}</span>
-    </Panel>
+    </div>
   )
+}
+
+type TopRightBarProps = {
+  graph: IssueGraph
+  labelCounts: { name: string; count: number }[]
+  highlight: ReadonlySet<string>
+  onToggleHighlight: (label: string) => void
+  onClearHighlight: () => void
+  onFitView: () => void
+  onShare: () => void
+  sharing: boolean
+  onAskAgain: () => void
 }
 
 function TopRightBar({
@@ -881,19 +900,9 @@ function TopRightBar({
   onShare,
   sharing,
   onAskAgain,
-}: {
-  graph: IssueGraph
-  labelCounts: { name: string; count: number }[]
-  highlight: ReadonlySet<string>
-  onToggleHighlight: (label: string) => void
-  onClearHighlight: () => void
-  onFitView: () => void
-  onShare: () => void
-  sharing: boolean
-  onAskAgain: () => void
-}) {
+}: TopRightBarProps) {
   return (
-    <Panel position="top-right" className="bar bar--tools">
+    <div className="bar bar--tools">
       <DependencyList graph={graph} />
       <LabelPicker
         labels={labelCounts}
@@ -924,6 +933,28 @@ function TopRightBar({
       <button className="button button--small" type="button" onClick={onAskAgain}>
         <Icon name="reload" size={12} /> Read latest from GitHub
       </button>
+    </div>
+  )
+}
+
+/**
+ * Both top bars in one panel, because two panels pinned to opposite corners cannot see each other:
+ * a repository name long enough, or a window narrow enough, and the tools slide underneath the
+ * identity. Laid out in ordinary flex flow they push each other along the line and wrap when the
+ * line runs out, which no breakpoint offset can promise. The strip itself lets gestures through;
+ * only the bars catch them.
+ */
+export function TopChrome({
+  identity,
+  tools,
+}: {
+  identity: TopLeftBarProps
+  tools: TopRightBarProps
+}) {
+  return (
+    <Panel position="top-left" className="topbar">
+      <TopLeftBar {...identity} />
+      <TopRightBar {...tools} />
     </Panel>
   )
 }
@@ -1088,7 +1119,7 @@ function Canvas({
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState<ShareOutcome | null>(null)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(readStored<string[]>(hiddenKey(identity), [])),
+    () => new Set(readStored(hiddenKey(identity), asStringArray, [])),
   )
 
   // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
@@ -1307,24 +1338,25 @@ function Canvas({
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
-      <TopLeftBar
-        slug={slug}
-        nodeCount={graph.nodes.length}
-        dependentCount={counts.dependent}
-        blockingCount={counts.blocking}
-        onOpenExternal={openExternal}
-      />
-
-      <TopRightBar
-        graph={graph}
-        labelCounts={labelCounts}
-        highlight={highlight}
-        onToggleHighlight={toggleHighlight}
-        onClearHighlight={() => setHighlight(new Set())}
-        onFitView={fitView}
-        onShare={share}
-        sharing={sharing}
-        onAskAgain={onAskAgain}
+      <TopChrome
+        identity={{
+          slug,
+          nodeCount: graph.nodes.length,
+          dependentCount: counts.dependent,
+          blockingCount: counts.blocking,
+          onOpenExternal: openExternal,
+        }}
+        tools={{
+          graph,
+          labelCounts,
+          highlight,
+          onToggleHighlight: toggleHighlight,
+          onClearHighlight: () => setHighlight(new Set()),
+          onFitView: fitView,
+          onShare: share,
+          sharing,
+          onAskAgain,
+        }}
       />
 
       <SelectionBar
@@ -1381,7 +1413,7 @@ function GraphView({
 }) {
   const [attempt, setAttempt] = useState(0)
   const [note, setNote] = useState<string | null>(null)
-  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, false))
+  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, asBoolean, false))
 
   useEffect(() => {
     writeStored(SHOW_CLOSED_KEY, showClosed)

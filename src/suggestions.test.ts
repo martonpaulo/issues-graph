@@ -49,6 +49,32 @@ describe('recentTargets', () => {
     store.set('issue-graph:recent', JSON.stringify(['a/one', 'not a slug']))
     expect(recentTargets()).toEqual(['a/one'])
   })
+
+  /* The list is written by this build but read by every later one, and it is editable by hand.
+     A value that is not a list of strings has to be ignored here, because the caller maps over
+     what comes back. */
+
+  it('offers nothing when the stored list is not an array', () => {
+    store.set('issue-graph:recent', JSON.stringify({ 0: 'a/one' }))
+    expect(recentTargets()).toEqual([])
+  })
+
+  it('offers nothing when the stored array holds something other than strings', () => {
+    store.set('issue-graph:recent', JSON.stringify(['a/one', { owner: 'b', repo: 'two' }]))
+    expect(recentTargets()).toEqual([])
+  })
+
+  it('offers nothing rather than throwing on stored text that is not JSON', () => {
+    store.set('issue-graph:recent', 'a/one')
+    expect(recentTargets()).toEqual([])
+  })
+
+  it('replaces a list of the wrong shape on the next write instead of failing', () => {
+    store.set('issue-graph:recent', JSON.stringify('a/one'))
+    remember('b/two')
+
+    expect(recentTargets()).toEqual(['b/two'])
+  })
 })
 
 describe('mergeSuggestions', () => {

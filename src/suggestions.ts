@@ -1,5 +1,5 @@
 import { parseTargetInput, slugOf, type RepoTarget } from './route'
-import { readStored, writeStored } from './storage'
+import { asStringArray, readStored, writeStored } from './storage'
 
 const RECENT_KEY = 'issue-graph:recent'
 const RECENT_LIMIT = 6
@@ -7,7 +7,9 @@ const RECENT_LIMIT = 6
 const SUGGESTION_LIMIT = 8
 
 export function recentTargets(): string[] {
-  return readStored<string[]>(RECENT_KEY, []).filter((slug) => parseTargetInput(slug) !== null)
+  return readStored(RECENT_KEY, asStringArray, []).filter(
+    (slug) => parseTargetInput(slug) !== null,
+  )
 }
 
 export function rememberTarget(target: RepoTarget): void {

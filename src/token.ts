@@ -1,4 +1,4 @@
-import { clearStored, readStored, writeStored } from './storage'
+import { asString, clearStored, readStored, writeStored } from './storage'
 
 /**
  * The viewer's own GitHub token.
@@ -18,8 +18,7 @@ const TOKEN_KEY = 'issue-graph:token'
 
 /** The stored token, or an empty string when none is set or storage cannot be read. */
 export function readToken(): string {
-  const stored = readStored<unknown>(TOKEN_KEY, '')
-  return typeof stored === 'string' ? stored.trim() : ''
+  return readStored(TOKEN_KEY, asString, '').trim()
 }
 
 /**
