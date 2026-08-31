@@ -889,12 +889,16 @@ function ShareResult({ outcome, onClose }: { outcome: ShareOutcome; onClose: () 
 function Canvas({
   graph,
   slug,
+  identity,
   savedCopy,
   snapshot,
   onAskAgain,
 }: {
   graph: IssueGraph
+  /** The repository as the reader spelled it, for the bar, the link and the accessible name. */
   slug: string
+  /** The same repository as one key, for the hidden cards and the shared link. */
+  identity: string
   savedCopy: SavedCopyProvenance | null
   snapshot: SnapshotView
   /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
@@ -908,19 +912,19 @@ function Canvas({
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState<ShareOutcome | null>(null)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(readStored<string[]>(hiddenKey(slug), [])),
+    () => new Set(readStored<string[]>(hiddenKey(identity), [])),
   )
 
   // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
   // costs requests. Nothing here is ever written back to GitHub.
   useEffect(() => {
-    writeStored(hiddenKey(slug), [...hidden])
-  }, [slug, hidden])
+    writeStored(hiddenKey(identity), [...hidden])
+  }, [identity, hidden])
 
   const share = useCallback(() => {
     setSharing(true)
     setShared(null)
-    void buildSnapshotUrl(slug, snapshot, window.location.origin, BASE)
+    void buildSnapshotUrl(identity, snapshot, window.location.origin, BASE)
       .then(async (link): Promise<ShareOutcome> => {
         if (link.kind !== 'ready') return link
         try {
@@ -937,7 +941,7 @@ function Canvas({
         setShared(outcome)
         setSharing(false)
       })
-  }, [slug, snapshot])
+  }, [identity, snapshot])
 
   const selectIssue = useCallback((id: string, additive: boolean) => {
     setSelected((current) => nextIssueSelection(current, id, additive))
@@ -1266,12 +1270,16 @@ function GraphLoad({
   onOpen: (target: RepoTarget) => void
 }) {
   const { token } = useTokenState()
-  // The canonical spelling, because everything below is a key: the saved copy, the hidden cards,
-  // and the repository a shared link claims to hold. Keying those on what the reader typed forks
-  // one repository's state across its spellings. Displayed copy keeps `slugOf`.
-  const slug = canonicalSlugOf(target)
+  // Two spellings of one repository, and they are not interchangeable.
+  //
+  // `identity` keys everything stored or matched — the saved copy, the hidden cards, the
+  // repository a shared link claims to hold — because keying those on what the reader typed forks
+  // one repository's state across its spellings. `slug` is what the reader typed, and it is what
+  // the page says back to them: the bar, the repository link, the prefilled input, the copy.
+  const identity = canonicalSlugOf(target)
+  const slug = slugOf(target)
   // Read once per mount: the gate has to describe a copy that does not change under it.
-  const [cached] = useState<CachedGraph | null>(() => readCache(slug))
+  const [cached] = useState<CachedGraph | null>(() => readCache(identity))
   // Read once per mount, for the same reason as the saved copy: neither may change under the page
   // it produced. A snapshot in the fragment opens straight into the drawing, skipping the gate —
   // there is nothing to weigh, because drawing it costs nothing.
@@ -1329,7 +1337,7 @@ function GraphLoad({
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     }
 
-    void readSnapshot(fragment, slug)
+    void readSnapshot(fragment, identity)
       .then(async (read) => {
         if (cancelled) return
         if (read.kind !== 'snapshot') {
@@ -1364,7 +1372,7 @@ function GraphLoad({
     return () => {
       cancelled = true
     }
-  }, [sharedLink, fragment, slug, target])
+  }, [sharedLink, fragment, identity, target])
 
   /**
    * A load already in flight carries the token it started with: `LoadOptions` is built once, so
@@ -1436,7 +1444,7 @@ function GraphLoad({
           if (controller.signal.aborted) return
           if (result.ok) {
             rememberTarget(target)
-            writeCache(slug, result.data)
+            writeCache(identity, result.data)
             setPhase({ kind: 'drawing' })
             // Read from GitHub just now, so the payloads may name the repository they came from.
             const graph = await buildGraph(result.data, target, {
@@ -1472,7 +1480,7 @@ function GraphLoad({
           })
         })
     },
-    [target, slug, token, onReload],
+    [target, identity, token, onReload],
   )
 
   const drawSavedCopy = useCallback(
@@ -1500,9 +1508,10 @@ function GraphLoad({
     return (
       <ReactFlowProvider>
         <Canvas
-          key={`${slug}:${showClosed}`}
+          key={`${identity}:${showClosed}`}
           graph={phase.graph}
           slug={slug}
+          identity={identity}
           savedCopy={phase.savedCopy}
           snapshot={phase.snapshot}
           onAskAgain={() => onReload()}
