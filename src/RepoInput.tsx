@@ -15,8 +15,21 @@ import { mergeSuggestions } from './suggestions'
 
 /** Long enough that a word typed at speed costs one search, not one per keystroke. */
 const DEBOUNCE_MS = 350
-/** The blur has to outlive the click that caused it, or the option is gone before it can be chosen. */
-const BLUR_GRACE_MS = 120
+
+/** The one wording of the failure, so the message and the test that reads it cannot drift apart. */
+export const INVALID_TARGET = 'Name the repository as owner/repo — the owner is never assumed.'
+
+/**
+ * What a validation failure adds to the input: the invalid state, and the description that says
+ * why. Both are absent while the value is acceptable, so a corrected value leaves nothing behind
+ * for a screen reader to announce.
+ */
+export function describeValidation(
+  error: string | null,
+  errorId: string,
+): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
+  return error ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
+}
 
 /**
  * The two suggestion sources merged for the text currently typed: repositories opened before, and
@@ -50,40 +63,67 @@ function useRepoSuggestions(typed: string, token: string): string[] {
 }
 
 /**
+ * Where a key press leaves the highlighted option: the arrows wrap in both directions, Escape
+ * gives up the highlight, and every other key leaves it alone. `null` means the key was not one
+ * the listbox owns, so the event keeps its default behavior.
+ */
+export function nextActiveOption(
+  key: string,
+  active: number,
+  count: number,
+): number | null {
+  if (key === 'Escape') return -1
+  if (count === 0) return null
+  if (key === 'ArrowDown') return (active + 1) % count
+  if (key === 'ArrowUp') return active <= 0 ? count - 1 : active - 1
+  return null
+}
+
+/**
+ * The option a submit would take, or -1 when the typed text stands on its own.
+ *
+ * A choice exists only while the options it was made among are on screen. Leaving the field
+ * dismisses the popup and the highlight with it, so a submit that happens later cannot act on a
+ * choice the user has moved on from — and an index past the end, whose suggestion list moved under
+ * it, is no choice either. What keeps the `Open` button from destroying the choice it is meant to
+ * act on is that pressing it never blurs the input; see the button's `onMouseDown`.
+ */
+export function chosenSuggestion(active: number, count: number, visible: boolean): number {
+  return visible && active >= 0 && active < count ? active : -1
+}
+
+/**
  * The open/closed and highlighted-option state of the listbox, with the keyboard contract a
- * combobox owes: arrows wrap through the options, Escape closes without choosing, and the close
- * on blur is delayed so a click on an option still lands.
+ * combobox owes: arrows wrap through the options and Escape closes without choosing. Focus never
+ * leaves the input for a press on an option, so the popup cannot close before that click lands.
  */
 function useComboboxNavigation(count: number) {
   const [open, setOpen] = useState(false)
   const [active, setActive] = useState(-1)
-  const blurTimer = useRef<number | undefined>(undefined)
-
-  useEffect(() => () => window.clearTimeout(blurTimer.current), [])
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      if (event.key === 'ArrowDown' && count > 0) {
-        event.preventDefault()
-        setOpen(true)
-        setActive((index) => (index + 1) % count)
-      } else if (event.key === 'ArrowUp' && count > 0) {
-        event.preventDefault()
-        setOpen(true)
-        setActive((index) => (index <= 0 ? count - 1 : index - 1))
-      } else if (event.key === 'Escape') {
+      const next = nextActiveOption(event.key, active, count)
+      if (next === null) return
+
+      if (event.key === 'Escape') {
         setOpen(false)
-        setActive(-1)
+      } else {
+        event.preventDefault()
+        setOpen(true)
       }
+      setActive(next)
     },
-    [count],
+    [active, count],
   )
 
   const show = useCallback(() => setOpen(true), [])
   const close = useCallback(() => setOpen(false), [])
   const reset = useCallback(() => setActive(-1), [])
-  const onBlur = useCallback(() => {
-    blurTimer.current = window.setTimeout(() => setOpen(false), BLUR_GRACE_MS)
+  /** Leaving the field abandons the popup and the highlight together, so neither goes stale. */
+  const dismiss = useCallback(() => {
+    setOpen(false)
+    setActive(-1)
   }, [])
 
   const visible = open && count > 0
@@ -91,18 +131,17 @@ function useComboboxNavigation(count: number) {
   return {
     active,
     visible,
-    /** The option a submit would take, or -1 when the typed text stands on its own. */
-    chosen: visible && active >= 0 ? active : -1,
+    chosen: chosenSuggestion(active, count, visible),
     setActive,
     show,
     close,
     reset,
+    dismiss,
     onKeyDown,
-    onBlur,
   }
 }
 
-function SuggestionList({
+export function SuggestionList({
   listId,
   suggestions,
   active,
@@ -118,15 +157,22 @@ function SuggestionList({
   return (
     <ul className="repoinput__list" id={listId} role="listbox" aria-label="Repository suggestions">
       {suggestions.map((slug, index) => (
-        <li key={slug} id={`${listId}-${index}`} role="option" aria-selected={index === active}>
-          <button
-            type="button"
-            className={`repoinput__option${index === active ? ' is-active' : ''}`}
-            onMouseEnter={() => onHover(index)}
-            onClick={() => onChoose(slug)}
-          >
-            {slug}
-          </button>
+        // The option is the whole list item: a focusable descendant would be a second widget
+        // inside a role the listbox pattern reserves for one.
+        // https://www.w3.org/WAI/ARIA/apg/patterns/listbox/
+        <li
+          key={slug}
+          id={`${listId}-${index}`}
+          role="option"
+          aria-selected={index === active}
+          className={`repoinput__option${index === active ? ' is-active' : ''}`}
+          // Keeping the press from reaching the document is what keeps focus on the input, so the
+          // option is still mounted when the click arrives and no timer has to outlive a blur.
+          onMouseDown={(event) => event.preventDefault()}
+          onMouseEnter={() => onHover(index)}
+          onClick={() => onChoose(slug)}
+        >
+          {slug}
         </li>
       ))}
     </ul>
@@ -150,6 +196,8 @@ export function RepoInput({
   const [value, setValue] = useState(initial)
   const [error, setError] = useState<string | null>(null)
   const listId = useId()
+  const errorId = `${listId}-error`
+  const inputRef = useRef<HTMLInputElement>(null)
 
   const typed = value.trim()
   // Opening the repository already open does nothing, so the control that would do it is off.
@@ -162,7 +210,10 @@ export function RepoInput({
     (raw: string) => {
       const target = parseTargetInput(raw)
       if (!target) {
-        setError('Name the repository as owner/repo — the owner is never assumed.')
+        setError(INVALID_TARGET)
+        // The message describes the input, so the input is where the reading has to be, whether
+        // the submit came from the button or from Enter.
+        inputRef.current?.focus()
         return
       }
       setError(null)
@@ -186,6 +237,7 @@ export function RepoInput({
         <label className="repoinput__field">
           <Icon name="search" />
           <input
+            ref={inputRef}
             className="repoinput__input"
             value={value}
             placeholder="owner/repo"
@@ -194,23 +246,35 @@ export function RepoInput({
             aria-expanded={list.visible}
             aria-controls={listId}
             aria-autocomplete="list"
-            aria-activedescendant={list.active >= 0 ? `${listId}-${list.active}` : undefined}
+            // Only while the options are on screen: the highlight outlives the popup so a submit
+            // can still act on it, but an id that is no longer rendered is not something to point
+            // a screen reader at.
+            aria-activedescendant={
+              list.visible && list.active >= 0 ? `${listId}-${list.active}` : undefined
+            }
+            {...describeValidation(error, errorId)}
             autoComplete="off"
             spellCheck={false}
             autoFocus={initial.length === 0}
             onChange={(event) => {
               setValue(event.target.value)
+              setError(null)
               list.reset()
               list.show()
             }}
             onFocus={list.show}
-            onBlur={list.onBlur}
+            onBlur={list.dismiss}
             onKeyDown={list.onKeyDown}
           />
         </label>
         <button
           className="button button--primary"
           type="submit"
+          // The press must not blur the input: a blur would dismiss the popup, and with it the
+          // highlighted option, in the render before this button's own submit event arrived. Same
+          // remedy as the options use, for the same reason — the input stays the focus owner, so
+          // there is no ordering between a close and a submit to get wrong.
+          onMouseDown={(event) => event.preventDefault()}
           disabled={typed.length === 0 || unchanged}
         >
           Open
@@ -230,7 +294,11 @@ export function RepoInput({
         />
       )}
 
-      {error && <p className="notice notice--error">{error}</p>}
+      {error && (
+        <p className="notice notice--error" id={errorId} role="alert">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
