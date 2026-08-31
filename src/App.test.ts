@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
+  abortOnTokenChange,
   App,
   budgetParts,
   decideSavedCopyOpen,
@@ -263,5 +264,58 @@ describe('what a token change interrupts', () => {
     expect(stopsForTokenChange('gate')).toBe(false)
     expect(stopsForTokenChange('ready')).toBe(false)
     expect(stopsForTokenChange('failed')).toBe(false)
+  })
+})
+
+/**
+ * The abort is what actually stops requests carrying a credential the viewer has replaced, so it
+ * is worth proving on its own: the component's effect is one call to this.
+ */
+describe('stopping a load whose token is gone', () => {
+  function active(): { current: AbortController | null } {
+    return { current: new AbortController() }
+  }
+
+  it('aborts what is in flight and remembers the token that replaced it', () => {
+    const carried = { current: 'old' }
+    const controller = active()
+
+    expect(abortOnTokenChange(carried, 'new', controller)).toBe(true)
+    expect(controller.current?.signal.aborted).toBe(true)
+    expect(carried.current).toBe('new')
+  })
+
+  it('aborts when the token is removed, which is the case that leaks a credential', () => {
+    const carried = { current: 'a-token' }
+    const controller = active()
+
+    expect(abortOnTokenChange(carried, '', controller)).toBe(true)
+    expect(controller.current?.signal.aborted).toBe(true)
+  })
+
+  it('leaves an unchanged token alone, so an unrelated render cannot stop a load', () => {
+    const carried = { current: 'same' }
+    const controller = active()
+
+    expect(abortOnTokenChange(carried, 'same', controller)).toBe(false)
+    expect(controller.current?.signal.aborted).toBe(false)
+  })
+
+  it('aborts once, not on every call after the change', () => {
+    const carried = { current: 'old' }
+    const first = active()
+    abortOnTokenChange(carried, 'new', first)
+
+    const second = active()
+    expect(abortOnTokenChange(carried, 'new', second)).toBe(false)
+    expect(second.current?.signal.aborted).toBe(false)
+  })
+
+  it('does not fail when nothing is in flight', () => {
+    const carried = { current: 'old' }
+    const nothing = { current: null }
+
+    expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
+    expect(carried.current).toBe('new')
   })
 })

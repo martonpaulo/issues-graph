@@ -1078,6 +1078,25 @@ export function stopsForTokenChange(kind: Phase['kind']): boolean {
   return kind === 'listing' || kind === 'confirm' || kind === 'resolving' || kind === 'drawing'
 }
 
+/**
+ * Aborts whatever is in flight when the token it was started with is no longer the current one,
+ * and records the token the next load will carry.
+ *
+ * The comparison lives in a ref rather than in state because the render-phase block below
+ * synchronizes its own copy before any effect commits: an effect comparing against that state
+ * would always find the two already equal and would never abort. Returns whether it aborted.
+ */
+export function abortOnTokenChange(
+  carried: { current: string },
+  token: string,
+  active: { current: AbortController | null },
+): boolean {
+  if (carried.current === token) return false
+  carried.current = token
+  active.current?.abort()
+  return true
+}
+
 function GraphLoad({
   target,
   note,
@@ -1122,11 +1141,14 @@ function GraphLoad({
    * removed, and the budget on screen would describe an authentication state the load no longer
    * has. Stopping it is the only reading of "takes effect on the next request" that is true.
    */
-  const [loadToken, setLoadToken] = useState(token)
+  const carriedToken = useRef(token)
+  const [shownToken, setShownToken] = useState(token)
   const [stopped, setStopped] = useState<string | null>(null)
 
-  if (loadToken !== token) {
-    setLoadToken(token)
+  // What the page shows next. The abort itself is the effect below, because stopping a request is
+  // a side effect and this block has to stay a pure state adjustment.
+  if (shownToken !== token) {
+    setShownToken(token)
     if (stopsForTokenChange(phase.kind)) {
       setPhase({ kind: 'gate', status: null, checking: true })
       setStopped(
@@ -1137,16 +1159,18 @@ function GraphLoad({
     }
   }
 
-  // Aborting is what actually stops the requests; the state above only decides what is shown.
+  // Aborting is what actually stops the requests. Keyed on the token alone, and comparing against
+  // a ref, so the state adjustment above cannot hide the change from it.
   useEffect(() => {
-    if (loadToken !== token) abort.current?.abort()
-  }, [loadToken, token])
+    abortOnTokenChange(carriedToken, token, abort)
+  }, [token])
 
   const start = useCallback(
     (includeClosed: boolean) => {
       abort.current?.abort()
       const controller = new AbortController()
       abort.current = controller
+      carriedToken.current = token
       setStopped(null)
       setPhase({ kind: 'listing' })
 
