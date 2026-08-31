@@ -7,7 +7,16 @@
  * route is entered. Keep every graph-side import inside `GraphView.tsx`: one eager import of it
  * from here or from `Shell.tsx` folds it back into the landing chunk.
  */
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  Component,
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from 'react'
 
 import {
   BASE,
@@ -26,7 +35,36 @@ import {
 } from './route'
 import { readToken, writeToken } from './token'
 
+interface RouteProps {
+  target: RepoTarget
+  onOpen: (target: RepoTarget) => void
+}
+
 const GraphView = lazy(() => import('./GraphView'))
+
+/**
+ * Keeps a failed graph chunk from taking the page down with it.
+ *
+ * The import happens after the document is already open, so it can fail long after a successful
+ * load: a deployment replaces the hashed assets this document names, or the request simply drops.
+ * React unmounts the whole tree at an uncaught render error, and the reader is left with a blank
+ * page and nothing to act on, which is worse than the failure itself.
+ * https://react.dev/reference/react/Component#static-getderivedstatefromerror
+ */
+export class GraphBoundary extends Component<
+  { fallback: ReactNode; children?: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+
+  render(): ReactNode {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
 
 /**
  * What stands in while the graph chunk is fetched. It is the same shell the repository route
@@ -34,12 +72,44 @@ const GraphView = lazy(() => import('./GraphView'))
  * put, and only the section underneath them changes. On a fast connection the chunk is usually
  * already there and this is never painted.
  */
-function GraphPending({ target, onOpen }: { target: RepoTarget; onOpen: (target: RepoTarget) => void }) {
+function GraphPending({ target, onOpen }: RouteProps) {
   return (
     <Start initial={slugOf(target)} onOpen={onOpen}>
       <p className="notice" role="status">
         Loading the graph…
       </p>
+    </Start>
+  )
+}
+
+/**
+ * What the reader gets when it never arrives: the same shell again, what went wrong, and the one
+ * action that fixes it.
+ *
+ * Reloading, and not an in-place retry. A failed module fetch is recorded in the document's module
+ * map, so importing the same URL again resolves to that recorded failure rather than a new
+ * request; a fresh `React.lazy` does not change the URL and so does not change the answer. Only a
+ * new document clears the map — and it is also what picks up the current asset names after a
+ * deployment replaced them, which is the likeliest reason the chunk was missing.
+ * https://html.spec.whatwg.org/multipage/webappapis.html#module-map
+ */
+export function GraphUnavailable({ target, onOpen }: RouteProps) {
+  return (
+    <Start initial={slugOf(target)} onOpen={onOpen}>
+      <p className="notice notice--error" role="alert">
+        The graph could not be loaded. The page may have been open while a new version was
+        deployed, or the request failed on the way. Nothing was read from GitHub, so no budget was
+        spent.
+      </p>
+      <div className="stage__actions">
+        <button
+          className="button button--primary"
+          type="button"
+          onClick={() => window.location.reload()}
+        >
+          Reload the page
+        </button>
+      </div>
     </Start>
   )
 }
@@ -98,13 +168,15 @@ export function App() {
     <TokenContext.Provider value={tokenState}>
       <OpenExternalContext.Provider value={openExternal}>
         {route.kind === 'graph' ? (
-          <Suspense fallback={<GraphPending target={route.target} onOpen={openTarget} />}>
-            <GraphView
-              key={`${slugOf(route.target)}:${hashNav}`}
-              target={route.target}
-              onOpen={openTarget}
-            />
-          </Suspense>
+          <GraphBoundary fallback={<GraphUnavailable target={route.target} onOpen={openTarget} />}>
+            <Suspense fallback={<GraphPending target={route.target} onOpen={openTarget} />}>
+              <GraphView
+                key={`${slugOf(route.target)}:${hashNav}`}
+                target={route.target}
+                onOpen={openTarget}
+              />
+            </Suspense>
+          </GraphBoundary>
         ) : (
           <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
         )}

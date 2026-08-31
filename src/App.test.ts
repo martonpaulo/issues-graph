@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { App } from './App'
+import { App, GraphBoundary, GraphUnavailable } from './App'
 
 /**
  * Installs the browser globals the router reads, for one pathname and fragment.
@@ -85,5 +85,48 @@ describe('the lazy boundary itself', () => {
     }
 
     expect(readFileSync('src/App.tsx', 'utf8')).toContain("import('./GraphView')")
+  })
+})
+
+describe('when the graph chunk never arrives', () => {
+  /**
+   * The failure is not hypothetical: the import runs after the document is open, so a deployment
+   * that replaces the hashed assets this page names turns every later attempt into a 404, and a
+   * dropped request does the same for one reader.
+   */
+  it('answers a render failure with the fallback instead of the tree', () => {
+    expect(GraphBoundary.getDerivedStateFromError()).toEqual({ failed: true })
+
+    const boundary = new GraphBoundary({
+      fallback: createElement('p', null, 'the fallback'),
+      children: createElement('p', null, 'the graph'),
+    })
+
+    expect(renderToStaticMarkup(boundary.render())).toContain('the graph')
+    boundary.state = GraphBoundary.getDerivedStateFromError()
+    expect(renderToStaticMarkup(boundary.render())).toContain('the fallback')
+  })
+
+  it('keeps the shell, says what happened, and offers the way out', () => {
+    const html = atPath('/dependencies/acme/app', () =>
+      renderToStaticMarkup(
+        createElement(GraphUnavailable, {
+          target: { owner: 'acme', repo: 'app' },
+          onOpen: () => {},
+        }),
+      ),
+    )
+
+    // The heading and the repository field survive the failure, so the reader is never left with
+    // a blank page and no way to reach another repository.
+    expect(html).toContain('Issue dependencies')
+    expect(html).toContain('acme/app')
+    expect(html).toContain('role="alert"')
+    expect(html).toContain('Reload the page')
+    // No in-place retry: the document's module map has already recorded the failed fetch, so a
+    // second import of the same URL answers from that record instead of asking again.
+    expect(html).not.toContain('Try again')
+    // Nothing was fetched, so the reader should not be left wondering what it cost.
+    expect(html).toContain('no budget was spent')
   })
 })
