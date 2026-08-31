@@ -21,6 +21,9 @@ import {
   failureText,
   graphBounds,
   nextIssueSelection,
+  nextTrapIndex,
+  overlayKeyAction,
+  popupTriggerProps,
   SelectionBar,
   TopChrome,
 } from './App'
@@ -603,6 +606,16 @@ describe('top chrome layout', () => {
     expect(html.indexOf('bar bar--identity')).toBeLessThan(html.indexOf('bar bar--tools'))
   })
 
+  /* The panel is mounted only while it is open, so a closed trigger states the relationship and
+     the state, and names nothing. */
+  it('says on the closed label picker that it opens a panel, and that the panel is shut', () => {
+    const html = chrome('martonpaulo/issues-graph')
+
+    expect(html).toContain('aria-haspopup="dialog"')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('aria-controls')
+  })
+
   it('keeps the whole slug in the accessible name and in a hint however long the name is', () => {
     const html = chrome(longestSlug)
 
@@ -732,5 +745,96 @@ describe('where the focus ring is allowed to show', () => {
 
   it('shows the card icons whenever one of them takes the focus', () => {
     expect(styles).toMatch(/\.card__actions:focus-within[^{]*\{[^}]*opacity: 1/)
+  })
+})
+
+describe('what a key press asks of an open overlay', () => {
+  function press(
+    key: string,
+    modifiers: Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>> = {},
+  ) {
+    return { key, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...modifiers }
+  }
+
+  /* One table for both surfaces: the dialog acts on all three answers, the picker's panel on the
+     first, and neither can end up reading Escape differently from the other. */
+  it('dismisses on Escape and walks the controls on Tab', () => {
+    expect(overlayKeyAction(press('Escape'))).toBe('close')
+    expect(overlayKeyAction(press('Tab'))).toBe('focus-next')
+    expect(overlayKeyAction(press('Tab', { shiftKey: true }))).toBe('focus-previous')
+  })
+
+  it('leaves the browser its own chords, so Ctrl+Tab still changes browser tab', () => {
+    expect(overlayKeyAction(press('Tab', { ctrlKey: true }))).toBeNull()
+    expect(overlayKeyAction(press('Tab', { metaKey: true }))).toBeNull()
+    expect(overlayKeyAction(press('Tab', { altKey: true }))).toBeNull()
+    expect(overlayKeyAction(press('Escape', { metaKey: true }))).toBeNull()
+  })
+
+  it('claims no other key, so what an overlay does not answer reaches the control', () => {
+    for (const key of ['Enter', ' ', 'a', 'f', 'ArrowDown', 'Home']) {
+      expect(overlayKeyAction(press(key)), key).toBeNull()
+    }
+  })
+})
+
+describe('where Tab goes inside an open dialog', () => {
+  it('walks every control in turn and comes back to the first', () => {
+    const walked: number[] = []
+    let at = 0
+    for (let press = 0; press < 3; press += 1) {
+      at = nextTrapIndex(3, at, false)
+      walked.push(at)
+    }
+
+    expect(walked).toEqual([1, 2, 0])
+  })
+
+  it('walks the same ring backwards on Shift+Tab', () => {
+    const walked: number[] = []
+    let at = 0
+    for (let press = 0; press < 3; press += 1) {
+      at = nextTrapIndex(3, at, true)
+      walked.push(at)
+    }
+
+    expect(walked).toEqual([2, 1, 0])
+  })
+
+  /* A press arriving while the focus is still outside — on `<body>`, which the browser reports as
+     no control at all — enters at the end the reader was heading for. */
+  it('enters at the near end when the focus is outside the dialog', () => {
+    expect(nextTrapIndex(3, -1, false)).toBe(0)
+    expect(nextTrapIndex(3, -1, true)).toBe(2)
+  })
+
+  it('re-enters rather than running off the end when the focused control has gone', () => {
+    expect(nextTrapIndex(2, 7, false)).toBe(0)
+    expect(nextTrapIndex(2, 7, true)).toBe(1)
+  })
+
+  it('has nowhere to send a press in a dialog with nothing to focus', () => {
+    expect(nextTrapIndex(0, -1, false)).toBe(-1)
+    expect(nextTrapIndex(0, 0, true)).toBe(-1)
+  })
+})
+
+describe('how a picker declares the panel it opens', () => {
+  it('names the panel while it is open', () => {
+    expect(popupTriggerProps(true, 'panel-1')).toEqual({
+      'aria-haspopup': 'dialog',
+      'aria-expanded': true,
+      'aria-controls': 'panel-1',
+    })
+  })
+
+  /* Pointing at an element that is not in the document says nothing to a screen reader, so a shut
+     picker states only that it has a panel and that the panel is shut. */
+  it('names nothing while it is shut', () => {
+    expect(popupTriggerProps(false, 'panel-1')).toEqual({
+      'aria-haspopup': 'dialog',
+      'aria-expanded': false,
+      'aria-controls': undefined,
+    })
   })
 })
