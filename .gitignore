@@ -17,3 +17,12 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Serena writes a per-checkout index here. It is machine state, and leaving it untracked made
+# every orchestrator worktree look dirty, which blocked AO from reclaiming any of them.
+.serena/
+
+# This project uses npm; package-lock.json is the tracked lockfile. A second lockfile from
+# another package manager resolves different versions without anyone noticing.
+pnpm-lock.yaml
+yarn.lock
