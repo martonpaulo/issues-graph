@@ -1,5 +1,11 @@
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { readStored, writeStored } from './storage'
+import {
+  cacheKey,
+  evictLeastRecent,
+  recordCacheSize,
+  touchRepository,
+} from './retention'
+import { readStored, writeStoredText, type StorageWriteResult } from './storage'
 
 /**
  * A saved copy of one repository's graph data.
@@ -11,8 +17,6 @@ import { readStored, writeStored } from './storage'
  * Only the fields the graph consumes are stored: full GitHub issue payloads run to hundreds of
  * kilobytes and would hit the storage quota within a few repositories.
  */
-
-const KEY_PREFIX = 'issue-graph:cache:'
 
 /**
  * Every field is optional exactly where `IssuePayload` makes it optional, so a copy written before
@@ -214,12 +218,34 @@ export function decodeStoredGraph(value: unknown): StoredGraph | undefined {
 }
 
 export function readCache(slug: string): CachedGraph | null {
-  const stored = readStored(`${KEY_PREFIX}${slug}`, decodeStoredGraph, null)
+  const stored = readStored(cacheKey(slug), decodeStoredGraph, null)
   if (stored === null) return null
 
+  // Reading a copy is using the repository, and the budgets evict on recency: without this, a
+  // repository the reader opens from its saved copy every day still ages out behind ones they
+  // read from GitHub once.
+  touchRepository(slug)
   return { savedAt: new Date(stored.savedAt), data: fromStored(stored) }
 }
 
-export function writeCache(slug: string, data: RepositoryGraphData): void {
-  writeStored(`${KEY_PREFIX}${slug}`, toStored(data, Date.now()))
+/**
+ * Saves the copy, reports whether it was saved, and keeps the browser inside its budgets.
+ *
+ * A full quota is answered by giving up the least recently used repository and trying again,
+ * rather than by giving up on the write. What is surrendered is reconstructible from GitHub and
+ * belongs to a repository nobody has opened lately; what is being written is the one read the
+ * reader just paid for. The loop ends when the write succeeds or when there is nothing left to
+ * surrender, and the caller is told either way.
+ */
+export function writeCache(slug: string, data: RepositoryGraphData): StorageWriteResult {
+  const payload = JSON.stringify(toStored(data, Date.now()))
+  const key = cacheKey(slug)
+
+  let result = writeStoredText(key, payload)
+  while (!result.ok && result.reason === 'quota' && evictLeastRecent(slug)) {
+    result = writeStoredText(key, payload)
+  }
+
+  if (result.ok) recordCacheSize(slug, payload.length)
+  return result
 }
