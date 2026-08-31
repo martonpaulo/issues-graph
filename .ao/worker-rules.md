@@ -51,20 +51,24 @@ The bar is unchanged: no incidental observations, no speculation without evidenc
 tracked, and nothing you finished yourself. `issue-capture` stays the only writer, so the new
 issue is deduplicated and labelled like every other.
 
+
 ## Parking instead of asking
 
 When the run reaches something it cannot settle, park the issue: record the blocker on the issue,
-then **put the question to the owner and wait**. A parked session stays open on purpose, because
-that is what puts it in the board's *needs you* column. Ending cleanly hides it behind an idle
-worker nobody looks at.
+then **put the question to the owner and wait**. A parked session stays open on purpose: an
+unanswered question is what makes its card report **Blocked**. Ending cleanly leaves it reporting
+**Awaiting PR**, which looks exactly like a run that stopped for no reason.
 
 **Ask through your question-asking tool, not in prose.** A decision card written as Markdown is a
 message, and a message ends the turn: the session goes idle and the board shows it as finished.
-Only an unanswered question raised through the tool holds the session in *needs you*. Write the
-card for the record, then raise the same question through the tool.
+Only an unanswered question raised through the tool reports **Blocked**. Write the card for the
+record, then raise the same question through the tool.
 
-- **Blocked on a human choice** — apply `status: needs-decision`, post one comment stating exactly
-  which choice is open and what is already established, then ask the owner and wait.
+- **Blocked on a human choice** — apply `status: needs-decision` **and `in-progress` in the same
+  edit**, post one comment stating exactly which choice is open and what is already established,
+  then ask the owner and wait. The `status:` label is for the owner; `in-progress` is the only name
+  the orchestrator reads, and without it your parked issue is handed to a fresh worker on the next
+  intake sweep, which asks the owner the question you just asked. Read both labels back.
 - **Blocked on a missing phase** — post one comment naming the missing phase, no label change,
   then name it to the owner and wait.
 - **Already delivered** — the requirement is already met on the default branch, by another issue
@@ -81,7 +85,7 @@ Never invent a product decision, a provenance label, or a new `status:` value.
 
 ## Automatic merge
 
-enabled
+Auto-merge: available under the predicates below.
 
 Arm `gh pr merge --auto --merge` only when **all** predicates hold: CI is green on the exact
 current head; an approved review exists from a different model family than the implementer;
@@ -106,9 +110,9 @@ when the issue does not say. The names match Agent Orchestrator's own roles.
 
 | Role | Label | This repository's default |
 | --- | --- | --- |
-| Implementer | `implementer: claude\|codex\|antigravity` | **claude** |
-| Reviewer | `reviewer: claude\|codex\|antigravity` | **codex** |
-| Orchestrator | `orchestrator: claude\|codex\|antigravity` | **codex** |
+| Implementer | `implementer: claude\|codex` | **claude** |
+| Reviewer | `reviewer: claude\|codex` | **codex** |
+| Orchestrator | `orchestrator: claude\|codex` | **codex** |
 
 **The issue outranks the default.** Honour an explicit label even when another pool has more
 headroom; the label is the owner's decision, and quota is a reason to relabel rather than to
