@@ -8,14 +8,13 @@
  * from here or from `Shell.tsx` folds it back into the landing chunk.
  */
 import {
-  Component,
   lazy,
   Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
+  type ComponentType,
 } from 'react'
 
 import {
@@ -40,31 +39,26 @@ interface RouteProps {
   onOpen: (target: RepoTarget) => void
 }
 
-const GraphView = lazy(() => import('./GraphView'))
+type GraphModule = { default: ComponentType<RouteProps> }
 
 /**
- * Keeps a failed graph chunk from taking the page down with it.
+ * Answers a chunk that never arrived with the page that says so, and nothing else.
  *
- * The import happens after the document is already open, so it can fail long after a successful
- * load: a deployment replaces the hashed assets this document names, or the request simply drops.
- * React unmounts the whole tree at an uncaught render error, and the reader is left with a blank
- * page and nothing to act on, which is worse than the failure itself.
- * https://react.dev/reference/react/Component#static-getderivedstatefromerror
+ * The scope is the point. Only the import's own rejection becomes `GraphUnavailable`; a module
+ * that loaded is handed back untouched, so an error thrown later — while a session is running, or
+ * while an already-drawn graph re-renders — still surfaces as itself. Catching those here too
+ * would relabel a real bug as a network problem and promise no GitHub budget was spent when some
+ * already had been.
  */
-export class GraphBoundary extends Component<
-  { fallback: ReactNode; children?: ReactNode },
-  { failed: boolean }
-> {
-  state = { failed: false }
-
-  static getDerivedStateFromError(): { failed: boolean } {
-    return { failed: true }
-  }
-
-  render(): ReactNode {
-    return this.state.failed ? this.props.fallback : this.props.children
+export async function chunkOrUnavailable(chunk: Promise<GraphModule>): Promise<GraphModule> {
+  try {
+    return await chunk
+  } catch {
+    return { default: GraphUnavailable }
   }
 }
+
+const GraphView = lazy(() => chunkOrUnavailable(import('./GraphView')))
 
 /**
  * What stands in while the graph chunk is fetched. It is the same shell the repository route
@@ -83,8 +77,9 @@ function GraphPending({ target, onOpen }: RouteProps) {
 }
 
 /**
- * What the reader gets when it never arrives: the same shell again, what went wrong, and the one
- * action that fixes it.
+ * What the reader gets when the chunk never arrives: the same shell again, what went wrong, and
+ * the one action that fixes it. It renders in place of the graph, so the heading and the
+ * repository field stay where they were and another repository is still reachable.
  *
  * Reloading, and not an in-place retry. A failed module fetch is recorded in the document's module
  * map, so importing the same URL again resolves to that recorded failure rather than a new
@@ -168,15 +163,13 @@ export function App() {
     <TokenContext.Provider value={tokenState}>
       <OpenExternalContext.Provider value={openExternal}>
         {route.kind === 'graph' ? (
-          <GraphBoundary fallback={<GraphUnavailable target={route.target} onOpen={openTarget} />}>
-            <Suspense fallback={<GraphPending target={route.target} onOpen={openTarget} />}>
-              <GraphView
-                key={`${slugOf(route.target)}:${hashNav}`}
-                target={route.target}
-                onOpen={openTarget}
-              />
-            </Suspense>
-          </GraphBoundary>
+          <Suspense fallback={<GraphPending target={route.target} onOpen={openTarget} />}>
+            <GraphView
+              key={`${slugOf(route.target)}:${hashNav}`}
+              target={route.target}
+              onOpen={openTarget}
+            />
+          </Suspense>
         ) : (
           <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
         )}

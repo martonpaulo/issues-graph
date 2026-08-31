@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import { App, GraphBoundary, GraphUnavailable } from './App'
+import { App, chunkOrUnavailable, GraphUnavailable } from './App'
 
 /**
  * Installs the browser globals the router reads, for one pathname and fragment.
@@ -94,17 +94,20 @@ describe('when the graph chunk never arrives', () => {
    * that replaces the hashed assets this page names turns every later attempt into a 404, and a
    * dropped request does the same for one reader.
    */
-  it('answers a render failure with the fallback instead of the tree', () => {
-    expect(GraphBoundary.getDerivedStateFromError()).toEqual({ failed: true })
+  it('answers a rejected import with the page that says so', async () => {
+    const module = await chunkOrUnavailable(Promise.reject(new Error('404')))
 
-    const boundary = new GraphBoundary({
-      fallback: createElement('p', null, 'the fallback'),
-      children: createElement('p', null, 'the graph'),
-    })
+    expect(module.default).toBe(GraphUnavailable)
+  })
 
-    expect(renderToStaticMarkup(boundary.render())).toContain('the graph')
-    boundary.state = GraphBoundary.getDerivedStateFromError()
-    expect(renderToStaticMarkup(boundary.render())).toContain('the fallback')
+  it('leaves a chunk that did load alone, so its own errors stay its own', async () => {
+    // A failure after this point — a session that throws, a re-render of a drawn graph — is a bug
+    // in the graph, not a missing chunk. Relabelling it as one would hide it behind copy about
+    // deployments and a promise that no GitHub budget was spent, which by then may be false.
+    const Graph = () => createElement('p', null, 'the graph')
+    const module = await chunkOrUnavailable(Promise.resolve({ default: Graph }))
+
+    expect(module.default).toBe(Graph)
   })
 
   it('keeps the shell, says what happened, and offers the way out', () => {
