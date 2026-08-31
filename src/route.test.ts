@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { parseRoute, parseTargetInput, pathForTarget, segmentsOf, slugOf } from './route'
+import {
+  parseRoute,
+  parseTargetInput,
+  pathForTarget,
+  segmentsOf,
+  slugOf,
+  titleForRoute,
+} from './route'
 
 const BASE = '/issues-graph/'
 
@@ -96,5 +103,43 @@ describe('parseTargetInput', () => {
     expect(parseTargetInput('a/b/c')).toBeNull()
     expect(parseTargetInput('bad name')).toBeNull()
     expect(parseTargetInput('tabelo')).toBeNull()
+  })
+})
+
+describe('titleForRoute', () => {
+  const titleAt = (pathname: string) => titleForRoute(parseRoute(pathname, BASE))
+
+  it('names the product on the index', () => {
+    expect(titleAt(BASE)).toBe('Issue dependencies')
+  })
+
+  it('leads with the repository on a graph route', () => {
+    expect(titleAt(`${BASE}dependencies/acme/app`)).toBe('acme/app · Issue dependencies')
+  })
+
+  it('falls back to the index title without echoing a rejected path', () => {
+    const title = titleAt(`${BASE}dependencies/acme/${encodeURIComponent('<img src=x>')}`)
+    expect(title).toBe('Issue dependencies')
+    expect(title).not.toContain('<')
+  })
+
+  it('changes across a navigation sequence, including going back', () => {
+    // The history stack a viewer builds, then walks back through: App derives the route from
+    // `pathname`, which Back and Forward update the same way an in-app link does.
+    const visited = [
+      BASE,
+      `${BASE}dependencies/acme/app`,
+      `${BASE}dependencies/other/repo`,
+      `${BASE}nope`,
+      `${BASE}dependencies/acme/app`,
+    ]
+
+    expect(visited.map(titleAt)).toEqual([
+      'Issue dependencies',
+      'acme/app · Issue dependencies',
+      'other/repo · Issue dependencies',
+      'Issue dependencies',
+      'acme/app · Issue dependencies',
+    ])
   })
 })
