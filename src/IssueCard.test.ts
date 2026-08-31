@@ -30,8 +30,11 @@ function issueNode(overrides: Partial<GraphNode>): GraphNode {
  * `IssueCard` draws `@xyflow/react` handles, which read the flow store, so the provider is what
  * makes a bare render possible at all.
  */
-function renderCard(node: GraphNode, description = 'Issue #30. Blocked by nothing. Blocks nothing.'): string {
-  const data: IssueCardData = {
+function cardData(
+  node: GraphNode,
+  description = 'Issue #30. Blocked by nothing. Blocks nothing.',
+): IssueCardData {
+  return {
     node,
     selected: false,
     hidden: false,
@@ -42,10 +45,19 @@ function renderCard(node: GraphNode, description = 'Issue #30. Blocked by nothin
     onToggleHidden: () => {},
     onOpen: () => {},
   }
+}
 
+function renderCard(node: GraphNode, description?: string): string {
   return renderToStaticMarkup(
-    createElement(ReactFlowProvider, null, createElement(IssueCard, { data } as never)),
+    createElement(ReactFlowProvider, null, createElement(IssueCard, {
+      data: cardData(node, description),
+    } as never)),
   )
+}
+
+/** The ids the cards point their descriptions at, in document order. */
+function describedIds(html: string): string[] {
+  return [...html.matchAll(/aria-describedby="([^"]*)"/g)].map((match) => match[1])
 }
 
 function accessibleNames(html: string): string[] {
@@ -102,9 +114,56 @@ describe('IssueCard', () => {
       'Issue #30. Blocked by #23 and #24. Blocks #31.',
     )
 
-    expect(html).toContain('aria-describedby="card-deps-owner-app-30"')
+    // The reference has to resolve, whatever the id is spelled as.
+    const [described] = describedIds(html)
+    expect(described).toBeDefined()
     expect(html).toContain(
-      '<span class="sr-only" id="card-deps-owner-app-30">Issue #30. Blocked by #23 and #24. Blocks #31.</span>',
+      `<span class="sr-only" id="${described}">Issue #30. Blocked by #23 and #24. Blocks #31.</span>`,
+    )
+  })
+
+  /**
+   * `acme/foo-bar#1` and `acme-foo/bar#1` are both identities GitHub can produce, and any id
+   * folding `/` and `#` into a safe character maps them onto one string. Two cards sharing an id
+   * would leave one described by the other's blockers, which is worse than describing neither.
+   */
+  it('gives two cards distinct ids even where their identities fold together', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ReactFlowProvider,
+        null,
+        createElement(IssueCard, {
+          data: cardData(
+            issueNode({ id: 'acme/foo-bar#1', number: 1, repo: 'acme/foo-bar' }),
+            'Issue #1. Blocked by nothing. Blocks nothing.',
+          ),
+        } as never),
+        createElement(IssueCard, {
+          data: cardData(
+            issueNode({
+              id: 'acme-foo/bar#1',
+              number: 1,
+              repo: 'acme-foo/bar',
+              external: true,
+              repoLabel: 'acme-foo/bar',
+              state: null,
+            }),
+            'Issue acme-foo/bar#1. Blocked by nothing. Blocks #1.',
+          ),
+        } as never),
+      ),
+    )
+
+    const ids = describedIds(html)
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
+
+    // And each reference still resolves to its own card's sentence.
+    expect(html).toContain(
+      `<span class="sr-only" id="${ids[0]}">Issue #1. Blocked by nothing. Blocks nothing.</span>`,
+    )
+    expect(html).toContain(
+      `<span class="sr-only" id="${ids[1]}">Issue acme-foo/bar#1. Blocked by nothing. Blocks #1.</span>`,
     )
   })
 })
