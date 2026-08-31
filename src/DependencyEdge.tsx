@@ -5,7 +5,46 @@ import type { Point } from './graph'
 /** How far a corner is rounded off: enough to read as a turn, not enough to become a curve. */
 export const EDGE_RADIUS = 12
 
-export type DependencyEdgeType = Edge<{ points?: Point[] }, 'dependency'>
+export type DependencyEdgeType = Edge<{ points?: Point[]; inverted?: boolean }, 'dependency'>
+
+/** Half the width of the head across its base, and how far it reaches back along the line. */
+const ARROW_HALF_WIDTH = 4.5
+const ARROW_LENGTH = 9
+
+/**
+ * A filled triangle sitting on the last point, pointing the way the line arrives.
+ *
+ * Drawn here rather than through React Flow's shared `markerEnd` because those markers live in one
+ * `<defs>` outside every edge, so the only way to colour one differently is to bake the colour into
+ * its id — which puts a `#` inside the `url(#…)` that references it. This head is part of the edge's
+ * own SVG, so the stylesheet keeps owning the colour, exactly as it does for the line.
+ */
+export function arrowHead(points: Point[]): string {
+  const tip = points[points.length - 1]
+  let from = tip
+  for (let index = points.length - 2; index >= 0; index -= 1) {
+    if (points[index].x !== tip.x || points[index].y !== tip.y) {
+      from = points[index]
+      break
+    }
+  }
+
+  const length = Math.hypot(tip.x - from.x, tip.y - from.y)
+  if (length === 0) return ''
+
+  // Unit vector along the final leg, and its perpendicular.
+  const ux = (tip.x - from.x) / length
+  const uy = (tip.y - from.y) / length
+  const baseX = tip.x - ux * ARROW_LENGTH
+  const baseY = tip.y - uy * ARROW_LENGTH
+
+  return [
+    `M ${tip.x},${tip.y}`,
+    `L ${baseX - uy * ARROW_HALF_WIDTH},${baseY + ux * ARROW_HALF_WIDTH}`,
+    `L ${baseX + uy * ARROW_HALF_WIDTH},${baseY - ux * ARROW_HALF_WIDTH}`,
+    'Z',
+  ].join(' ')
+}
 
 /** An SVG path through the points, with each corner rounded to at most `radius`. */
 export function roundedPath(points: Point[], radius: number): string {
@@ -66,5 +105,12 @@ export function DependencyEdge({
           { x: targetX, y: targetY },
         ]
 
-  return <BaseEdge id={id} path={roundedPath(points, EDGE_RADIUS)} markerEnd={markerEnd} />
+  return (
+    <>
+      <BaseEdge id={id} path={roundedPath(points, EDGE_RADIUS)} markerEnd={markerEnd} />
+      {/* A containment edge the layout had to draw upwards has no position left to say which end
+          is the parent, so it says it with a head. Every other one keeps its bare dashed line. */}
+      {data?.inverted && <path className="edge__arrow" d={arrowHead(points)} />}
+    </>
+  )
 }
