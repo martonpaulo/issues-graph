@@ -60,6 +60,14 @@ function describedIds(html: string): string[] {
   return [...html.matchAll(/aria-describedby="([^"]*)"/g)].map((match) => match[1])
 }
 
+/**
+ * What a button's accessible name is computed from: everything between its tags. Clipped text
+ * counts — `.sr-only` hides from the eye, not from the accessibility tree.
+ */
+function buttonContents(html: string): string[] {
+  return [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((match) => match[1])
+}
+
 function accessibleNames(html: string): string[] {
   return [...html.matchAll(/aria-label="([^"]*)"/g)].map((match) => match[1])
 }
@@ -120,6 +128,24 @@ describe('IssueCard', () => {
     expect(html).toContain(
       `<span class="sr-only" id="${described}">Issue #30. Blocked by #23 and #24. Blocks #31.</span>`,
     )
+  })
+
+  /**
+   * A button's name is computed from its contents and `.sr-only` is clipped from view but not
+   * from the accessibility tree, so the sentence inside the button would be announced as part of
+   * the name and then again as the description.
+   */
+  it('describes the card without also naming it that', () => {
+    const html = renderCard(
+      issueNode({}),
+      'Issue #30. Blocked by #23 and #24. Blocks #31.',
+    )
+
+    for (const contents of buttonContents(html)) {
+      expect(contents).not.toContain('Blocked by')
+    }
+    // Still present on the card, just not inside anything that names itself from it.
+    expect(html).toContain('Issue #30. Blocked by #23 and #24. Blocks #31.')
   })
 
   /**

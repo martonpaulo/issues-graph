@@ -66,20 +66,10 @@ function cardClasses(data: IssueCardData): string {
 function CardBody({
   node,
   selected,
-  description,
+  descriptionId,
   onSelect,
-}: Pick<IssueCardData, 'node' | 'selected' | 'description' | 'onSelect'>) {
+}: Pick<IssueCardData, 'node' | 'selected' | 'onSelect'> & { descriptionId: string }) {
   const pressedAt = useRef<{ x: number; y: number } | null>(null)
-  /**
-   * React's own per-instance id rather than one spelled out of `node.id`.
-   *
-   * The node id carries `/` and `#`, and any scheme that folds those into a safe character stops
-   * being injective: `acme/foo-bar#1` and `acme-foo/bar#1` are both identities GitHub can produce
-   * and both collapse to the same string. Two cards sharing a DOM id is not a cosmetic fault —
-   * `aria-describedby` resolves to whichever came first, so one card would be described by the
-   * other card's blockers.
-   */
-  const descriptionId = useId()
 
   return (
     <button
@@ -118,12 +108,6 @@ function CardBody({
         style={{ WebkitLineClamp: node.titleLines, lineClamp: node.titleLines }}
       >
         {node.title}
-      </span>
-
-      {/* The arrows are geometry, and geometry is exactly what a screen reader cannot follow.
-          Hidden rather than drawn: the same fact is already on screen as an edge. */}
-      <span className="sr-only" id={descriptionId}>
-        {description}
       </span>
 
       <span className="card__labels">
@@ -176,6 +160,16 @@ function CardActions({
 export function IssueCard({ data }: NodeProps<IssueNode>) {
   const { node, selected, hidden, description, onSelect, onToggleHidden, onOpen } = data
   const label = issueRef(node)
+  /**
+   * React's own per-instance id rather than one spelled out of `node.id`.
+   *
+   * The node id carries `/` and `#`, and any scheme that folds those into a safe character stops
+   * being injective: `acme/foo-bar#1` and `acme-foo/bar#1` are both identities GitHub can produce
+   * and both collapse to the same string. Two cards sharing a DOM id is not a cosmetic fault —
+   * `aria-describedby` resolves to whichever came first, so one card would be described by the
+   * other card's blockers.
+   */
+  const descriptionId = useId()
 
   return (
     <div className={cardClasses(data)}>
@@ -184,9 +178,18 @@ export function IssueCard({ data }: NodeProps<IssueNode>) {
       <CardBody
         node={node}
         selected={selected}
-        description={description}
+        descriptionId={descriptionId}
         onSelect={onSelect}
       />
+
+      {/* The arrows are geometry, and geometry is exactly what a screen reader cannot follow, so
+          the same fact is written out. Deliberately a sibling of the button rather than a child:
+          `.sr-only` is clipped from view but stays in the accessibility tree, and a button's name
+          is computed from its contents, so inside the button this sentence would land in the name
+          as well as in the description and be announced twice. */}
+      <span className="sr-only" id={descriptionId}>
+        {description}
+      </span>
 
       <CardActions
         node={node}
