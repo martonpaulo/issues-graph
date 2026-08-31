@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  cardLabels,
-  CARD_SLOT_COUNT,
-  hasNamespace,
-  parseLabel,
-  parseLabels,
-  valueOf,
-} from './labels'
+import { cardLabels, CARD_SLOT_COUNT, needsAttention, parseLabel } from './labels'
 
 const label = (name: string) => ({ name, color: 'cccccc' })
 
@@ -121,14 +114,37 @@ describe('cardLabels on a backlog that does not', () => {
   })
 })
 
-describe('hasNamespace and valueOf', () => {
-  it('detects a status label, which is what marks an issue as needing attention', () => {
-    expect(hasNamespace([label('status: needs-decision')], 'status')).toBe(true)
-    expect(hasNamespace([label('effort: L')], 'status')).toBe(false)
+describe('needsAttention', () => {
+  it('recognizes the two values the convention actually defines', () => {
+    expect(needsAttention([label('status: needs-decision')])).toBe(true)
+    expect(needsAttention([label('status: blocked')])).toBe(true)
+    expect(needsAttention([label('Status:Needs-Decision')])).toBe(true)
+    expect(needsAttention([label('effort: L')])).toBe(false)
+    expect(needsAttention([])).toBe(false)
   })
 
-  it('reads a namespace value back', () => {
-    expect(valueOf(parseLabels([label('effort: L')]), 'effort')).toBe('L')
-    expect(valueOf(parseLabels([label('effort: L')]), 'priority')).toBeNull()
+  /**
+   * `status:` is a namespace half of GitHub uses for a board column, and a board column is not an
+   * exception waiting on anybody. Reading the namespace alone showed every issue on such a board
+   * as needing attention, which is the loudest state the card has.
+   */
+  it('says nothing about a repository using the namespace for its board', () => {
+    for (const name of [
+      'status: backlog',
+      'status: accepted',
+      'status: triage',
+      'status: in progress',
+      'status: ready',
+      'status: done',
+    ]) {
+      expect(needsAttention([label(name)])).toBe(false)
+    }
+  })
+
+  it('reads the value on its own terms, not as a prefix of one it knows', () => {
+    expect(needsAttention([label('status: blocked-upstream')])).toBe(false)
+    expect(needsAttention([label('status: not blocked')])).toBe(false)
+    // A bare label is not a namespaced one, whatever it is called.
+    expect(needsAttention([label('blocked')])).toBe(false)
   })
 })

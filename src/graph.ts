@@ -1,6 +1,6 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
 import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
-import { cardLabels, hasNamespace, type CardChip } from './labels'
+import { cardLabels, needsAttention, type CardChip } from './labels'
 import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
@@ -313,8 +313,11 @@ function hasLabel(issue: IssuePayload, name: string): boolean {
  *
  * 1. `in-review` first, because an issue whose change is already written and waiting is the one
  *    error that costs somebody a second implementation of finished work.
- * 2. A `status:` label next. Its description says `in-progress` travels with every one of them, so
- *    the pair means the issue is parked on a human, and parked is the fact worth showing.
+ * 2. A `status:` label whose value this convention defines next. Its description says
+ *    `in-progress` travels with every one of them, so the pair means the issue is parked on a
+ *    human, and parked is the fact worth showing. The value is what is matched, never the
+ *    namespace: `status:` is a namespace half of GitHub uses for board columns, and a repository
+ *    whose issues sit in `status: backlog` is not a repository of issues waiting on somebody.
  * 3. `in-progress` alone: a worker is holding it right now.
  * 4. `blocked_by` counts blockers that are still **open**, while `total_blocked_by` counts open and
  *    closed ones. So `blocked_by > 0` is exactly "has an unfinished blocker", and an issue whose
@@ -331,7 +334,7 @@ export function deriveState(issue: IssuePayload): IssueState {
     return issue.state_reason === 'not_planned' ? 'not-planned' : 'completed'
   }
   if (hasLabel(issue, IN_REVIEW_LABEL)) return 'in-review'
-  if (hasNamespace(issue.labels, 'status')) return 'attention'
+  if (needsAttention(issue.labels)) return 'attention'
   if (hasLabel(issue, IN_PROGRESS_LABEL)) return 'in-progress'
   if ((issue.issue_dependencies_summary?.blocked_by ?? 0) > 0) return 'blocked'
   if (issue.assignees?.length === 0) return 'unassigned'

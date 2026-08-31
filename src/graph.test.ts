@@ -197,8 +197,11 @@ describe('deriveState', () => {
     expect(deriveState(issue({ labels: [{ name: 'in-review', color: '8B949E' }] }))).toBe('in-review')
     // Matched against the whole name, case-insensitively, exactly as the orchestrator matches it.
     expect(deriveState(issue({ labels: [{ name: 'In-Review', color: '8B949E' }] }))).toBe('in-review')
+    // The prefixed name is not the orchestrator's bare label and never becomes `in-review`. It is
+    // not one of the two `status:` values this convention defines either, so it says nothing at
+    // all rather than standing in for a state.
     expect(deriveState(issue({ labels: [{ name: 'status: in-review', color: '8B949E' }] }))).toBe(
-      'attention',
+      'ready',
     )
   })
 
@@ -213,6 +216,40 @@ describe('deriveState', () => {
     expect(deriveState(issue({ labels: [{ name: 'status: blocked', color: '24292F' }] }))).toBe(
       'attention',
     )
+  })
+
+  /**
+   * `status:` is a namespace half of GitHub uses for a board column. Reading the namespace alone
+   * put every issue on such a board into `needs attention` — the loudest state the card has, and
+   * one that means "a person has to decide something" rather than "this sits in a column".
+   */
+  it('reads a foreign board column as the nothing it says', async () => {
+    for (const name of ['status: backlog', 'status: accepted', 'status: triage', 'status: done']) {
+      const labels = [{ name, color: 'ededed' }]
+      expect(deriveState(issue({ labels, assignees: [{ login: 'octocat' }] }))).toBe('ready')
+      expect(deriveState(issue({ labels, assignees: [] }))).toBe('unassigned')
+      expect(
+        deriveState(
+          issue({
+            labels,
+            assignees: [],
+            issue_dependencies_summary: {
+              blocked_by: 1,
+              total_blocked_by: 1,
+              blocking: 0,
+              total_blocking: 0,
+            },
+          }),
+        ),
+      ).toBe('blocked')
+    }
+
+    // And the two values the convention does define still read as parked, from the same payloads.
+    for (const name of ['status: blocked', 'status: needs-decision']) {
+      expect(deriveState(issue({ labels: [{ name, color: 'ededed' }], assignees: [] }))).toBe(
+        'attention',
+      )
+    }
   })
 
   it('separates an unassigned issue from one that is free to start', async () => {
@@ -270,11 +307,14 @@ describe('deriveState', () => {
 })
 
 describe('a card built from a repository this viewer knows nothing about', () => {
+  // `status: backlog` overlaps this backlog's own namespace and means something else entirely,
+  // which is the case a set of labels chosen not to collide would never have caught.
   const arbitrary = [
     { name: 'bug', color: 'd73a4a' },
     { name: 'good first issue', color: '7057ff' },
     { name: 'help wanted', color: '008672' },
     { name: '\u{1F41B} needs repro', color: '000000' },
+    { name: 'status: backlog', color: 'ededed' },
   ]
 
   it('sizes itself for the chips it actually draws', async () => {
@@ -291,8 +331,9 @@ describe('a card built from a repository this viewer knows nothing about', () =>
   })
 
   it('still reads state from GitHub\'s own facts when no label means anything here', () => {
-    // Every taxonomy-derived state is a no-op without its label; what is left is open or closed,
-    // whether a blocker is outstanding, and whether anybody is on it.
+    // Every taxonomy-derived state is a no-op without a label this convention defines — including
+    // the `status:` one, which is matched on its value. What is left is open or closed, whether a
+    // blocker is outstanding, and whether anybody is on it.
     const labels = arbitrary
     expect(deriveState(issue({ labels, assignees: [{ login: 'octocat' }] }))).toBe('ready')
     expect(deriveState(issue({ labels, assignees: [] }))).toBe('unassigned')

@@ -76,12 +76,33 @@ export function parseLabels(labels: LabelPayload[]): ParsedLabel[] {
   return labels.map(parseLabel)
 }
 
-export function hasNamespace(labels: LabelPayload[], namespace: string): boolean {
-  return parseLabels(labels).some((label) => label.namespace === namespace)
-}
+/**
+ * The complete `status:` set this convention defines. `blocked` says the issue waits on something
+ * outside the backlog — an upstream release, a vendor, an access request — and `needs-decision`
+ * says it waits on a human choice evidence cannot settle. There is no third value; absence is the
+ * normal state, and the convention explicitly refuses `status: ready` and anything else that would
+ * turn the label into a board column.
+ *
+ * That closure is the whole reason a card may read this at all. `status:` is a namespace half of
+ * GitHub uses for board columns — `status: backlog`, `status: accepted`, `status: triage` — and
+ * none of those is an exception waiting on anybody.
+ * https://github.com/martonpaulo/skills — `issue-capture/LABELS.md` defines both values.
+ */
+const ATTENTION_STATUSES: ReadonlySet<string> = new Set(['blocked', 'needs-decision'])
 
-export function valueOf(labels: ParsedLabel[], namespace: string): string | null {
-  return labels.find((label) => label.namespace === namespace)?.value ?? null
+/**
+ * Whether the issue is parked, in the sense this backlog's own convention gives that word: it is
+ * waiting on a person, and nothing in the backlog will move it.
+ *
+ * Matched on the value and not on the namespace. Reading `status:` alone claimed far more than the
+ * convention defines, so a repository that uses the namespace for its board showed every issue on
+ * it as needing attention.
+ */
+export function needsAttention(labels: LabelPayload[]): boolean {
+  return parseLabels(labels).some(
+    (label) =>
+      label.namespace === 'status' && ATTENTION_STATUSES.has(label.value.trim().toLowerCase()),
+  )
 }
 
 /**
