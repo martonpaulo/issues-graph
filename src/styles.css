@@ -415,6 +415,20 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
+/* A gap in the data, reported directly under the row that says where the data came from. It
+   borrows the fill and outline `.notice--error` and a blocked card already use, so the reader
+   meets no new colour. Three cues separate it from the muted row above and only one is hue: it
+   is the only thing in the panel drawn as its own box, it is the heavier weight, and it is
+   `--text` rather than `--muted`. In greyscale the box and the weight still read. */
+.info__warn {
+  padding: 4px 7px;
+  color: var(--text);
+  font-weight: 600;
+  background: var(--blocked-fill);
+  border: 1px solid var(--blocked-line);
+  border-radius: 7px;
+}
+
 /* The live region stays mounted with nothing in it, so it must also take up nothing. */
 .said--quiet {
   padding: 0;
