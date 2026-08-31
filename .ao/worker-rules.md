@@ -10,11 +10,32 @@ that works from a bare clone.
 This is an unattended run: `AO_SESSION_ID` is set and nobody is available to answer questions.
 The issue skills' unattended contract applies in full.
 
-- Invoke skills by their exact names: `/issue-implement <n>`, `/issue-plan <n>`. Generic
-  continuation language authorizes nothing.
+- **Start by invoking `/issue-implement <n>` for the assigned issue.** This is the first action of
+  the run, not an option: the issue skills own the preparation gate, the delivery grouping, the
+  publication conventions and the parking protocol, and none of that applies to a run that went
+  straight to editing files. Implementing directly is a contract violation even when the resulting
+  diff is correct.
+- Use the exact skill names. `/issue-implement <n>` and `/issue-plan <n>` carry authorization;
+  generic continuation language carries none.
 - Proceed from delegated planning into implementation for any effort size, and record the
   skipped readback in the pull request body with the exact sentence the unattended contract
   defines.
+
+## Branch naming under the orchestrator
+
+**Every branch starts with `ao/<session-id>/`.** The orchestrator associates a pull request with
+its session by that prefix and by nothing else. A branch named only by the repository's own
+convention is invisible to it: the pull request opens, no review is triggered, and the session sits
+idle looking finished while nothing is watching the PR.
+
+Keep the repository's convention after the prefix, so both hold at once:
+
+```text
+ao/<session-id>/<type>/<agent>/issue-<n>/<slug>
+```
+
+`AO_SESSION_ID` carries the session id. This is not cosmetic: the missing prefix is silent, and the
+only symptom is an idle session with an unreviewed pull request.
 
 ## Parking instead of asking
 
@@ -30,8 +51,8 @@ worker nobody looks at.
 - **Disproven** — the run holds reproducible evidence that the issue's premise is false. Post that
   evidence and close the issue as not planned. This is the one disposition that ends clean, and
   the gate is a command a human can rerun with its output, never an assertion. Anything short of
-  proof is parked. A disproven run also terminates its own session, so the card lands in the
-  board's archive instead of sitting idle among live work.
+  proof is parked. Do not terminate your own session; `skd merge` archives any idle session whose
+  issue is closed and which owns no open pull request.
 
 Never invent a product decision, a provenance label, or a new `status:` value.
 
