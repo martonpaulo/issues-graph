@@ -14,6 +14,11 @@ import { readStored, writeStored } from './storage'
 
 const KEY_PREFIX = 'issue-graph:cache:'
 
+/**
+ * Every field is optional exactly where `IssuePayload` makes it optional, so a copy written before
+ * assignees and sub-issues were read still parses. `version` therefore stays at 1: the shape is a
+ * superset, and an older copy simply derives the states it used to derive.
+ */
 export interface StoredIssue {
   number: number
   title: string
@@ -23,6 +28,9 @@ export interface StoredIssue {
   repository_url: string
   labels: { name: string; color: string }[]
   issue_dependencies_summary?: IssuePayload['issue_dependencies_summary']
+  assignees?: IssuePayload['assignees']
+  sub_issues_summary?: IssuePayload['sub_issues_summary']
+  parent_issue_url?: IssuePayload['parent_issue_url']
 }
 
 export interface StoredGraph {
@@ -51,6 +59,11 @@ function project(issue: IssuePayload): StoredIssue {
     repository_url: issue.repository_url,
     labels: issue.labels.map((label) => ({ name: label.name, color: label.color })),
     issue_dependencies_summary: issue.issue_dependencies_summary,
+    // Only the login: the rest of GitHub's user object is several hundred bytes per issue that
+    // nothing reads, and this projection exists to stay inside a storage quota and a URL length.
+    assignees: issue.assignees?.map((assignee) => ({ login: assignee.login })),
+    sub_issues_summary: issue.sub_issues_summary,
+    parent_issue_url: issue.parent_issue_url,
   }
 }
 

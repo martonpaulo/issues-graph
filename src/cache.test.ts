@@ -145,17 +145,43 @@ describe('writeCache', () => {
 
     expect(Object.keys(stored.issues[0]).sort()).toEqual(
       [
+        'assignees',
         'html_url',
         'issue_dependencies_summary',
         'labels',
         'number',
+        'parent_issue_url',
         'repository_url',
         'state',
         'state_reason',
+        'sub_issues_summary',
         'title',
       ].sort(),
     )
     expect(Object.keys(stored.issues[0].labels[0]).sort()).toEqual(['color', 'name'])
+    // The login and nothing else: GitHub's user object is several hundred bytes per issue that
+    // nothing reads, and this projection is what keeps a copy inside the storage quota.
+    const parent = stored.issues.find((issue: { number: number }) => issue.number === 294)
+    expect(parent.sub_issues_summary).toEqual({ total: 2, completed: 0, percent_completed: 0 })
+    const child = stored.issues.find((issue: { number: number }) => issue.number === 296)
+    expect(child.parent_issue_url).toBe('https://api.github.com/repos/martonpaulo/tabelo/issues/294')
+  })
+
+  it('round-trips a copy written before assignees and sub-issues were read', () => {
+    // `version` stays at 1 because the shape is a superset: an older copy must still parse and
+    // still derive the states it used to derive.
+    const older = issues.map((issue) => {
+      const copy = { ...issue }
+      delete copy.assignees
+      delete copy.sub_issues_summary
+      delete copy.parent_issue_url
+      return copy
+    })
+    writeCache('martonpaulo/tabelo', graph({ issues: older, blockers: new Map() }))
+
+    const read = readCache('martonpaulo/tabelo')!
+    expect(read.data.issues[0].assignees).toBeUndefined()
+    expect(read.data.issues).toHaveLength(older.length)
   })
 
   it('drops a payload field the graph does not read', () => {
