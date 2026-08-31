@@ -60,6 +60,28 @@ describe('parseRoute', () => {
       target: { owner: 'acme', repo: 'app' },
     })
   })
+
+  it('reports a malformed escape as an invalid route instead of throwing', () => {
+    for (const bad of ['%', '%E0%A4%A', '%z', 'a%2']) {
+      expect(parseRoute(`${BASE}dependencies/acme/${bad}`, BASE)).toEqual({
+        kind: 'invalid',
+        reason: 'This URL is malformed. Enter a repository as owner/repo.',
+      })
+    }
+  })
+
+  it('reports a malformed escape wherever it sits in the path', () => {
+    expect(parseRoute(`${BASE}%/acme/app`, BASE).kind).toBe('invalid')
+    expect(parseRoute(`${BASE}dependencies/%E0%A4%A/app/`, BASE).kind).toBe('invalid')
+    expect(parseRoute('/dependencies/acme/%', BASE).kind).toBe('invalid')
+  })
+
+  it('still reads a name written with valid percent encoding', () => {
+    expect(parseRoute(`${BASE}dependencies/%61cme/a%70p`, BASE)).toEqual({
+      kind: 'graph',
+      target: { owner: 'acme', repo: 'app' },
+    })
+  })
 })
 
 describe('segmentsOf', () => {
@@ -69,6 +91,21 @@ describe('segmentsOf', () => {
       'acme',
       'app',
     ])
+  })
+
+  it('decodes valid escapes', () => {
+    expect(segmentsOf(`${BASE}dependencies/%61cme/my%2Erepo`, BASE)).toEqual([
+      'dependencies',
+      'acme',
+      'my.repo',
+    ])
+  })
+
+  it('returns null rather than throwing on a malformed escape', () => {
+    for (const bad of ['%', '%E0%A4%A', '%z', 'a%2']) {
+      expect(segmentsOf(`${BASE}dependencies/acme/${bad}`, BASE)).toBeNull()
+      expect(segmentsOf(`/dependencies/acme/${bad}/`, BASE)).toBeNull()
+    }
   })
 })
 

@@ -29,17 +29,44 @@ function isName(value: string): boolean {
   return NAME.test(value) && value !== '.' && value !== '..'
 }
 
-/** Splits a pathname into segments, dropping the Vite base prefix and empty parts. */
-export function segmentsOf(pathname: string, base: string): string[] {
+/**
+ * `decodeURIComponent` throws `URIError` on a lone `%` or an escape that is not valid UTF-8, and a
+ * hand-edited or truncated shared link produces exactly that. Returning `null` keeps the failure
+ * inside the route model instead of letting it escape into a render.
+ */
+function decodeSegment(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Splits a pathname into segments, dropping the Vite base prefix and empty parts. Returns `null`
+ * when any segment carries a malformed percent escape, which no path this app builds ever does.
+ */
+export function segmentsOf(pathname: string, base: string): string[] | null {
   const normalisedBase = base.endsWith('/') ? base : `${base}/`
   const withoutBase = pathname.startsWith(normalisedBase)
     ? pathname.slice(normalisedBase.length)
     : pathname.replace(/^\//, '')
-  return withoutBase.split('/').filter((segment) => segment.length > 0).map(decodeURIComponent)
+
+  const segments: string[] = []
+  for (const segment of withoutBase.split('/')) {
+    if (segment.length === 0) continue
+    const decoded = decodeSegment(segment)
+    if (decoded === null) return null
+    segments.push(decoded)
+  }
+  return segments
 }
 
 export function parseRoute(pathname: string, base: string): Route {
   const segments = segmentsOf(pathname, base)
+  if (segments === null) {
+    return { kind: 'invalid', reason: 'This URL is malformed. Enter a repository as owner/repo.' }
+  }
 
   if (segments.length === 0) return { kind: 'index' }
   if (segments[0] !== 'dependencies') {
