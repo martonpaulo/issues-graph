@@ -2,7 +2,7 @@
 /**
  * Refreshes the test fixtures from the live GitHub API.
  *
- *   node scripts/capture-fixtures.mjs martonpaulo/agent-workflows martonpaulo/tabelo
+ *   node scripts/capture-fixtures.mjs martonpaulo/arbaro martonpaulo/tabelo
  *
  * Full issue payloads run to hundreds of kilobytes per repository, so the issue lists are
  * projected down to the fields the client actually consumes. To keep that projection honest each

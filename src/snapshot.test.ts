@@ -5,8 +5,8 @@ import { buildGraph } from './graph'
 import { buildSnapshotUrl, readSnapshot, SNAPSHOT_URL_LIMIT } from './snapshot'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
-import workflowsBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
-import workflowsIssues from './__fixtures__/agent-workflows.issues.json'
+import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
+import arbaroIssues from './__fixtures__/arbaro.issues.json'
 
 const ORIGIN = 'https://martonpaulo.github.io'
 const BASE = '/issues-graph/'
@@ -40,7 +40,7 @@ function graph(
 }
 
 const tabelo = graph(tabeloIssues, tabeloBlockedBy)
-const workflows = graph(workflowsIssues, workflowsBlockedBy)
+const arbaro = graph(arbaroIssues, arbaroBlockedBy)
 const SAVED_AT = new Date('2026-08-31T10:00:00Z')
 
 function fragmentOf(url: string): string {
@@ -163,16 +163,16 @@ describe('readSnapshot', () => {
 
   it('carries the coverage the read that produced it had', async () => {
     const link = await share(
-      'martonpaulo/agent-workflows',
-      graph(workflowsIssues, workflowsBlockedBy, { includedClosed: true }),
+      'martonpaulo/arbaro',
+      graph(arbaroIssues, arbaroBlockedBy, { includedClosed: true }),
     )
-    const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/agent-workflows')
+    const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/arbaro')
 
     expect(read.kind).toBe('snapshot')
     if (read.kind !== 'snapshot') return
     expect(read.view.data.includedClosed).toBe(true)
     expect(read.view.showClosed).toBe(true)
-    expect(read.view.data.issues).toEqual(workflows.issues)
+    expect(read.view.data.issues).toEqual(arbaro.issues)
   })
 
   it('sends the graph that was drawn, not the wider read behind it', async () => {
@@ -200,8 +200,8 @@ describe('readSnapshot', () => {
   })
 
   it('reports no budget of its own, because the requests were spent when it was taken', async () => {
-    const link = await share('martonpaulo/agent-workflows', workflows)
-    const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/agent-workflows')
+    const link = await share('martonpaulo/arbaro', arbaro)
+    const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/arbaro')
 
     expect(read.kind).toBe('snapshot')
     if (read.kind !== 'snapshot') return

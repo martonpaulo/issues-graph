@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
-import awIssues from './__fixtures__/agent-workflows.issues.json'
+import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
+import arbaroIssues from './__fixtures__/arbaro.issues.json'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -46,15 +46,16 @@ function dataFrom(
   }
 }
 
-const AW = { owner: 'martonpaulo', repo: 'agent-workflows' }
+const ARBARO = { owner: 'martonpaulo', repo: 'arbaro' }
 const TABELO = { owner: 'martonpaulo', repo: 'tabelo' }
 
 /**
  * Sizes of the default view — open issues, closed blockers dropped. They are written down rather
  * than derived so a change in what the graph decides to draw has to be acknowledged here.
  */
-const NODES_AW = 25
-const EDGES_AW = 40
+const NODES_ARBARO = 48
+/** Forty-six `blocked_by` edges plus the twelve sub-issues arbaro's parents were split into. */
+const EDGES_ARBARO = 58
 const NODES_TABELO = 46
 /** Six `blocked_by` edges plus the two sub-issues tabelo #294 was split into. */
 const EDGES_TABELO = 8
@@ -298,7 +299,7 @@ describe('parentNodeId', () => {
 
 describe('buildGraph against captured GitHub data', () => {
   it('keeps the reported short-title card tight without shortening its neighbour', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     const issue12 = graph.nodes.find((node) => node.number === 12)!
     const issue13 = graph.nodes.find((node) => node.number === 13)!
 
@@ -324,15 +325,15 @@ describe('buildGraph against captured GitHub data', () => {
     }
   })
 
-  it('builds the agent-workflows graph', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
-    expect(graph.nodes).toHaveLength(NODES_AW)
-    expect(graph.edges).toHaveLength(EDGES_AW)
+  it('builds the arbaro graph', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    expect(graph.nodes).toHaveLength(NODES_ARBARO)
+    expect(graph.edges).toHaveLength(EDGES_ARBARO)
     expect(graph.complete).toBe(true)
   })
 
   it('reports the request cost the load actually paid', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     expect(graph.requestCount).toBeGreaterThan(0)
   })
 
@@ -376,9 +377,17 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it('leaves a repository captured before these fields existed exactly as it was', async () => {
-    // The agent-workflows capture carries no assignees, no sub-issue summary and no parent, which
-    // is what an older cached copy or a shared snapshot looks like. Nothing new may appear.
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    // An older cached copy or a shared snapshot predates assignees, sub-issue summaries and
+    // parents, so it carries none of them. Every live capture now does, which is why this shape
+    // is derived from one rather than captured: the payload is real, only the fields GitHub
+    // added after the snapshot was taken are dropped. Nothing new may appear.
+    const dated = (arbaroIssues as IssuePayload[]).map((issue) => {
+      const dropped = new Set(['assignees', 'sub_issues_summary', 'parent_issue_url'])
+      return Object.fromEntries(
+        Object.entries(issue).filter(([field]) => !dropped.has(field)),
+      ) as IssuePayload
+    })
+    const graph = await buildGraph(dataFrom(dated, arbaroBlockedBy), ARBARO)
     expect(graph.edges.every((edge) => edge.kind === 'dependency')).toBe(true)
     expect(graph.nodes.every((node) => node.subIssues === null)).toBe(true)
     expect(graph.nodes.some((node) => node.state === 'ready')).toBe(true)
@@ -388,7 +397,7 @@ describe('buildGraph against captured GitHub data', () => {
 
   it('omits presentation metadata from an external blocker', async () => {
     const localIssue = tabeloIssues[0] as IssuePayload
-    const externalIssue = awIssues[0] as IssuePayload
+    const externalIssue = arbaroIssues[0] as IssuePayload
     const graph = await buildGraph(
       dataFrom([localIssue], { [localIssue.number]: [externalIssue] }),
       TABELO,
@@ -398,8 +407,8 @@ describe('buildGraph against captured GitHub data', () => {
     const external = graph.nodes.find((node) => node.external)!
 
     expect(external).toMatchObject({
-      repo: 'martonpaulo/agent-workflows',
-      repoLabel: 'agent-workflows',
+      repo: 'martonpaulo/arbaro',
+      repoLabel: 'arbaro',
       state: null,
       labels: [],
       allLabels: externalIssue.labels.map((label) => label.name),
@@ -417,7 +426,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('draws no closed %s issue by default', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
@@ -426,7 +435,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])(
     'shows %s closed blockers, which the open-issue list never returned, only when asked',
@@ -436,7 +445,9 @@ describe('buildGraph against captured GitHub data', () => {
 
       // The list asks only for open issues; a closed blocker reaches the graph inside the
       // dependency payload of whatever it blocks.
-      const recovered = graph.nodes.filter((node) => !listed.has(node.number))
+      // A blocker from another repository arrives the same way but is drawn without a state, so
+      // only the same-repository recoveries answer the question this test asks.
+      const recovered = graph.nodes.filter((node) => !node.external && !listed.has(node.number))
       expect(recovered.length).toBeGreaterThan(0)
       expect(recovered.every((node) => node.state === 'completed' || node.state === 'not-planned'))
         .toBe(true)
@@ -444,7 +455,7 @@ describe('buildGraph against captured GitHub data', () => {
   )
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('frames every %s card in exactly one group', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
@@ -457,7 +468,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it('encloses every member of a group inside its frame', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
 
     for (const group of graph.groups) {
@@ -474,7 +485,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('keeps %s structurally sound', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
@@ -490,8 +501,8 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it('derives blocked from GitHub rather than from the drawn edges', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
-    const byNumber = new Map((awIssues as IssuePayload[]).map((i) => [i.number, i]))
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const byNumber = new Map((arbaroIssues as IssuePayload[]).map((i) => [i.number, i]))
 
     for (const node of graph.nodes) {
       const source = byNumber.get(node.number)
@@ -502,7 +513,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('lays %s out in a shape a screen can show', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
@@ -519,7 +530,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('never overlaps two %s cards', async (_name, issues, blockedBy, target) => {
     const { nodes } = await buildGraph(dataFrom(issues, blockedBy), target)
@@ -538,7 +549,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it('lays nodes out without stacking them all at the origin', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     const xs = new Set(graph.nodes.map((node) => node.position.x))
     const ys = new Set(graph.nodes.map((node) => node.position.y))
     expect(xs.size).toBeGreaterThan(1)
@@ -549,19 +560,72 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('puts every %s blocker above what it blocks', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-    // Wrapping a wide rank into sub-rows must not let an edge point back up the canvas.
+    // No exemption. arbaro #18 is blocked by the three sub-issues it was split into, and ordering
+    // wins that contradiction outright: the only edge allowed to point back up the canvas is the
+    // containment edge that says so with a head of its own. Wrapping a wide rank into sub-rows must
+    // not let any other edge point back up either.
     for (const edge of graph.edges) {
-      expect(byId.get(edge.source)!.position.y).toBeLessThan(byId.get(edge.target)!.position.y)
+      if (edge.inverted) continue
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeLessThan(byId.get(edge.target)!.position.y)
     }
   })
 
+  it('draws every arbaro dependency downwards, contradicted or not', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+
+    // #18 is blocked by #37, #38 and #39, which are also its sub-issues. Before the contradiction
+    // was decided here rather than left to ELK, those three blockers were laid out below what they
+    // block, so the reader scanning downwards for "what unlocks what" read them backwards.
+    const blockers = ['arbaro#37', 'arbaro#38', 'arbaro#39'].map((id) => `martonpaulo/${id}`)
+    const parent = byId.get('martonpaulo/arbaro#18')!
+    for (const blocker of blockers) {
+      expect(byId.get(blocker)!.position.y, blocker).toBeLessThan(parent.position.y)
+    }
+
+    for (const edge of graph.edges) {
+      if (edge.kind !== 'dependency') continue
+      expect(edge.inverted, edge.id).toBeUndefined()
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeLessThan(byId.get(edge.target)!.position.y)
+    }
+  })
+
+  it('marks exactly the contradicted arbaro containment edges, and only those', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const marked = graph.edges.filter((edge) => edge.inverted)
+
+    expect(marked.map((edge) => edge.id).sort()).toEqual(
+      [37, 38, 39].map((child) => `martonpaulo/arbaro#18=>martonpaulo/arbaro#${child}`),
+    )
+    // Marked because it is drawn upwards, and drawn upwards is what the mark has to mean.
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+    for (const edge of marked) {
+      expect(edge.kind).toBe('hierarchy')
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeGreaterThan(byId.get(edge.target)!.position.y)
+    }
+  })
+
+  it('leaves a repository with no such contradiction unmarked', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    expect(graph.edges.some((edge) => edge.inverted)).toBe(false)
+  })
+
   it.each([
-    ['agent-workflows', awIssues, awBlockedBy, AW],
+    ['arbaro', arbaroIssues, arbaroBlockedBy, ARBARO],
     ['tabelo', tabeloIssues, tabeloBlockedBy, TABELO],
   ])('routes every %s edge orthogonally', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
@@ -581,7 +645,7 @@ describe('buildGraph against captured GitHub data', () => {
   })
 
   it('gives each edge of a card its own point on it', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     const leaving = new Map<string, number[]>()
 
     for (const edge of graph.edges) {
@@ -787,13 +851,13 @@ describe('buildGraph edge cases not present in the captured data', () => {
 
   it('carries incompleteness through to the graph so the canvas cannot claim to be whole', async () => {
     const graph = await buildGraph(
-      dataFrom(awIssues, awBlockedBy, {
+      dataFrom(arbaroIssues, arbaroBlockedBy, {
         complete: false,
         unresolved: [{ number: 9, reason: 'rate limit reached' }],
         rateLimited: true,
         rateLimitReset: new Date(1750000000 * 1000),
       }),
-      AW,
+      ARBARO,
     )
     expect(graph.complete).toBe(false)
     expect(graph.rateLimited).toBe(true)
@@ -955,12 +1019,12 @@ describe('repository identity is canonical, not what the address happened to spe
   })
 
   it('draws the captured repositories whole from a mixed-case address', async () => {
-    const aw = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+    const arbaro = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), {
       owner: 'MartonPaulo',
-      repo: 'Agent-Workflows',
+      repo: 'ArBaRo',
     })
-    expect(aw.nodes).toHaveLength(NODES_AW)
-    expect(aw.edges).toHaveLength(EDGES_AW)
+    expect(arbaro.nodes).toHaveLength(NODES_ARBARO)
+    expect(arbaro.edges).toHaveLength(EDGES_ARBARO)
 
     const tabelo = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), {
       owner: 'MARTONPAULO',

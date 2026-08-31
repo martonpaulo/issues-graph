@@ -20,15 +20,19 @@ Long-task durations rather than elapsed wall-clock, deliberately. ELK's bundled 
 work through timers, and a browser throttles timers to roughly one per second while its window is
 hidden: elapsed time then reports the throttling, while each task's own duration stays honest.
 
-Chrome 130 (Electron 33), Apple Silicon. `agent-workflows` and `tabelo` are this repository's
-captured fixtures; the synthesized graphs chain every node to the two before it, so ELK has to lay
-all of them out rather than pack them loose.
+Chrome 130 (Electron 33), Apple Silicon. `arbaro` and `tabelo` are this repository's captured
+fixtures; the synthesized graphs chain every node to the two before it, so ELK has to lay all of
+them out rather than pack them loose.
+
+`arbaro` was measured before that repository was renamed, and its fixture has since been re-captured
+at 48 nodes and 58 edges (#108). The sizes in the tables below are the ones actually measured, so
+they are left as they were read rather than restated against the larger fixture.
 
 ## Result: on the main thread, every real layout is a long task
 
 | Graph | Nodes / edges | Main-thread long tasks |
 | --- | --- | --- |
-| `agent-workflows` | 25 / 40 | one task, 66–88 ms |
+| `arbaro` | 25 / 40 | one task, 66–88 ms |
 | `tabelo` | 46 / 5 | none |
 | synthesized | 100 / 196 | one task, 222 ms |
 | synthesized | 250 / 496 | one task, 672 ms |
@@ -57,7 +61,7 @@ barely a graph, not because 46 issues are cheap.
 
 | Graph | Main-thread long tasks | Layout wall-clock |
 | --- | --- | --- |
-| `agent-workflows` | none | 89–109 ms |
+| `arbaro` | none | 89–109 ms |
 | `tabelo` | none | 27 ms |
 | synthesized 100 | none | 256 ms |
 | synthesized 250 | none | 674 ms |

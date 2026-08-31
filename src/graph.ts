@@ -203,6 +203,12 @@ export interface GraphEdge {
   target: string
   /** The orthogonal route the layout reserved for this edge, in canvas coordinates. */
   points?: Point[]
+  /**
+   * True when this edge runs against the canvas's top-to-bottom order, so its direction cannot be
+   * read from position and has to be stated. Only ever set on a hierarchy edge; see
+   * {@link invertedEdges}.
+   */
+  inverted?: boolean
 }
 
 /**
@@ -443,8 +449,8 @@ let ready: ElkEngine | null = null
 /**
  * A real worker where the platform has one, and the bundled engine where it does not.
  *
- * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for the
- * 25-node `agent-workflows` graph, 672 ms at 250 nodes — during which the page cannot paint or
+ * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for a
+ * 25-node graph, 672 ms at 250 nodes — during which the page cannot paint or
  * answer a click. The worker moves that off the main thread and makes the work stoppable, which is
  * the only way an ELK layout can be stopped.
  *
@@ -566,6 +572,41 @@ function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
   return [...groups.values()]
 }
 
+/**
+ * The hierarchy edges that contradict a dependency edge between the same two issues.
+ *
+ * A parent split into sub-issues and then blocked by them is legitimate data, and the two relations
+ * it produces disagree about direction: containment puts the parent above its children, ordering
+ * puts a blocker above what it blocks. No layout satisfies both, so one of them has to be drawn
+ * against the canvas's top-to-bottom order.
+ *
+ * Ordering wins, and the choice is not a coin toss. This canvas exists to answer what unlocks what,
+ * containment carries no order at all — `kindOf` calls a purely contained component a breakdown
+ * rather than a chain, and `dependencyCounts` ignores hierarchy edges outright — and, decisively, a
+ * dependency edge is drawn with an arrowhead while a hierarchy edge deliberately is not. An arrow
+ * still says which end comes first wherever it is drawn; a dashed line with no marker says nothing
+ * but where its ends sit. So the relation whose meaning survives inversion is the one kept upright,
+ * and the one that would lose its meaning is marked instead: these ids get `inverted`, and the
+ * canvas draws them with the arrowhead their ordinary style does without.
+ *
+ * Deciding it here rather than leaving the cycle to ELK also makes it deterministic. Handed a
+ * two-node cycle the engine breaks it however it likes, so the same repository could mark different
+ * edges between two versions of it.
+ */
+export function invertedEdges(edges: GraphEdge[]): Set<string> {
+  const blocks = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind === 'dependency') blocks.add(`${edge.source} ${edge.target}`)
+  }
+
+  const inverted = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind !== 'hierarchy') continue
+    if (blocks.has(`${edge.target} ${edge.source}`)) inverted.add(edge.id)
+  }
+  return inverted
+}
+
 const GROUP_WORD: Record<GraphGroup['kind'], string> = {
   chain: 'Chain',
   breakdown: 'Breakdown',
@@ -642,6 +683,9 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
   if (nodes.length === 0) return { nodes, groups: [], routes: new Map() }
 
   const components = componentsOf(nodes, edges)
+  // Handed to ELK the other way round, so the engine never sees the two-node cycle a parent blocked
+  // by its own sub-issues makes, and every dependency edge comes back pointing down the canvas.
+  const inverted = invertedEdges(edges)
   const connected = components.filter((group) => group.length > 1)
   const loose = components.filter((group) => group.length === 1).flat()
   const placed = new Map<string, GraphNode>(
@@ -679,7 +723,11 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
         })),
         edges: edges
           .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
-          .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
+          .map((edge) =>
+            inverted.has(edge.id)
+              ? { id: edge.id, sources: [edge.target], targets: [edge.source] }
+              : { id: edge.id, sources: [edge.source], targets: [edge.target] },
+          ),
       })
     } catch (error) {
       // The engine that just failed is kept for the rest of the session otherwise, so the retry the
@@ -697,11 +745,11 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
     for (const edge of result.edges ?? []) {
       const section = edge.sections?.[0]
       if (!section) continue
-      routes.set(edge.id, [
-        section.startPoint,
-        ...(section.bendPoints ?? []),
-        section.endPoint,
-      ])
+      const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
+      // The route ELK drew runs the way it was asked, so a reversed edge gets its route turned back
+      // round: the polyline still leaves the parent and arrives at the child, which is where the
+      // arrowhead marking the inversion has to land.
+      routes.set(edge.id, inverted.has(edge.id) ? points.reverse() : points)
     }
 
     for (const component of connected) {
@@ -843,10 +891,15 @@ export async function buildGraph(
   }
 
   const laid = await layout([...nodes.values()], edges)
+  const inverted = invertedEdges(edges)
 
   return {
     nodes: laid.nodes,
-    edges: edges.map((edge) => ({ ...edge, points: laid.routes.get(edge.id) })),
+    edges: edges.map((edge) => ({
+      ...edge,
+      points: laid.routes.get(edge.id),
+      inverted: inverted.has(edge.id) || undefined,
+    })),
     groups: laid.groups,
     identity: canonicalSlug(targetSlug),
     complete: data.complete,

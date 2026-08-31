@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
-import awIssues from './__fixtures__/agent-workflows.issues.json'
+import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
+import arbaroIssues from './__fixtures__/arbaro.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
 
 /**
@@ -65,17 +65,17 @@ vi.mock('elkjs/lib/elk.bundled.js', () => {
   return { default: FakeElk }
 })
 
-const AW = { owner: 'martonpaulo', repo: 'agent-workflows' }
+const ARBARO = { owner: 'martonpaulo', repo: 'arbaro' }
 
 function data(): RepositoryGraphData {
   const blockers = new Map(
-    Object.entries(awBlockedBy as Record<string, IssuePayload[]>).map(([number, list]) => [
+    Object.entries(arbaroBlockedBy as Record<string, IssuePayload[]>).map(([number, list]) => [
       Number(number),
       list,
     ]),
   )
   return {
-    issues: awIssues as IssuePayload[],
+    issues: arbaroIssues as IssuePayload[],
     blockers,
     complete: true,
     unresolved: [],
@@ -111,11 +111,11 @@ describe('a failed layout engine can be retried', () => {
     const { buildGraph } = await freshGraph()
 
     elk.failNext = true
-    await expect(buildGraph(data(), AW)).rejects.toThrow(
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow(
       'Failed to fetch dynamically imported module',
     )
 
-    const graph = await buildGraph(data(), AW)
+    const graph = await buildGraph(data(), ARBARO)
 
     expect(graph.nodes.length).toBeGreaterThan(0)
     expect(elk.constructions).toBe(2)
@@ -125,10 +125,10 @@ describe('a failed layout engine can be retried', () => {
     const { buildGraph } = await freshGraph()
 
     elk.failNext = true
-    await expect(buildGraph(data(), AW)).rejects.toThrow()
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow()
 
-    await buildGraph(data(), AW)
-    await buildGraph(data(), AW)
+    await buildGraph(data(), ARBARO)
+    await buildGraph(data(), ARBARO)
 
     // One failure, one replacement, and nothing built for the draw that reused it.
     expect(elk.constructions).toBe(2)
@@ -141,13 +141,13 @@ describe('a failed layout engine can be retried', () => {
     elk.failNext = true
     // Started together, so both hold the same in-flight engine Promise: both must fail, and the
     // one started afterwards must not.
-    const [first, second] = await Promise.allSettled([buildGraph(data(), AW), buildGraph(data(), AW)])
+    const [first, second] = await Promise.allSettled([buildGraph(data(), ARBARO), buildGraph(data(), ARBARO)])
 
     expect(first.status).toBe('rejected')
     expect(second.status).toBe('rejected')
     expect(elk.constructions).toBe(1)
 
-    await expect(buildGraph(data(), AW)).resolves.toBeTruthy()
+    await expect(buildGraph(data(), ARBARO)).resolves.toBeTruthy()
     expect(elk.constructions).toBe(2)
   })
 })
@@ -163,13 +163,13 @@ describe('discarding the engine detaches it before anything awaits', () => {
   it('does not hand a discarded engine to a draw that starts in the same turn', async () => {
     const { buildGraph, discardLayoutEngine } = await freshGraph()
 
-    await buildGraph(data(), AW)
+    await buildGraph(data(), ARBARO)
     expect(elk.constructions).toBe(1)
 
     // A close and an immediate remount: no await between them, which is the window in which the
     // memo used to still be holding the engine it was about to terminate.
     discardLayoutEngine()
-    const redrawn = await buildGraph(data(), AW)
+    const redrawn = await buildGraph(data(), ARBARO)
 
     expect(redrawn.nodes.length).toBeGreaterThan(0)
     expect(elk.constructions).toBe(2)
@@ -178,7 +178,7 @@ describe('discarding the engine detaches it before anything awaits', () => {
   it('terminates the engine it detached', async () => {
     const { buildGraph, discardLayoutEngine } = await freshGraph()
 
-    await buildGraph(data(), AW)
+    await buildGraph(data(), ARBARO)
     discardLayoutEngine()
     await Promise.resolve()
     await Promise.resolve()
@@ -199,17 +199,17 @@ describe('an engine whose layout fails is not kept', () => {
     const { buildGraph } = await freshGraph()
 
     elk.failLayout = true
-    await expect(buildGraph(data(), AW)).rejects.toThrow('The layout engine could not be loaded.')
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow('The layout engine could not be loaded.')
   })
 
   it('builds a new engine for the retry instead of reusing the dead one', async () => {
     const { buildGraph } = await freshGraph()
 
     elk.failLayout = true
-    await expect(buildGraph(data(), AW)).rejects.toThrow()
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow()
 
     elk.failLayout = false
-    const graph = await buildGraph(data(), AW)
+    const graph = await buildGraph(data(), ARBARO)
 
     expect(graph.nodes.length).toBeGreaterThan(0)
     // The retry is only a retry if it is not handed the same corpse.
@@ -220,7 +220,7 @@ describe('an engine whose layout fails is not kept', () => {
     const { buildGraph } = await freshGraph()
 
     elk.failLayout = true
-    await expect(buildGraph(data(), AW)).rejects.toThrow()
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow()
     // The discard resolves the memoized engine before terminating it.
     await Promise.resolve()
     await Promise.resolve()
@@ -232,16 +232,16 @@ describe('an engine whose layout fails is not kept', () => {
     const { buildGraph } = await freshGraph()
 
     elk.failLayout = true
-    const failing = buildGraph(data(), AW)
+    const failing = buildGraph(data(), ARBARO)
     await expect(failing).rejects.toThrow()
 
     elk.failLayout = false
-    await buildGraph(data(), AW)
+    await buildGraph(data(), ARBARO)
     const before = elk.constructions
 
     // A third draw reuses the replacement: the earlier failure took its own engine down and
     // stopped there.
-    await buildGraph(data(), AW)
+    await buildGraph(data(), ARBARO)
     expect(elk.constructions).toBe(before)
   })
 })
