@@ -125,4 +125,9 @@ jobs:
             -f description="$summary" \
             -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
             >/dev/null
-          [ "$state" = success ]
+          # Deliberately no `exit 1` on a failing verdict. Failing the job would put a
+          # failure-class check run back in the rollup beside the status, which is the exact thing
+          # this workflow is shaped to avoid: the correction would replace the status and leave the
+          # run behind. The status is the required context, so a bad title still blocks the merge,
+          # and a status that never got published blocks it too by never reporting.
+          printf 'Published %s for %s\n' "$state" "$SHA"
