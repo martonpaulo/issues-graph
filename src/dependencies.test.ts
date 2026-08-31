@@ -284,6 +284,40 @@ describe('a sub-issue hierarchy', () => {
       .toEqual(['other/lib#9->#6'])
   })
 
+  it('reads a parent blocked by its own sub-issue the same way round as any other', async () => {
+    // The contradiction #130 settled for the drawing: a parent split into sub-issues and then
+    // blocked by one of them. The canvas hands that hierarchy edge to the layout reversed and marks
+    // it `inverted`, but `source` is still the parent, so the words must not follow the drawing's
+    // inversion — the child is what blocks, the parent is what contains.
+    const graph = await buildGraph(
+      dataFrom(
+        [
+          issue({ number: 5, title: 'The parent' }),
+          issue({
+            number: 6,
+            title: 'A sub-issue',
+            parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
+          }),
+        ],
+        { 5: [issue({ number: 6 })] },
+      ),
+      { owner: 'acme', repo: 'app' },
+    )
+
+    const hierarchy = graph.edges.filter((edge) => edge.kind === 'hierarchy')
+    expect(hierarchy.map((edge) => edge.inverted)).toEqual([true])
+
+    expect(describe_(graph, 'acme/app#5')).toBe(
+      'Issue #5. Blocked by #6. Blocks nothing. Contains #6.',
+    )
+    expect(describe_(graph, 'acme/app#6')).toBe(
+      'Issue #6. Blocked by nothing. Blocks #5. Part of #5.',
+    )
+    expect(containmentRows(graph).map((row) => `${row.parent.id}->${row.child.id}`)).toEqual([
+      'acme/app#5->acme/app#6',
+    ])
+  })
+
   it('follows the closed-blocker toggle, exactly as the drawing does', async () => {
     async function withClosedParent(showClosed: boolean) {
       return buildGraph(
