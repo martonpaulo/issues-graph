@@ -29,10 +29,40 @@ export interface WorkerEngine {
 export function workerEngine(): WorkerEngine {
   // Vite emits the worker script as its own asset and hands back its URL; the file is a classic
   // script, so the worker is constructed without `type: 'module'`.
-  const elk = new ELK({ workerFactory: () => new Worker(elkWorkerUrl) })
+  const worker = new Worker(elkWorkerUrl)
+
+  // `new Worker(url)` succeeds whatever the URL says: the fetch happens afterwards, and a script
+  // that 404s or throws while loading reports itself through an `error` event instead. `elk-api`
+  // listens for `message` and nothing else — a layout's resolver is stored under its id and only
+  // ever removed by a reply — so a worker that dies leaves that promise pending for the life of the
+  // page. Every rejection handler in this codebase would then be waiting on a promise that cannot
+  // settle, and the page would sit on "Laying out the graph…" exactly as it did before #16.
+  //
+  // So the worker's death is turned into a rejection of its own, and every layout races against it.
+  let died: (error: Error) => void = () => {}
+  const death = new Promise<never>((_, reject) => {
+    died = reject
+  })
+  // A death nobody is waiting on is not an unhandled rejection; it is a worker that failed while
+  // the page happened to be idle, and the next layout is what needs to hear about it.
+  death.catch(() => {})
+
+  const fail = (message: string) => {
+    died(new Error(message))
+  }
+  worker.addEventListener('error', (event: ErrorEvent) => {
+    // A cross-origin or load failure arrives with no message, so the fallback names what happened
+    // rather than reporting an empty one.
+    fail(event.message || 'The layout engine could not be loaded.')
+  })
+  worker.addEventListener('messageerror', () => {
+    fail('The layout engine sent a reply that could not be read.')
+  })
+
+  const elk = new ELK({ workerFactory: () => worker })
 
   return {
-    layout: (graph) => elk.layout(graph),
+    layout: (graph) => Promise.race([elk.layout(graph), death]),
     terminate: () => elk.terminateWorker(),
   }
 }

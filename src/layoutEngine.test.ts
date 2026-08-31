@@ -12,7 +12,13 @@ import type { IssuePayload, RepositoryGraphData } from './github'
  * rejection. That needs an engine whose initialization can be made to fail exactly once, which is
  * why this file substitutes ELK rather than sharing `graph.test.ts`'s real one.
  */
-const elk = vi.hoisted(() => ({ constructions: 0, layouts: 0, failNext: false }))
+const elk = vi.hoisted(() => ({
+  constructions: 0,
+  layouts: 0,
+  terminations: 0,
+  failNext: false,
+  failLayout: false,
+}))
 
 vi.mock('elkjs/lib/elk.bundled.js', () => {
   interface FakeNode {
@@ -35,8 +41,17 @@ vi.mock('elkjs/lib/elk.bundled.js', () => {
       }
     }
 
+    terminate(): void {
+      elk.terminations += 1
+    }
+
     layout(graph: FakeNode): Promise<FakeNode> {
       elk.layouts += 1
+      if (elk.failLayout) {
+        // What a worker that died after construction looks like from here: the layout rejects
+        // rather than resolving, and the engine that produced it is no longer trustworthy.
+        return Promise.reject(new Error('The layout engine could not be loaded.'))
+      }
       // Positions are irrelevant here — this file is about the engine's lifecycle, and
       // `graph.test.ts` already holds every assertion about where cards land.
       return Promise.resolve({
@@ -81,7 +96,9 @@ async function freshGraph() {
   vi.resetModules()
   elk.constructions = 0
   elk.layouts = 0
+  elk.terminations = 0
   elk.failNext = false
+  elk.failLayout = false
   return import('./graph')
 }
 
@@ -132,6 +149,65 @@ describe('a failed layout engine can be retried', () => {
 
     await expect(buildGraph(data(), AW)).resolves.toBeTruthy()
     expect(elk.constructions).toBe(2)
+  })
+})
+
+/**
+ * The worker's own failure mode. `new Worker(url)` succeeds whatever the URL says, and `elk-api`
+ * listens for `message` alone, so a worker that dies leaves its layout promise pending for the life
+ * of the page — the stuck "Laying out the graph…" this issue exists to remove, reintroduced on a new
+ * path. `layoutWorker.ts` turns that death into a rejection; these cover what `graph.ts` must then
+ * do with the engine that produced it.
+ */
+describe('an engine whose layout fails is not kept', () => {
+  it('reports the failure rather than resolving', async () => {
+    const { buildGraph } = await freshGraph()
+
+    elk.failLayout = true
+    await expect(buildGraph(data(), AW)).rejects.toThrow('The layout engine could not be loaded.')
+  })
+
+  it('builds a new engine for the retry instead of reusing the dead one', async () => {
+    const { buildGraph } = await freshGraph()
+
+    elk.failLayout = true
+    await expect(buildGraph(data(), AW)).rejects.toThrow()
+
+    elk.failLayout = false
+    const graph = await buildGraph(data(), AW)
+
+    expect(graph.nodes.length).toBeGreaterThan(0)
+    // The retry is only a retry if it is not handed the same corpse.
+    expect(elk.constructions).toBe(2)
+  })
+
+  it('terminates the failed engine, so a dead worker is not left running', async () => {
+    const { buildGraph } = await freshGraph()
+
+    elk.failLayout = true
+    await expect(buildGraph(data(), AW)).rejects.toThrow()
+    // The discard resolves the memoized engine before terminating it.
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(elk.terminations).toBe(1)
+  })
+
+  it('keeps a healthy engine that replaced the failed one', async () => {
+    const { buildGraph } = await freshGraph()
+
+    elk.failLayout = true
+    const failing = buildGraph(data(), AW)
+    await expect(failing).rejects.toThrow()
+
+    elk.failLayout = false
+    await buildGraph(data(), AW)
+    const before = elk.constructions
+
+    // A third draw reuses the replacement: the earlier failure took its own engine down and
+    // stopped there.
+    await buildGraph(data(), AW)
+    expect(elk.constructions).toBe(before)
   })
 })
 

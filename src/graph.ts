@@ -500,6 +500,29 @@ export function drawFailure(error: unknown): DrawFailure {
 }
 
 /**
+ * Drops the memoized engine and terminates it.
+ *
+ * `used` narrows that to one engine: a layout that failed says its own engine is no longer
+ * trustworthy, but by the time the failure is handled the memo may already hold a replacement that
+ * is perfectly healthy, and taking that one down would turn one failed draw into two.
+ */
+function discard(used: ElkEngine | null): void {
+  const held = engine
+  if (!held) return
+  void held.then(
+    (current) => {
+      if (used && current !== used) return
+      if (engine === held) engine = null
+      current.terminate?.()
+    },
+    () => {
+      // An attempt that never produced an engine has already cleared itself, and its rejection
+      // belongs to whoever asked for it.
+    },
+  )
+}
+
+/**
  * Stops a layout whose result nobody is waiting for any more.
  *
  * ELK offers no cancellation, so the running layout can only be discarded — but a worker can be
@@ -510,12 +533,7 @@ export function drawFailure(error: unknown): DrawFailure {
  * terminating it takes the current one down too.
  */
 export function discardLayoutEngine(): void {
-  const discarded = engine
-  engine = null
-  void discarded?.then((current) => current.terminate?.()).catch(() => {
-    // An engine that never loaded has nothing to terminate, and its rejection is already the
-    // caller's to report.
-  })
+  discard(null)
 }
 
 /** Weakly-connected components: edge direction does not matter for grouping. */
@@ -649,20 +667,28 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
   if (connected.length > 0) {
     const members = connected.flat()
     const ids = new Set(members.map((node) => node.id))
-    const result = await (
-      await elk()
-    ).layout({
-      id: 'root',
-      layoutOptions: ELK_OPTIONS,
-      children: members.map((node) => ({
-        id: node.id,
-        width: NODE_WIDTH,
-        height: node.height,
-      })),
-      edges: edges
-        .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
-        .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
-    })
+    const engineUsed = await elk()
+    let result: ElkNode
+    try {
+      result = await engineUsed.layout({
+        id: 'root',
+        layoutOptions: ELK_OPTIONS,
+        children: members.map((node) => ({
+          id: node.id,
+          width: NODE_WIDTH,
+          height: node.height,
+        })),
+        edges: edges
+          .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
+          .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
+      })
+    } catch (error) {
+      // The engine that just failed is kept for the rest of the session otherwise, so the retry the
+      // reader is offered would hand the same draw to the same dead worker and fail identically.
+      // Rebuilding one is cheap; retrying against a corpse is not a retry at all.
+      discard(engineUsed)
+      throw error
+    }
 
     for (const child of result.children ?? []) {
       const node = placed.get(child.id)
