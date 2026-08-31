@@ -22,6 +22,16 @@ function installStorage(overrides: Partial<Storage> = {}): Map<string, string> {
   return entries
 }
 
+/**
+ * Server-side rendering and any non-browser consumer has no `window` at all. storage.ts catches
+ * the resulting ReferenceError in the same guard it uses for a browser that refuses access, so
+ * the behaviour is covered by the same contract and deserves the same test.
+ */
+function removeWindow(): void {
+  Reflect.deleteProperty(globalThis, 'window')
+}
+
+
 let entries: Map<string, string>
 
 beforeEach(() => {
@@ -64,6 +74,12 @@ describe('readStored', () => {
 
     expect(readStored<string | null>('graph:repo', 'martonpaulo/tabelo')).toBeNull()
   })
+
+  it('returns the fallback when there is no window at all', () => {
+    removeWindow()
+
+    expect(readStored('graph:layout', 'vertical')).toBe('vertical')
+  })
 })
 
 describe('writeStored', () => {
@@ -89,5 +105,10 @@ describe('writeStored', () => {
     })
 
     expect(() => writeStored('graph:layout', 'vertical')).not.toThrow()
+  })
+
+  it('stays silent when there is no window at all', () => {
+    removeWindow()
+    expect(() => writeStored('issue-graph:theme', 'dark')).not.toThrow()
   })
 })
