@@ -155,12 +155,21 @@ export interface SessionOptions {
 /**
  * Whether a token change has to stop what the page is doing.
  *
- * A load in progress carries the token it started with, so it must be stopped. A gate has sent
- * nothing, and a drawn graph or a reported failure is finished: none of them is holding a request
- * that could still leave with the wrong credential, and discarding a graph somebody is reading
- * would be a worse answer than leaving it.
+ * The question is whether the work in flight carries the credential that just changed. A load
+ * does: its request options were built once, so everything still queued would keep sending a
+ * token the viewer has replaced or removed. A gate has sent nothing, and a drawn graph or a
+ * reported failure is finished — discarding a graph somebody is reading would be a worse answer
+ * than leaving it.
+ *
+ * A drawing is the case the phase alone cannot answer, which is why the second argument exists.
+ * The same phase covers a graph being laid out from a GitHub read that carried the token, and one
+ * being laid out from a payload already in hand — this browser's saved copy, or a snapshot that
+ * arrived in the address bar. Those send nothing and hold no credential, so a token change has
+ * nothing to stop: ending them would discard a graph that cost the viewer nothing, under a notice
+ * saying a read was stopped when no read was ever sent.
  */
-export function stopsForTokenChange(kind: Phase['kind']): boolean {
+export function stopsForTokenChange(kind: Phase['kind'], carriesToken: boolean): boolean {
+  if (!carriesToken) return false
   return kind === 'listing' || kind === 'confirm' || kind === 'resolving' || kind === 'drawing'
 }
 
@@ -183,6 +192,11 @@ export class GraphSession {
   #work: AbortController | null = null
   /** Reading the budget is separate: it costs nothing and outlives no load. */
   #probe: AbortController | null = null
+  /**
+   * Whether the work in flight is sending the viewer's token. Only a GitHub read does; drawing a
+   * saved copy or a shared link works from a payload already in hand.
+   */
+  #workCarriesToken = false
   /**
    * Answers the confirmation the loader is awaiting. Held here so resetting or closing the session
    * can settle it explicitly, rather than depending on an abort listener having been reached: an
@@ -237,7 +251,8 @@ export class GraphSession {
     if (this.#sharedLink) {
       this.#state = { phase: { kind: 'drawing' }, linkProblem: null, stopped: null }
       this.#notify()
-      this.#openSharedLink(this.#run)
+      // Drawing a payload that arrived in the address bar: no request, and no token on it.
+      this.#openSharedLink(this.#beginWork(false))
       return
     }
     this.#state = { phase: CHECKING_GATE, linkProblem: null, stopped: null }
@@ -248,7 +263,7 @@ export class GraphSession {
   /** Reads the repository from GitHub. */
   start(includeClosed: boolean): void {
     if (this.#closed) return
-    const controller = this.#beginWork()
+    const controller = this.#beginWork(true)
     const run = this.#run
     this.#set({ phase: { kind: 'listing' }, stopped: null })
 
@@ -288,7 +303,7 @@ export class GraphSession {
     const decision = decideSavedCopyOpen(copy, showClosed)
     if (decision.kind !== 'open') return
 
-    const controller = this.#beginWork()
+    const controller = this.#beginWork(false)
     const run = this.#run
     this.#set({ phase: { kind: 'drawing' }, stopped: null })
 
@@ -322,10 +337,8 @@ export class GraphSession {
   setToken(token: string): void {
     if (token === this.#token) return
     this.#token = token
-    const stops = stopsForTokenChange(this.#state.phase.kind)
-    this.#cancelWork()
-
-    if (stops) {
+    if (stopsForTokenChange(this.#state.phase.kind, this.#workCarriesToken)) {
+      this.#cancelWork()
       this.#set({
         phase: CHECKING_GATE,
         stopped: token
@@ -363,10 +376,11 @@ export class GraphSession {
     return !this.#closed && run === this.#run && !controller.signal.aborted
   }
 
-  #beginWork(): AbortController {
+  #beginWork(carriesToken: boolean): AbortController {
     this.#cancelWork()
     const controller = new AbortController()
     this.#work = controller
+    this.#workCarriesToken = carriesToken
     return controller
   }
 
@@ -386,6 +400,7 @@ export class GraphSession {
     this.#settleConfirmation = null
     this.#work?.abort()
     this.#work = null
+    this.#workCarriesToken = false
   }
 
   #layoutFailure(error: unknown): SessionFailure {
@@ -504,8 +519,9 @@ export class GraphSession {
    * to this browser's cache either: it is somebody else's copy, and a later visit must not be
    * offered it as this viewer's own.
    */
-  #openSharedLink(run: number): void {
-    const isCurrent = () => !this.#closed && run === this.#run
+  #openSharedLink(controller: AbortController): void {
+    const run = this.#run
+    const isCurrent = () => this.#current(run, controller)
 
     void this.#effects
       .readSnapshot(this.#options.fragment, this.#options.identity)

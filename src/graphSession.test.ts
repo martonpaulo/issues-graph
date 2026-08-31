@@ -460,6 +460,23 @@ describe('opening the copy this browser saved', () => {
     })
   })
 
+  /** Drawn from this browser's own store, so it sends nothing and holds no token either. */
+  it('keeps drawing when the token changes', async () => {
+    const held = deferred<IssueGraph>()
+    const harness = open({ readCache: () => savedCopy(), buildGraph: () => held.promise })
+    harness.session.openSavedCopy(false)
+    await settle()
+
+    harness.session.setToken('ghp_new')
+    held.resolve(graph)
+    await settle()
+
+    expect(harness.session.getState()).toMatchObject({
+      phase: { kind: 'ready', savedCopy: { source: 'saved' } },
+      stopped: null,
+    })
+  })
+
   it('drops a layout that finishes after the session closed', async () => {
     const held = deferred<IssueGraph>()
     const harness = open({ readCache: () => savedCopy(), buildGraph: () => held.promise })
@@ -555,26 +572,30 @@ describe('a shared link in the fragment', () => {
   })
 
   /**
-   * The shared-link run holds no request, so an abort signal cannot reach it: only the run counter
-   * can. Without that, a token change moved the page to the gate and the snapshot still landed
-   * afterwards, overwriting the gate with a graph the viewer had already been taken away from.
+   * A shared link sends no request and carries no credential, so a token change has nothing to
+   * stop. Ending it would discard a graph that cost the viewer nothing and strand the snapshot
+   * still sitting in the address bar, leaving the page and the URL describing different things.
    */
-  it('drops a snapshot that arrives after a token change moved the page on', async () => {
+  it('keeps drawing when the token changes, because it carries neither', async () => {
     const held = deferred<SnapshotRead>()
     const harness = open({ readSnapshot: () => held.promise }, { fragment })
     harness.session.begin()
     expect(harness.session.getState().phase).toEqual({ kind: 'drawing' })
 
     harness.session.setToken('ghp_new')
-    expect(harness.session.getState().phase.kind).toBe('gate')
+    expect(harness.session.getState().phase).toEqual({ kind: 'drawing' })
 
     held.resolve({ kind: 'snapshot', view })
     await settle()
 
-    expect(harness.session.getState().phase.kind).toBe('gate')
+    expect(harness.session.getState()).toMatchObject({
+      phase: { kind: 'ready', savedCopy: { source: 'shared' } },
+      stopped: null,
+    })
+    expect(harness.fragmentsCleared).toBe(0)
   })
 
-  it('drops a shared-link layout that finishes after a token change', async () => {
+  it('keeps a layout already under way when the token changes', async () => {
     const held = deferred<IssueGraph>()
     const harness = open(
       {
@@ -591,29 +612,24 @@ describe('a shared link in the fragment', () => {
     held.resolve(graph)
     await settle()
 
-    expect(harness.session.getState().phase.kind).toBe('gate')
+    expect(harness.session.getState().phase.kind).toBe('ready')
   })
 
   /**
-   * The other half of an invalidated run: giving up on the link rewrites the address bar. Doing
-   * that after the viewer has been moved to the gate would strip a fragment the page is no longer
-   * acting on, and would replace the notice explaining why they were moved.
+   * Giving up on a link rewrites the address bar, so a run that has been ended must not reach it:
+   * stripping the fragment of a page that has gone would take the snapshot with it.
    */
   it('leaves the address bar alone when the run it belonged to was ended', async () => {
     const held = deferred<SnapshotRead>()
     const harness = open({ readSnapshot: () => held.promise }, { fragment })
     harness.session.begin()
 
-    harness.session.setToken('ghp_new')
+    harness.session.close()
     held.resolve({ kind: 'invalid', reason: 'This link is for another repository.' })
     await settle()
 
     expect(harness.fragmentsCleared).toBe(0)
-    expect(harness.session.getState()).toMatchObject({
-      phase: { kind: 'gate' },
-      linkProblem: null,
-      stopped: 'The read was stopped when the token changed. Nothing further was sent without it.',
-    })
+    expect(harness.session.getState().linkProblem).toBeNull()
   })
 
   it('drops a snapshot that arrives after the session closed', async () => {
@@ -635,16 +651,34 @@ describe('a shared link in the fragment', () => {
  */
 describe('what a token change interrupts', () => {
   it('stops a read that is under way', () => {
-    expect(stopsForTokenChange('listing')).toBe(true)
-    expect(stopsForTokenChange('confirm')).toBe(true)
-    expect(stopsForTokenChange('resolving')).toBe(true)
-    expect(stopsForTokenChange('drawing')).toBe(true)
+    expect(stopsForTokenChange('listing', true)).toBe(true)
+    expect(stopsForTokenChange('confirm', true)).toBe(true)
+    expect(stopsForTokenChange('resolving', true)).toBe(true)
+    expect(stopsForTokenChange('drawing', true)).toBe(true)
   })
 
   it('leaves a gate, a drawn graph, and a reported failure alone', () => {
-    expect(stopsForTokenChange('gate')).toBe(false)
-    expect(stopsForTokenChange('ready')).toBe(false)
-    expect(stopsForTokenChange('failed')).toBe(false)
+    expect(stopsForTokenChange('gate', true)).toBe(false)
+    expect(stopsForTokenChange('ready', true)).toBe(false)
+    expect(stopsForTokenChange('failed', true)).toBe(false)
+  })
+
+  /**
+   * The same phase covers a graph laid out from a GitHub read and one laid out from a payload
+   * already in hand. Only the first is holding the token, and only it has anything to stop.
+   */
+  it('leaves work that never carried the token alone, in every phase', () => {
+    const kinds: Phase['kind'][] = [
+      'gate',
+      'listing',
+      'confirm',
+      'resolving',
+      'drawing',
+      'failed',
+      'ready',
+    ]
+
+    for (const kind of kinds) expect(stopsForTokenChange(kind, false)).toBe(false)
   })
 
   it('aborts the signal the requests in flight are carrying', async () => {
