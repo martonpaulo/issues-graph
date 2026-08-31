@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import rawIssue from './__fixtures__/agent-workflows.raw-issue.json'
+import rawIssue from './__fixtures__/arbaro.raw-issue.json'
 import {
   DEPENDENCY_CONCURRENCY,
   DEPENDENCY_PAGE_SIZE,

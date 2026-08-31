@@ -455,19 +455,111 @@ interface ElkEdge {
 
 interface ElkEngine {
   layout(graph: ElkNode): Promise<ElkNode>
+  /** Present only for the worker engine; the bundled one runs on the thread that called it. */
+  terminate?(): void
 }
 
 let engine: Promise<ElkEngine> | null = null
+/**
+ * What `engine` resolved to, kept beside it so a discard can decide *and* detach without awaiting.
+ * Reading the engine out of its own promise is a turn too late: the memo would still be handing the
+ * doomed engine to anything that asked in between.
+ */
+let ready: ElkEngine | null = null
+
+/**
+ * A real worker where the platform has one, and the bundled engine where it does not.
+ *
+ * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for a
+ * 25-node graph, 672 ms at 250 nodes — during which the page cannot paint or
+ * answer a click. The worker moves that off the main thread and makes the work stoppable, which is
+ * the only way an ELK layout can be stopped.
+ *
+ * The budget those figures were read against is the platform's own 50 ms, agreed under #16. See
+ * `docs/research/elk-layout-main-thread-cost.md` for the measurement and the decision.
+ *
+ * The fallback is not a nicety: the tests run this module under Node, where `Worker` does not
+ * exist, and the layout they assert on is the same algorithm either way.
+ */
+async function createEngine(): Promise<ElkEngine> {
+  if (typeof Worker !== 'undefined') {
+    const { workerEngine } = await import('./layoutWorker')
+    return workerEngine() as ElkEngine
+  }
+  const module = await import('elkjs/lib/elk.bundled.js')
+  return new (module.default as unknown as new () => ElkEngine)()
+}
 
 /**
  * ELK is a megabyte of compiled Java, so it is fetched only when a graph is actually drawn and
  * kept for the rest of the session.
+ *
+ * Only a *settled-successful* engine is worth keeping. Memoizing the Promise itself means a
+ * rejected chunk load — a deploy that moved the asset, a network blip, an offline moment — is kept
+ * with the same permanence as a working engine, and every later draw in the session re-awaits that
+ * one rejection however healthy the network has since become. Clearing the slot on rejection is
+ * what makes the retry the reader is already offered actually retry something.
  */
 async function elk(): Promise<ElkEngine> {
-  engine ??= import('elkjs/lib/elk.bundled.js').then(
-    (module) => new (module.default as unknown as new () => ElkEngine)(),
-  )
+  if (!engine) {
+    const attempt: Promise<ElkEngine> = createEngine()
+      .then((created) => {
+        if (engine === attempt) ready = created
+        return created
+      })
+      .catch((error: unknown) => {
+        // Cleared only while this attempt is still the one on record, so a later attempt that has
+        // already replaced it — and may well have succeeded — is not discarded by an older failure.
+        if (engine === attempt) {
+          engine = null
+          ready = null
+        }
+        throw error
+      })
+    engine = attempt
+  }
   return engine
+}
+
+/**
+ * Drops the memoized engine and terminates it.
+ *
+ * `used` narrows that to one engine: a layout that failed says its own engine is no longer
+ * trustworthy, but by the time the failure is handled the memo may already hold a replacement that
+ * is perfectly healthy, and taking that one down would turn one failed draw into two.
+ */
+function discard(used: ElkEngine | null): void {
+  const held = engine
+  if (!held) return
+  // Whether this discard applies is decided here rather than inside the callback below, because
+  // `ready` already knows what the memo holds.
+  if (used && ready !== used) return
+  // Detached before anything is awaited. Resolving the engine first to identify it left the memo
+  // pointing at it for a further turn, so a draw beginning in that window — a close and an
+  // immediate remount is exactly that — was handed an engine on its way to being terminated.
+  engine = null
+  ready = null
+  void held.then(
+    (current) => current.terminate?.(),
+    () => {
+      // An attempt that never produced an engine has nothing to terminate, and its rejection
+      // belongs to whoever asked for it.
+    },
+  )
+}
+
+/**
+ * Stops a layout whose result nobody is waiting for any more.
+ *
+ * ELK offers no cancellation, so the running layout can only be discarded — but a worker can be
+ * terminated, and that is the difference between "the result is ignored" and "the work stops". The
+ * engine is dropped with it, so the next draw builds a fresh one.
+ *
+ * Call this only when no draw still wants an answer: one worker serves every layout, and
+ * terminating it takes the current one down too.
+ */
+export function discardLayoutEngine(): void {
+  discard(null)
 }
 
 /** Weakly-connected components: edge direction does not matter for grouping. */
@@ -601,20 +693,28 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
   if (connected.length > 0) {
     const members = connected.flat()
     const ids = new Set(members.map((node) => node.id))
-    const result = await (
-      await elk()
-    ).layout({
-      id: 'root',
-      layoutOptions: ELK_OPTIONS,
-      children: members.map((node) => ({
-        id: node.id,
-        width: NODE_WIDTH,
-        height: node.height,
-      })),
-      edges: edges
-        .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
-        .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
-    })
+    const engineUsed = await elk()
+    let result: ElkNode
+    try {
+      result = await engineUsed.layout({
+        id: 'root',
+        layoutOptions: ELK_OPTIONS,
+        children: members.map((node) => ({
+          id: node.id,
+          width: NODE_WIDTH,
+          height: node.height,
+        })),
+        edges: edges
+          .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
+          .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
+      })
+    } catch (error) {
+      // The engine that just failed is kept for the rest of the session otherwise, so the retry the
+      // reader is offered would hand the same draw to the same dead worker and fail identically.
+      // Rebuilding one is cheap; retrying against a corpse is not a retry at all.
+      discard(engineUsed)
+      throw error
+    }
 
     for (const child of result.children ?? []) {
       const node = placed.get(child.id)

@@ -5,14 +5,15 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
-import awIssues from './__fixtures__/agent-workflows.issues.json'
+import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
+import arbaroIssues from './__fixtures__/arbaro.issues.json'
 import {
   App,
   blockerStateText,
   DependencyTable,
   DIRECTION_LEGEND,
   budgetParts,
+  canvasShortcut,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -213,9 +214,9 @@ describe('graphBounds', () => {
   }
 
   it('encloses every card and every group frame of a captured graph', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), {
       owner: 'martonpaulo',
-      repo: 'agent-workflows',
+      repo: 'arbaro',
     })
     const bounds = graphBounds(graph)
 
@@ -238,9 +239,9 @@ describe('graphBounds', () => {
   })
 
   it('touches each edge of the box it reports', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), {
       owner: 'martonpaulo',
-      repo: 'agent-workflows',
+      repo: 'arbaro',
     })
     const bounds = graphBounds(graph)
     const boxes = [
@@ -397,9 +398,9 @@ describe('the dependencies as text', () => {
   it('renders one row per drawn edge, both ends named', async () => {
     const graph = await buildGraph(
       {
-        issues: awIssues as IssuePayload[],
+        issues: arbaroIssues as IssuePayload[],
         blockers: new Map(
-          Object.entries(awBlockedBy as Record<string, IssuePayload[]>).map(
+          Object.entries(arbaroBlockedBy as Record<string, IssuePayload[]>).map(
             ([number, list]) => [Number(number), list],
           ),
         ),
@@ -411,15 +412,17 @@ describe('the dependencies as text', () => {
         rateLimit: null,
         includedClosed: true,
       },
-      { owner: 'martonpaulo', repo: 'agent-workflows' },
+      { owner: 'martonpaulo', repo: 'arbaro' },
     )
 
     const rows = dependencyRows(graph)
     const html = renderToStaticMarkup(createElement(DependencyTable, { rows }))
 
-    // Every edge the canvas draws is reachable without tracing it.
-    expect(rows).toHaveLength(graph.edges.length)
-    for (const edge of graph.edges) {
+    // Every blocking edge the canvas draws is reachable without tracing it. Hierarchy edges are
+    // deliberately absent: containment is not a blocking relationship.
+    const drawn = graph.edges.filter((edge) => edge.kind === 'dependency')
+    expect(rows).toHaveLength(drawn.length)
+    for (const edge of drawn) {
       const blocker = graph.nodes.find((node) => node.id === edge.source)!
       const dependent = graph.nodes.find((node) => node.id === edge.target)!
       expect(
@@ -658,5 +661,78 @@ describe('top chrome layout', () => {
       if (!/\.bar--tools|\.bar--identity/.test(rule)) continue
       expect(rule, rule).not.toMatch(/(^|[^-\w])top:/)
     }
+  })
+})
+
+describe('what a key press asks of the canvas', () => {
+  const free = { captured: false, onControl: false }
+  const onControl = { captured: false, onControl: true }
+
+  function press(
+    key: string,
+    modifiers: Partial<Pick<KeyboardEvent, 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>> = {},
+  ) {
+    return { key, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, ...modifiers }
+  }
+
+  it('keeps the shortcuts the canvas has always had', () => {
+    expect(canvasShortcut(press('Escape'), free, 0)).toBe('clear')
+    expect(canvasShortcut(press('a', { metaKey: true }), free, 0)).toBe('select-all')
+    expect(canvasShortcut(press('A', { shiftKey: true }), free, 0)).toBe('select-all')
+    expect(canvasShortcut(press('f'), free, 3)).toBe('fit')
+    expect(canvasShortcut(press('D'), free, 3)).toBe('dim')
+    expect(canvasShortcut(press('r'), free, 3)).toBe('restore')
+    expect(canvasShortcut(press('Enter'), free, 1)).toBe('open')
+  })
+
+  it('stands down on Enter while a control has the focus, so one press has one outcome', () => {
+    expect(canvasShortcut(press('Enter'), onControl, 1)).toBeNull()
+  })
+
+  /* The other four share no key with an activation: a button ignores D, so the canvas may have it
+     even while that button is focused, and taking it away would make the bar's own hints wrong. */
+  it('still answers the keys a focused control does not act on', () => {
+    expect(canvasShortcut(press('f'), onControl, 1)).toBe('fit')
+    expect(canvasShortcut(press('d'), onControl, 1)).toBe('dim')
+    expect(canvasShortcut(press('r'), onControl, 1)).toBe('restore')
+    expect(canvasShortcut(press('Escape'), onControl, 1)).toBe('clear')
+  })
+
+  it('says nothing at all while a field or a dialog is waiting on an answer', () => {
+    const captured = { captured: true, onControl: false }
+    for (const key of ['Escape', 'a', 'f', 'd', 'r', 'Enter']) {
+      expect(canvasShortcut(press(key), captured, 1), key).toBeNull()
+    }
+  })
+
+  it('opens only when the selection is exactly one issue', () => {
+    expect(canvasShortcut(press('Enter'), free, 0)).toBeNull()
+    expect(canvasShortcut(press('Enter'), free, 2)).toBeNull()
+  })
+
+  it('leaves the browser its own chords', () => {
+    expect(canvasShortcut(press('f', { metaKey: true }), free, 1)).toBeNull()
+    expect(canvasShortcut(press('r', { ctrlKey: true }), free, 1)).toBeNull()
+    expect(canvasShortcut(press('d', { altKey: true }), free, 1)).toBeNull()
+  })
+})
+
+describe('where the focus ring is allowed to show', () => {
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+
+  /**
+   * The wrappers stopped being tab stops in the markup rather than in the stylesheet: React Flow
+   * is told not to make them focusable at all. A rule that hides their ring would only be there to
+   * hide a stop that still exists, which is the fault this replaced.
+   */
+  it('suppresses no ring on a React Flow wrapper', () => {
+    for (const rule of styles.split('}')) {
+      if (!/\.react-flow(__(pane|node|renderer))?:focus/.test(rule)) continue
+      expect(rule, rule).not.toMatch(/outline:\s*none/)
+    }
+  })
+
+  it('shows the card icons whenever one of them takes the focus', () => {
+    expect(styles).toMatch(/\.card__actions:focus-within[^{]*\{[^}]*opacity: 1/)
   })
 })
