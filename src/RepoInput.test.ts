@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import {
+  chosenSuggestion,
   describeValidation,
   INVALID_TARGET,
   nextActiveOption,
@@ -44,6 +45,61 @@ describe('nextActiveOption', () => {
     expect(nextActiveOption('ArrowUp', -1, 0)).toBeNull()
     expect(nextActiveOption('Enter', 1, 3)).toBeNull()
     expect(nextActiveOption('a', 1, 3)).toBeNull()
+  })
+})
+
+describe('chosenSuggestion', () => {
+  it('takes the highlighted option', () => {
+    expect(chosenSuggestion(0, 3)).toBe(0)
+    expect(chosenSuggestion(2, 3)).toBe(2)
+  })
+
+  it('leaves the typed text alone when nothing is highlighted', () => {
+    expect(chosenSuggestion(-1, 3)).toBe(-1)
+    expect(chosenSuggestion(-1, 0)).toBe(-1)
+  })
+
+  it('drops a highlight whose suggestion list moved under it', () => {
+    expect(chosenSuggestion(2, 1)).toBe(-1)
+    expect(chosenSuggestion(0, 0)).toBe(-1)
+  })
+})
+
+/**
+ * Clicking `Open` blurs the input, so the popup closes in the render before the submit event
+ * arrives. The regression this replays is a submit that read the closed popup and opened the raw
+ * typed text instead of the option the user had highlighted.
+ */
+describe('the Open button submitting a highlighted option', () => {
+  it('still submits the highlight after the blur has closed the popup', () => {
+    const suggestions = ['acme/app', 'acme/tools']
+    const typedValue = 'acme'
+
+    // The user highlights the second option.
+    let active = nextActiveOption('ArrowDown', -1, suggestions.length) ?? -1
+    active = nextActiveOption('ArrowDown', active, suggestions.length) ?? active
+    expect(active).toBe(1)
+
+    // Pressing the button blurs the input, which closes the popup before the submit fires.
+    const open = false
+
+    const chosen = chosenSuggestion(active, suggestions.length)
+    expect(chosen).toBe(1)
+    expect(chosen >= 0 ? suggestions[chosen] : typedValue).toBe('acme/tools')
+    // The choice outlives the popup rather than depending on it.
+    expect(open).toBe(false)
+  })
+
+  it('submits the typed text once Escape has given the highlight up', () => {
+    const suggestions = ['acme/app', 'acme/tools']
+    const typedValue = 'acme'
+
+    let active = nextActiveOption('ArrowDown', -1, suggestions.length) ?? -1
+    active = nextActiveOption('Escape', active, suggestions.length) ?? active
+
+    const chosen = chosenSuggestion(active, suggestions.length)
+    expect(chosen).toBe(-1)
+    expect(chosen >= 0 ? suggestions[chosen] : typedValue).toBe('acme')
   })
 })
 

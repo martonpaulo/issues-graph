@@ -80,9 +80,22 @@ export function nextActiveOption(
 }
 
 /**
+ * The option a submit would take, or -1 when the typed text stands on its own.
+ *
+ * Deliberately blind to whether the popup is on screen. Pressing the `Open` button blurs the input,
+ * which closes the popup in the render *before* the submit event arrives, so a choice derived from
+ * visibility would be thrown away by the very click meant to act on it. Only giving up the
+ * highlight — Escape, typing, or choosing — gives up the choice. An index past the end is one whose
+ * suggestion list moved under it, which is no choice either.
+ */
+export function chosenSuggestion(active: number, count: number): number {
+  return active >= 0 && active < count ? active : -1
+}
+
+/**
  * The open/closed and highlighted-option state of the listbox, with the keyboard contract a
  * combobox owes: arrows wrap through the options and Escape closes without choosing. Focus never
- * leaves the input, so a pointer press on an option cannot close the popup before the click lands.
+ * leaves the input for a press on an option, so the popup cannot close before that click lands.
  */
 function useComboboxNavigation(count: number) {
   const [open, setOpen] = useState(false)
@@ -113,8 +126,7 @@ function useComboboxNavigation(count: number) {
   return {
     active,
     visible,
-    /** The option a submit would take, or -1 when the typed text stands on its own. */
-    chosen: visible && active >= 0 ? active : -1,
+    chosen: chosenSuggestion(active, count),
     setActive,
     show,
     close,
@@ -228,7 +240,12 @@ export function RepoInput({
             aria-expanded={list.visible}
             aria-controls={listId}
             aria-autocomplete="list"
-            aria-activedescendant={list.active >= 0 ? `${listId}-${list.active}` : undefined}
+            // Only while the options are on screen: the highlight outlives the popup so a submit
+            // can still act on it, but an id that is no longer rendered is not something to point
+            // a screen reader at.
+            aria-activedescendant={
+              list.visible && list.active >= 0 ? `${listId}-${list.active}` : undefined
+            }
             {...describeValidation(error, errorId)}
             autoComplete="off"
             spellCheck={false}
