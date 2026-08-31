@@ -1,7 +1,14 @@
-/** The router, and nothing else. */
-import { useCallback, useEffect, useMemo, useState } from 'react'
+/**
+ * The router, and nothing else.
+ *
+ * A reader who has not named a repository yet needs the shell and the repository field; the graph
+ * runtime — React Flow, the canvas, its node and edge components — is worth hundreds of kilobytes
+ * they have no use for, so it is reached through a lazy import and arrives only once a repository
+ * route is entered. Keep every graph-side import inside `GraphView.tsx`: one eager import of it
+ * from here or from `Shell.tsx` folds it back into the landing chunk.
+ */
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 
-import GraphView from './GraphView'
 import {
   BASE,
   ExternalConfirm,
@@ -18,6 +25,25 @@ import {
   type RepoTarget,
 } from './route'
 import { readToken, writeToken } from './token'
+
+const GraphView = lazy(() => import('./GraphView'))
+
+/**
+ * What stands in while the graph chunk is fetched. It is the same shell the repository route
+ * settles into, so entering a repository never blanks the page: the heading and the field stay
+ * put, and only the section underneath them changes. On a fast connection the chunk is usually
+ * already there and this is never painted.
+ */
+function GraphPending({ target, onOpen }: { target: RepoTarget; onOpen: (target: RepoTarget) => void }) {
+  return (
+    <Start initial={slugOf(target)} onOpen={onOpen}>
+      <p className="notice" role="status">
+        Loading the graph…
+      </p>
+    </Start>
+  )
+}
+
 
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname)
@@ -72,11 +98,13 @@ export function App() {
     <TokenContext.Provider value={tokenState}>
       <OpenExternalContext.Provider value={openExternal}>
         {route.kind === 'graph' ? (
-          <GraphView
-            key={`${slugOf(route.target)}:${hashNav}`}
-            target={route.target}
-            onOpen={openTarget}
-          />
+          <Suspense fallback={<GraphPending target={route.target} onOpen={openTarget} />}>
+            <GraphView
+              key={`${slugOf(route.target)}:${hashNav}`}
+              target={route.target}
+              onOpen={openTarget}
+            />
+          </Suspense>
         ) : (
           <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
         )}
