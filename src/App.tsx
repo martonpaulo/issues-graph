@@ -17,11 +17,11 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
 } from 'react'
 
-import { readCache, writeCache, type CachedGraph } from './cache'
 import {
   adjacencyOf,
   dependencyRows,
@@ -30,7 +30,6 @@ import {
   type DependencyRow,
 } from './dependencies'
 import {
-  buildGraph,
   dependencyCounts,
   NODE_WIDTH,
   type GraphNode,
@@ -38,13 +37,18 @@ import {
 } from './graph'
 import {
   AUTHENTICATED_HOURLY_LIMIT,
-  loadRepositoryGraph,
-  readRateLimit,
   UNAUTHENTICATED_HOURLY_LIMIT,
-  type LoadFailure,
   type UnresolvedDependency,
   type RateLimitStatus,
 } from './github'
+import {
+  browserEffects,
+  decideSavedCopyOpen,
+  GraphSession,
+  type SavedCopyProvenance,
+  type SessionFailure,
+  type SessionState,
+} from './graphSession'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
@@ -59,8 +63,7 @@ import {
   type RepoTarget,
 } from './route'
 import { asBoolean, asStringArray, readStored, writeStored } from './storage'
-import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
-import { rememberTarget } from './suggestions'
+import { buildSnapshotUrl, type SnapshotView } from './snapshot'
 import { readToken, writeToken } from './token'
 import { describeAge, describeUntil } from './time'
 
@@ -86,43 +89,6 @@ const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
 // The stored key still says "hidden": it predates the rename to dimming, and the copy change is
 // not worth stranding every reader's saved set. The value is a list of node IDs either way.
 export const dimmedKey = (slug: string) => `issue-graph:hidden:${slug}`
-
-export interface SavedCopyProvenance {
-  savedAt: Date
-  includedClosed: boolean
-  /**
-   * Whose copy this is. A saved copy is the viewer's own earlier read; a shared one arrived in a
-   * link and was taken by somebody else. Both are point-in-time, but only one of them is theirs,
-   * and a recipient deciding whether to trust what is on screen needs to know which.
-   */
-  source: 'saved' | 'shared'
-}
-
-export type SavedCopyDecision =
-  | { kind: 'open'; provenance: SavedCopyProvenance }
-  | { kind: 'requires-latest'; reason: string }
-
-/** A saved copy can only satisfy views covered by the GitHub read that produced it. */
-export function decideSavedCopyOpen(
-  cached: CachedGraph,
-  showClosed: boolean,
-): SavedCopyDecision {
-  if (showClosed && !cached.data.includedClosed) {
-    return {
-      kind: 'requires-latest',
-      reason: 'A wider GitHub read is required to include closed blockers.',
-    }
-  }
-
-  return {
-    kind: 'open',
-    provenance: {
-      savedAt: cached.savedAt,
-      includedClosed: cached.data.includedClosed,
-      source: 'saved',
-    },
-  }
-}
 
 function savedCopyCoverage(includedClosed: boolean): string {
   return includedClosed ? 'includes closed blockers' : 'open blockers only'
@@ -414,7 +380,7 @@ function Start({
 
 export function failureText(
   target: RepoTarget,
-  failure: LoadFailure,
+  failure: SessionFailure,
   authenticated = false,
 ): { title: string; body: string } {
   const slug = slugOf(target)
@@ -447,6 +413,13 @@ export function failureText(
       }
     case 'cancelled':
       return { title: 'Load cancelled', body: 'No dependency requests were spent.' }
+    case 'layout':
+      // GitHub answered; the drawing is what failed. Naming the network here sent the reader to
+      // check the one thing that had already worked.
+      return {
+        title: 'The graph could not be laid out',
+        body: `The issues of ${slug} were read, but arranging them failed: ${withoutTrailingPeriod(failure.message)}. Nothing about GitHub needs changing; try again.`,
+      }
   }
 }
 
@@ -1394,22 +1367,6 @@ function Canvas({
 
 /* Loading, budget gates, and the repository view --------------------------- */
 
-type Phase =
-  | { kind: 'gate'; status: RateLimitStatus | null; checking: boolean }
-  | { kind: 'listing' }
-  | { kind: 'confirm'; cost: number; status: RateLimitStatus | null; decide: (ok: boolean) => void }
-  | { kind: 'resolving'; done: number; total: number }
-  /** The layout runs off the main path of the load, and on a large graph it is not instant. */
-  | { kind: 'drawing' }
-  | { kind: 'failed'; failure: LoadFailure }
-  | {
-      kind: 'ready'
-      graph: IssueGraph
-      savedCopy: SavedCopyProvenance | null
-      /** Kept beside the drawn graph because a shareable link is built from the data, not the layout. */
-      snapshot: SnapshotView
-    }
-
 function GraphView({
   target,
   onOpen,
@@ -1452,34 +1409,45 @@ function GraphView({
 }
 
 /**
- * Whether a token change has to stop what the page is doing.
+ * Binds a {@link GraphSession} to React.
  *
- * A load in progress carries the token it started with, so it must be stopped. A gate has sent
- * nothing, and a drawn graph or a reported failure is finished: none of them is holding a request
- * that could still leave with the wrong credential, and discarding a graph somebody is reading
- * would be a worse answer than leaving it.
+ * The session is the whole lifecycle; this is subscription and nothing else, which is why it can
+ * stay this short. `begin` and `close` are paired on the mount so a session that is unmounted
+ * stops its requests and settles anything still waiting on an answer — and so that StrictMode's
+ * mount, unmount, remount ends with a session that is running rather than one that was closed.
  */
-export function stopsForTokenChange(kind: Phase['kind']): boolean {
-  return kind === 'listing' || kind === 'confirm' || kind === 'resolving' || kind === 'drawing'
-}
+function useGraphSession(options: {
+  target: RepoTarget
+  identity: string
+  token: string
+  onCancelled: (why: string | null) => void
+}): { session: GraphSession; state: SessionState } {
+  const [session] = useState(
+    () =>
+      new GraphSession({
+        target: options.target,
+        identity: options.identity,
+        token: options.token,
+        // Read once, for the same reason as the saved copy: neither may change under the page it
+        // produced.
+        fragment: window.location.hash,
+        onCancelled: options.onCancelled,
+        effects: browserEffects,
+      }),
+  )
 
-/**
- * Aborts whatever is in flight when the token it was started with is no longer the current one,
- * and records the token the next load will carry.
- *
- * The comparison lives in a ref rather than in state because the render-phase block below
- * synchronizes its own copy before any effect commits: an effect comparing against that state
- * would always find the two already equal and would never abort. Returns whether it aborted.
- */
-export function abortOnTokenChange(
-  carried: { current: string },
-  token: string,
-  active: { current: AbortController | null },
-): boolean {
-  if (carried.current === token) return false
-  carried.current = token
-  active.current?.abort()
-  return true
+  const state = useSyncExternalStore(session.subscribe, session.getState, session.getState)
+
+  useEffect(() => {
+    session.begin()
+    return () => session.close()
+  }, [session])
+
+  useEffect(() => {
+    session.setToken(options.token)
+  }, [session, options.token])
+
+  return { session, state }
 }
 
 function GraphLoad({
@@ -1506,230 +1474,10 @@ function GraphLoad({
   // the page says back to them: the bar, the repository link, the prefilled input, the copy.
   const identity = canonicalSlugOf(target)
   const slug = slugOf(target)
-  // Read once per mount: the gate has to describe a copy that does not change under it.
-  const [cached] = useState<CachedGraph | null>(() => readCache(identity))
-  // Read once per mount, for the same reason as the saved copy: neither may change under the page
-  // it produced. A snapshot in the fragment opens straight into the drawing, skipping the gate —
-  // there is nothing to weigh, because drawing it costs nothing.
-  const [fragment] = useState(() => window.location.hash)
-  const sharedLink = hasSnapshot(fragment)
-  const [phase, setPhase] = useState<Phase>(
-    sharedLink ? { kind: 'drawing' } : { kind: 'gate', status: null, checking: true },
-  )
-  const [linkProblem, setLinkProblem] = useState<string | null>(null)
-  const abort = useRef<AbortController | null>(null)
 
-  // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
-  // can always open with real numbers instead of an assumption about what is left.
-  //
-  // The condition is the gate itself, not the address that opened the page. A shared link spends
-  // nothing and so asks nothing — not even this free read, which still names api.github.com in a
-  // request the recipient never chose to make — but a link that turns out to be unreadable lands
-  // back here, and the gate it lands on has to be usable. Keying on the phase means every route to
-  // the gate is quoted a budget; keying on the URL left the recovery path waiting forever on a
-  // request that had already been declined.
-  useEffect(() => {
-    if (phase.kind !== 'gate') return
-    const controller = new AbortController()
-    void readRateLimit({ signal: controller.signal, token }).then((status) => {
-      if (controller.signal.aborted) return
-      setPhase((current) =>
-        current.kind === 'gate' ? { ...current, status, checking: false } : current,
-      )
-    })
-    return () => controller.abort()
-    // Saving or removing a token changes the budget, so the gate has to read it again. The status
-    // this sets leaves `kind` alone, so recording it cannot re-trigger the read that produced it.
-  }, [target, token, phase.kind])
-
-  useEffect(() => () => abort.current?.abort(), [])
-
-  /**
-   * Draws the shared link, or explains why it cannot and falls back to the ordinary gate.
-   *
-   * The snapshot is drawn at the choice the sender drew it with, which the link records for
-   * exactly this reason — not at the coverage behind it, which can be wider, and not at the
-   * recipient's own preference, which is about a repository they have not read. Nothing is
-   * written to this browser's cache either: it is somebody else's copy, and a later visit must
-   * not be offered it as this viewer's own.
-   */
-  useEffect(() => {
-    if (!sharedLink) return
-    let cancelled = false
-
-    // A link that could not be read is not worth retrying on the next reload, and leaving it in
-    // the address bar would describe a graph the page is not showing.
-    const giveUp = (reason: string | null) => {
-      setLinkProblem(reason)
-      setPhase({ kind: 'gate', status: null, checking: true })
-      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
-    }
-
-    void readSnapshot(fragment, identity)
-      .then(async (read) => {
-        if (cancelled) return
-        if (read.kind !== 'snapshot') {
-          giveUp(read.kind === 'invalid' ? read.reason : null)
-          return
-        }
-
-        // Somebody else's link, so its payloads do not get to say which repository this is:
-        // `readSnapshot` bound it to the one in the path, and that binding is the whole guarantee.
-        const graph = await buildGraph(read.view.data, target, {
-          showClosed: read.view.showClosed,
-        })
-        if (cancelled) return
-        setPhase({
-          kind: 'ready',
-          graph,
-          savedCopy: {
-            savedAt: read.view.capturedAt,
-            // What the recipient is looking at, which is the sender's drawing rather than the
-            // wider read that may lie behind it.
-            includedClosed: read.view.showClosed,
-            source: 'shared',
-          },
-          snapshot: read.view,
-        })
-      })
-      .catch(() => {
-        if (cancelled) return
-        giveUp('This shared link could not be read.')
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [sharedLink, fragment, identity, target])
-
-  /**
-   * A load already in flight carries the token it started with: `LoadOptions` is built once, so
-   * every request still queued would keep sending a credential the viewer has just replaced or
-   * removed, and the budget on screen would describe an authentication state the load no longer
-   * has. Stopping it is the only reading of "takes effect on the next request" that is true.
-   */
-  const carriedToken = useRef(token)
-  const [shownToken, setShownToken] = useState(token)
-  const [stopped, setStopped] = useState<string | null>(null)
-
-  // What the page shows next. The abort itself is the effect below, because stopping a request is
-  // a side effect and this block has to stay a pure state adjustment.
-  if (shownToken !== token) {
-    setShownToken(token)
-    if (stopsForTokenChange(phase.kind)) {
-      setPhase({ kind: 'gate', status: null, checking: true })
-      setStopped(
-        token
-          ? 'The read was stopped when the token changed. Nothing further was sent without it.'
-          : 'The read was stopped when the token was removed. Nothing further was sent with it.',
-      )
-    }
-  }
-
-  // Aborting is what actually stops the requests. Keyed on the token alone, and comparing against
-  // a ref, so the state adjustment above cannot hide the change from it.
-  useEffect(() => {
-    abortOnTokenChange(carriedToken, token, abort)
-  }, [token])
-
-  const start = useCallback(
-    (includeClosed: boolean) => {
-      abort.current?.abort()
-      const controller = new AbortController()
-      abort.current = controller
-      carriedToken.current = token
-      setStopped(null)
-      setPhase({ kind: 'listing' })
-
-      loadRepositoryGraph(target, {
-        signal: controller.signal,
-        token,
-        includeClosed,
-        onProgress: ({ done, total }) => {
-          if (!controller.signal.aborted) setPhase({ kind: 'resolving', done, total })
-        },
-        confirmDependencies: async (cost) => {
-          const status = await readRateLimit({ signal: controller.signal, token })
-          if (controller.signal.aborted) return false
-          return new Promise<boolean>((resolve) => {
-            // Nothing has been sent yet, so an abort here answers the question with "no" rather
-            // than leaving the load awaiting a decision the interface can no longer offer.
-            const onAbort = () => resolve(false)
-            controller.signal.addEventListener('abort', onAbort, { once: true })
-            setPhase({
-              kind: 'confirm',
-              cost,
-              status,
-              decide: (ok) => {
-                controller.signal.removeEventListener('abort', onAbort)
-                resolve(ok)
-              },
-            })
-          })
-        },
-      })
-        .then(async (result) => {
-          if (controller.signal.aborted) return
-          if (result.ok) {
-            rememberTarget(target)
-            writeCache(identity, result.data)
-            setPhase({ kind: 'drawing' })
-            // Read from GitHub just now, so the payloads may name the repository they came from.
-            const graph = await buildGraph(result.data, target, {
-              showClosed: includeClosed,
-              trustedIdentity: true,
-            })
-            if (!controller.signal.aborted) {
-              setPhase({
-                kind: 'ready',
-                graph,
-                savedCopy: null,
-                snapshot: {
-                  data: result.data,
-                  capturedAt: new Date(),
-                  showClosed: includeClosed,
-                },
-              })
-            }
-          } else if (result.failure.kind === 'cancelled') {
-            onReload(null)
-          } else {
-            setPhase({ kind: 'failed', failure: result.failure })
-          }
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return
-          setPhase({
-            kind: 'failed',
-            failure: {
-              kind: 'network',
-              message: error instanceof Error ? error.message : 'The request failed.',
-            },
-          })
-        })
-    },
-    [target, identity, token, onReload],
-  )
-
-  const drawSavedCopy = useCallback(
-    (copy: CachedGraph) => {
-      const decision = decideSavedCopyOpen(copy, showClosed)
-      if (decision.kind !== 'open') return
-
-      setPhase({ kind: 'drawing' })
-      // This browser's own copy of a read it made from GitHub, under this repository's key.
-      void buildGraph(copy.data, target, { showClosed, trustedIdentity: true }).then((graph) =>
-        setPhase({
-          kind: 'ready',
-          graph,
-          savedCopy: decision.provenance,
-          snapshot: { data: copy.data, capturedAt: copy.savedAt, showClosed },
-        }),
-      )
-    },
-    [target, showClosed],
-  )
-
+  const { session, state } = useGraphSession({ target, identity, token, onCancelled: onReload })
+  const { phase, linkProblem, stopped } = state
+  const cached = session.cached
   const savedCopyDecision = cached ? decideSavedCopyOpen(cached, showClosed) : null
 
   if (phase.kind === 'ready' && phase.graph.nodes.length > 0) {
@@ -1794,7 +1542,7 @@ function GraphLoad({
               className={savedCopyDecision?.kind === 'open' ? 'button' : 'button button--primary'}
               type="button"
               disabled={phase.checking}
-              onClick={() => start(showClosed)}
+              onClick={() => session.start(showClosed)}
             >
               <Icon name="reload" size={12} /> Fetch now
             </button>
@@ -1808,7 +1556,7 @@ function GraphLoad({
                     ? 'saved-copy-unavailable'
                     : undefined
                 }
-                onClick={() => drawSavedCopy(cached)}
+                onClick={() => session.openSavedCopy(showClosed)}
               >
                 <Icon name="clock" size={12} /> Open saved copy
               </button>

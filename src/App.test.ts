@@ -8,13 +8,11 @@ import { describe, expect, it } from 'vitest'
 import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
-  abortOnTokenChange,
   App,
   blockerStateText,
   DependencyTable,
   DIRECTION_LEGEND,
   budgetParts,
-  decideSavedCopyOpen,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -23,9 +21,9 @@ import {
   graphBounds,
   nextIssueSelection,
   SelectionBar,
-  stopsForTokenChange,
   TopChrome,
 } from './App'
+import { decideSavedCopyOpen } from './graphSession'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -326,6 +324,20 @@ describe('what the reader is told about the budget', () => {
     expect(text.body).toContain('Try again')
   })
 
+  /**
+   * A layout failure is not a request failure: GitHub already answered. Reporting it as one sent
+   * the reader to check the connection that had just worked.
+   */
+  it('blames the drawing, not GitHub, when the layout is what failed', () => {
+    const text = failureText(target, { kind: 'layout', message: 'the worker stopped.' }, false)
+
+    expect(text.title).not.toContain('GitHub')
+    expect(text.body).toContain('were read')
+    expect(text.body).toContain('the worker stopped')
+    // One period, not the two that carrying the message's own would produce.
+    expect(text.body).not.toContain('stopped..')
+  })
+
   it('keeps every top-level failure’s guidance distinct', () => {
     const bodies = [
       failureText(target, { kind: 'bad-credentials' }, true),
@@ -333,6 +345,7 @@ describe('what the reader is told about the budget', () => {
       failureText(target, { kind: 'unexpected', status: 500, message: 'GitHub returned error 500' }, false),
       failureText(target, { kind: 'not-found' }, false),
       failureText(target, { kind: 'network', message: 'Failed to fetch' }, false),
+      failureText(target, { kind: 'layout', message: 'the worker stopped' }, false),
     ].map((text) => `${text.title}. ${text.body}`)
 
     expect(new Set(bodies).size).toBe(bodies.length)
@@ -377,78 +390,6 @@ describe('describeUnresolved', () => {
 
   it('says so plainly when the loader recorded no reason at all', () => {
     expect(describeUnresolved([])).toBe('Some blocker data is missing, and GitHub did not say why.')
-  })
-})
-
-/**
- * A load carries the token it started with, so changing one mid-flight has to stop the other.
- * Anything that is not in flight is left alone: nothing of its is still in the air.
- */
-describe('what a token change interrupts', () => {
-  it('stops a read that is under way', () => {
-    expect(stopsForTokenChange('listing')).toBe(true)
-    expect(stopsForTokenChange('confirm')).toBe(true)
-    expect(stopsForTokenChange('resolving')).toBe(true)
-    expect(stopsForTokenChange('drawing')).toBe(true)
-  })
-
-  it('leaves a gate, a drawn graph, and a reported failure alone', () => {
-    expect(stopsForTokenChange('gate')).toBe(false)
-    expect(stopsForTokenChange('ready')).toBe(false)
-    expect(stopsForTokenChange('failed')).toBe(false)
-  })
-})
-
-/**
- * The abort is what actually stops requests carrying a credential the viewer has replaced, so it
- * is worth proving on its own: the component's effect is one call to this.
- */
-describe('stopping a load whose token is gone', () => {
-  function active(): { current: AbortController | null } {
-    return { current: new AbortController() }
-  }
-
-  it('aborts what is in flight and remembers the token that replaced it', () => {
-    const carried = { current: 'old' }
-    const controller = active()
-
-    expect(abortOnTokenChange(carried, 'new', controller)).toBe(true)
-    expect(controller.current?.signal.aborted).toBe(true)
-    expect(carried.current).toBe('new')
-  })
-
-  it('aborts when the token is removed, which is the case that leaks a credential', () => {
-    const carried = { current: 'a-token' }
-    const controller = active()
-
-    expect(abortOnTokenChange(carried, '', controller)).toBe(true)
-    expect(controller.current?.signal.aborted).toBe(true)
-  })
-
-  it('leaves an unchanged token alone, so an unrelated render cannot stop a load', () => {
-    const carried = { current: 'same' }
-    const controller = active()
-
-    expect(abortOnTokenChange(carried, 'same', controller)).toBe(false)
-    expect(controller.current?.signal.aborted).toBe(false)
-  })
-
-  it('aborts once, not on every call after the change', () => {
-    const carried = { current: 'old' }
-    const first = active()
-    abortOnTokenChange(carried, 'new', first)
-
-    const second = active()
-    expect(abortOnTokenChange(carried, 'new', second)).toBe(false)
-    expect(second.current?.signal.aborted).toBe(false)
-  })
-
-  it('does not fail when nothing is in flight', () => {
-    const carried = { current: 'old' }
-    const nothing = { current: null }
-
-    expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
-    expect(carried.current).toBe('new')
   })
 })
 
