@@ -3,6 +3,7 @@ import {
   asStringArray,
   clearStored,
   readStored,
+  storedKeys,
   writeStored,
   type StorageWriteResult,
 } from './storage'
@@ -66,6 +67,16 @@ export interface RetentionEntry {
   usedAt: number
   /** How much the saved graph occupies, or 0 when none is held. */
   chars: number
+  /**
+   * Whether the reader opened this repository themselves.
+   *
+   * Not every repository the browser holds data for is one to offer back. Dimming cards on a
+   * shared link writes a key under that repository without the reader ever having chosen it, and
+   * a copy that arrived in somebody else's link must not be offered as this viewer's own. Such a
+   * repository still has to be counted and still has to be clearable, so it belongs in this list
+   * — just not in the suggestions.
+   */
+  opened: boolean
 }
 
 interface RetentionIndex {
@@ -82,7 +93,8 @@ function isEntry(value: unknown): value is RetentionEntry {
     Number.isFinite(entry.usedAt) &&
     typeof entry.chars === 'number' &&
     Number.isFinite(entry.chars) &&
-    entry.chars >= 0
+    entry.chars >= 0 &&
+    typeof entry.opened === 'boolean'
   )
 }
 
@@ -95,24 +107,83 @@ function decodeIndex(value: unknown): RetentionIndex | undefined {
 }
 
 /**
- * The recent names an earlier build wrote, in the order it wrote them, as entries that claim no
- * stored size. Claiming none is the honest reading: those builds kept no record of what they
- * saved, so the first write under this index is what establishes a real size.
+ * What a browser with no index holds, as entries.
+ *
+ * Two sources, and the second is the one that matters. The recent names an earlier build wrote
+ * are the repositories the reader chose, in the order it wrote them. But that list was capped at
+ * six while the keys behind it never were, so every repository that fell off it years ago still
+ * has a saved graph and a dimmed set sitting in storage. Seeding the index from the names alone
+ * would leave exactly those keys permanently unindexed, uncounted and beyond eviction — the
+ * original unbounded growth, preserved for every existing reader, in the change meant to end it.
+ *
+ * So the keys themselves are read too. Whatever is discovered that the names do not cover follows
+ * them, ordered after every repository the reader actually chose, which is where the budgets will
+ * cut. A discovered repository is not marked as opened: its name already fell out of the
+ * suggestions, and putting it back is not this migration's business — bounding it is.
+ *
+ * Sizes come from the stored values, so the first enforcement measures what is really there
+ * rather than trusting a record earlier builds never kept.
  */
-function legacyEntries(): RetentionEntry[] {
-  return readStored(LEGACY_RECENT_KEY, asStringArray, [])
-    .slice(0, MAX_ENTRIES)
-    .map((slug) => ({ slug, usedAt: 0, chars: 0 }))
+function unindexedEntries(): RetentionEntry[] {
+  const chosen = readStored(LEGACY_RECENT_KEY, asStringArray, []).slice(0, MAX_ENTRIES)
+  const entries: RetentionEntry[] = chosen.map((slug) => ({
+    slug,
+    usedAt: 0,
+    chars: heldChars(canonicalSlug(slug)),
+    opened: true,
+  }))
+
+  const seen = new Set(entries.map((entry) => canonicalSlug(entry.slug)))
+  for (const identity of ownedIdentities()) {
+    if (seen.has(identity)) continue
+    seen.add(identity)
+    entries.push({ slug: identity, usedAt: 0, chars: heldChars(identity), opened: false })
+  }
+
+  return entries
+}
+
+/** Every repository this browser holds a key for, discovered from storage rather than a list. */
+function ownedIdentities(): string[] {
+  const identities = new Set<string>()
+  for (const key of storedKeys()) {
+    if (key.startsWith(CACHE_PREFIX)) identities.add(key.slice(CACHE_PREFIX.length))
+    else if (key.startsWith(DIMMED_PREFIX)) identities.add(key.slice(DIMMED_PREFIX.length))
+  }
+  return [...identities]
+}
+
+/** How much the saved graph under this identity actually occupies right now. */
+function heldChars(identity: string): number {
+  return readStored(cacheKey(identity), (value) => JSON.stringify(value).length, 0)
 }
 
 /** The retained repositories, most recently used first. */
 export function retained(): RetentionEntry[] {
   const index = readStored<RetentionIndex | null>(INDEX_KEY, decodeIndex, null)
-  return index === null ? legacyEntries() : index.entries
+  return index === null ? unindexedEntries() : index.entries
 }
 
-function save(entries: RetentionEntry[]): void {
-  writeStored(INDEX_KEY, { version: 1, entries } satisfies RetentionIndex)
+/** The repositories to offer back: the ones the reader chose, in most-recently-used order. */
+export function openedSlugs(): string[] {
+  return retained()
+    .filter((entry) => entry.opened)
+    .map((entry) => entry.slug)
+}
+
+/**
+ * Whether this browser holds anything at all for the repository, so the page can offer to clear
+ * it. The index is the fast answer; the keys are checked too, because a value the index has not
+ * caught up with is still the reader's data and still theirs to remove.
+ */
+export function holdsData(slug: string): boolean {
+  const identity = canonicalSlug(slug)
+  if (retained().some((entry) => canonicalSlug(entry.slug) === identity)) return true
+  return storedKeys().some((key) => key === cacheKey(identity) || key === dimmedKey(identity))
+}
+
+function save(entries: RetentionEntry[]): StorageWriteResult {
+  return writeStored(INDEX_KEY, { version: 1, entries } satisfies RetentionIndex)
 }
 
 /** Removes every key the repository owns, and nothing else. */
@@ -153,12 +224,12 @@ function enforce(entries: RetentionEntry[]): RetentionEntry[] {
 function promote(
   slug: string,
   next: (existing: RetentionEntry | undefined) => RetentionEntry,
-): void {
+): StorageWriteResult {
   const identity = canonicalSlug(slug)
   const entries = retained()
   const existing = entries.find((entry) => canonicalSlug(entry.slug) === identity)
   const rest = entries.filter((entry) => canonicalSlug(entry.slug) !== identity)
-  save(enforce([next(existing), ...rest]))
+  return save(enforce([next(existing), ...rest]))
 }
 
 /**
@@ -168,7 +239,12 @@ function promote(
  * keeps showing the reader the spelling they just used.
  */
 export function rememberRepository(slug: string): void {
-  promote(slug, (existing) => ({ slug, usedAt: Date.now(), chars: existing?.chars ?? 0 }))
+  promote(slug, (existing) => ({
+    slug,
+    usedAt: Date.now(),
+    chars: existing?.chars ?? 0,
+    opened: true,
+  }))
 }
 
 /** Records that a saved graph of this size is now held for the repository. */
@@ -177,6 +253,7 @@ export function recordCacheSize(identity: string, chars: number): void {
     slug: existing?.slug ?? identity,
     usedAt: Date.now(),
     chars,
+    opened: existing?.opened ?? true,
   }))
 }
 
@@ -190,6 +267,25 @@ export function touchRepository(identity: string): void {
     slug: existing?.slug ?? identity,
     usedAt: Date.now(),
     chars: existing?.chars ?? 0,
+    opened: existing?.opened ?? true,
+  }))
+}
+
+/**
+ * Records that dimmed cards are now stored for a repository.
+ *
+ * Dimming is the one thing the viewer saves for a repository the reader never chose: a shared
+ * link draws somebody else's copy, and dimming a card on it writes a key under that repository
+ * while nothing else does. Unregistered, that key belonged to no budget and had no way to be
+ * cleared. It is registered without being marked as opened, so it is counted and clearable
+ * without the shared link turning into a suggestion.
+ */
+export function registerDimmed(identity: string): void {
+  promote(identity, (existing) => ({
+    slug: existing?.slug ?? identity,
+    usedAt: Date.now(),
+    chars: existing?.chars ?? 0,
+    opened: existing?.opened ?? false,
   }))
 }
 
@@ -206,8 +302,12 @@ export function evictLeastRecent(keep: string): boolean {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     if (canonicalSlug(entries[index].slug) === identity) continue
     dropKeys(entries[index].slug)
-    save([...entries.slice(0, index), ...entries.slice(index + 1)])
-    return true
+    // Only a recorded eviction counts. The caller retries its own write while this keeps saying
+    // yes, and an index that did not take the removal reads back unchanged: the same entry is
+    // chosen again, its already-absent keys are removed again, and the loop never ends. Reporting
+    // the failed write is what makes the retry terminate — on a page where the alternative is a
+    // synchronous spin with the tab frozen.
+    return save([...entries.slice(0, index), ...entries.slice(index + 1)]).ok
   }
 
   return false

@@ -1,4 +1,4 @@
-import { rememberRepository, retained } from './retention'
+import { openedSlugs, rememberRepository } from './retention'
 import { canonicalSlug, parseTargetInput, slugOf, type RepoTarget } from './route'
 
 /** As many options as fit under the field without the list becoming a page of its own. */
@@ -25,15 +25,14 @@ function dedupeByCanonical(slugs: string[]): string[] {
  * They are read from the retention index rather than from a list of their own. Two lists would
  * have to agree about which repositories this browser knows, and they did not: names survived the
  * six-slot list while the graphs behind them were kept forever. One list is the fix, and the
- * suggestions are a view of it.
+ * suggestions are a view of it — the repositories the reader chose, which is not every repository
+ * the browser holds data for.
  *
  * Deduplicating here as well as in the index costs nothing and collapses a list written before
  * identity was canonical, without the reader having to clear anything.
  */
 export function recentTargets(): string[] {
-  return dedupeByCanonical(retained().map((entry) => entry.slug)).filter(
-    (slug) => parseTargetInput(slug) !== null,
-  )
+  return dedupeByCanonical(openedSlugs()).filter((slug) => parseTargetInput(slug) !== null)
 }
 
 export function rememberTarget(target: RepoTarget): void {

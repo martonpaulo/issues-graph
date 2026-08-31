@@ -21,6 +21,12 @@ function installStorage(overrides: Partial<Storage> = {}): Map<string, string> {
     getItem: (key: string) => entries.get(key) ?? null,
     setItem: (key: string, value: string) => void entries.set(key, value),
     removeItem: (key: string) => void entries.delete(key),
+    // Enumerable, like the real thing: the retention index discovers keys older builds left
+    // behind, and a fake that cannot be walked would silently pass every test about that.
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
     ...overrides,
   }
   Object.defineProperty(globalThis, 'window', {

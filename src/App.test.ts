@@ -138,6 +138,21 @@ describe('saved copy entry', () => {
     })
   })
 
+  /* A shared link deliberately saves nothing: it is somebody else's copy, and a later visit must
+     not be offered it as this viewer's own. But the dimming effect ran on mount and wrote an
+     empty set anyway, creating a key under a repository that entered no budget and had no clear
+     control, because that control was gated on there being a saved copy. The gating is what this
+     covers; the write guard itself needs a mounted effect, which this server-rendered harness
+     does not run. */
+
+  it('offers to clear a repository held only by its dimmed cards', () => {
+    withBrowserStorage(() => {
+      window.localStorage.setItem(dimmedKey('acme/app'), JSON.stringify(['issue-1']))
+
+      expect(renderToStaticMarkup(createElement(App))).toContain('Clear saved data')
+    })
+  })
+
   it('never offers the budget gate when the address carries a shared link', async () => {
     const link = await buildSnapshotUrl(
       'acme/app',

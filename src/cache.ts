@@ -3,6 +3,7 @@ import {
   cacheKey,
   evictLeastRecent,
   recordCacheSize,
+  retained,
   touchRepository,
 } from './retention'
 import { readStored, writeStoredText, type StorageWriteResult } from './storage'
@@ -241,8 +242,16 @@ export function writeCache(slug: string, data: RepositoryGraphData): StorageWrit
   const payload = JSON.stringify(toStored(data, Date.now()))
   const key = cacheKey(slug)
 
+  // One attempt per repository that could be surrendered, counted before any of them is. Each
+  // recorded eviction strictly shortens the list, so this bound is never reached in practice; it
+  // is here because the cost of being wrong about that is a frozen tab rather than a failed
+  // write, and a loop whose termination depends on storage agreeing to record something should
+  // not be the only thing standing between the reader and a hung page.
+  let attemptsLeft = retained().length
+
   let result = writeStoredText(key, payload)
-  while (!result.ok && result.reason === 'quota' && evictLeastRecent(slug)) {
+  while (!result.ok && result.reason === 'quota' && attemptsLeft > 0 && evictLeastRecent(slug)) {
+    attemptsLeft -= 1
     result = writeStoredText(key, payload)
   }
 

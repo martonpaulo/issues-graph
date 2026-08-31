@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { canonicalSlug } from './route'
 import {
   cacheKey,
   clearRepositoryData,
   dimmedKey,
   evictLeastRecent,
+  holdsData,
   MAX_CHARS,
   MAX_ENTRIES,
+  openedSlugs,
   recordCacheSize,
+  registerDimmed,
   rememberRepository,
   retained,
   touchRepository,
@@ -18,12 +22,21 @@ import {
  * store is a plain map: the point here is which keys the index adds and removes, not the
  * browser's own quota, which the module never sees anyway.
  */
-function installStorage(overrides: Partial<Storage> = {}): Map<string, string> {
-  const entries = new Map<string, string>()
+function installStorage(
+  overrides: Partial<Storage> = {},
+  existing?: Map<string, string>,
+): Map<string, string> {
+  const entries = existing ?? new Map<string, string>()
   const storage = {
     getItem: (key: string) => entries.get(key) ?? null,
     setItem: (key: string, value: string) => void entries.set(key, value),
     removeItem: (key: string) => void entries.delete(key),
+    // Enumerable, like the real thing: the retention index discovers keys older builds left
+    // behind, and a fake that cannot be walked would silently pass every test about that.
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
     ...overrides,
   }
   Object.defineProperty(globalThis, 'window', {
@@ -39,11 +52,17 @@ beforeEach(() => {
   store = installStorage()
 })
 
-/** Puts a repository in the index with both of the keys it owns already written. */
+/**
+ * Puts a repository in the index with both of the keys it owns already written, in the order the
+ * viewer itself writes them: the reader's spelling is remembered first, then the saved graph's
+ * size is recorded under the canonical identity.
+ */
 function hold(slug: string, chars = 10): void {
-  store.set(cacheKey(slug.toLowerCase()), 'x'.repeat(chars))
-  store.set(dimmedKey(slug.toLowerCase()), '["issue-1"]')
-  recordCacheSize(slug, chars)
+  const identity = canonicalSlug(slug)
+  rememberRepository(slug)
+  store.set(cacheKey(identity), 'x'.repeat(chars))
+  store.set(dimmedKey(identity), '["issue-1"]')
+  recordCacheSize(identity, chars)
 }
 
 function slugs(): string[] {
@@ -84,6 +103,130 @@ describe('retained', () => {
     store.set('issue-graph:retention', JSON.stringify({ version: 2, entries: [] }))
 
     expect(slugs()).toEqual(['a/one'])
+  })
+})
+
+/* Every reader arriving at this build already has keys in storage, and before it there was no
+   record of most of them: the recent-name list held six while the keys behind it were kept
+   forever. A migration that reads only that list leaves every repository that fell off it
+   permanently unindexed — uncounted, un-evictable, and carrying the exact unbounded growth this
+   index exists to end. */
+
+describe('adopting a browser that predates the index', () => {
+  it('discovers the repositories no list ever recorded', () => {
+    store.set('issue-graph:recent', JSON.stringify(['a/one']))
+    store.set(cacheKey('old/forgotten'), '"x"')
+    store.set(dimmedKey('old/dimmed'), '["issue-1"]')
+
+    expect(slugs()).toEqual(['a/one', 'old/forgotten', 'old/dimmed'])
+  })
+
+  it('orders the reader\u2019s own repositories ahead of what it found', () => {
+    store.set('issue-graph:recent', JSON.stringify(['a/one', 'b/two']))
+    store.set(cacheKey('old/forgotten'), '"x"')
+
+    expect(retained().map((entry) => entry.opened)).toEqual([true, true, false])
+  })
+
+  it('does not put a repository the reader lost long ago back in the suggestions', () => {
+    store.set('issue-graph:recent', JSON.stringify(['a/one']))
+    store.set(cacheKey('old/forgotten'), '"x"')
+
+    expect(openedSlugs()).toEqual(['a/one'])
+  })
+
+  it('counts one repository once when both of its keys are present', () => {
+    store.set(cacheKey('old/both'), '"x"')
+    store.set(dimmedKey('old/both'), '["issue-1"]')
+
+    expect(slugs()).toEqual(['old/both'])
+  })
+
+  it('measures what the discovered copies actually occupy', () => {
+    store.set(cacheKey('old/forgotten'), '"0123456789"')
+
+    expect(retained()[0].chars).toBe('"0123456789"'.length)
+  })
+
+  it('evicts what it discovered on the first write, ending the unbounded growth', () => {
+    store.set('issue-graph:recent', JSON.stringify(['a/one']))
+    for (let index = 1; index <= MAX_ENTRIES + 2; index += 1) {
+      store.set(cacheKey(`old/r${index}`), '"x"')
+      store.set(dimmedKey(`old/r${index}`), '["issue-1"]')
+    }
+
+    rememberRepository('new/opened')
+
+    expect(retained()).toHaveLength(MAX_ENTRIES)
+    expect(store.has(cacheKey('old/r8'))).toBe(false)
+    expect(store.has(dimmedKey('old/r8'))).toBe(false)
+  })
+
+  it('leaves keys that are not a repository\u2019s alone while doing it', () => {
+    store.set('issue-graph:token', '"ghp_example"')
+    store.set('issue-graph:show-closed', 'true')
+    store.set(cacheKey('old/forgotten'), '"x"')
+
+    rememberRepository('new/opened')
+
+    expect(store.get('issue-graph:token')).toBe('"ghp_example"')
+    expect(store.get('issue-graph:show-closed')).toBe('true')
+  })
+})
+
+describe('registerDimmed', () => {
+  /* Dimming is the one thing saved for a repository the reader never chose: a shared link draws
+     somebody else's copy and saves nothing, but dimming a card on it writes a key. */
+
+  it('counts a repository held only by its dimmed cards', () => {
+    registerDimmed('shared/link')
+
+    expect(slugs()).toEqual(['shared/link'])
+    expect(holdsData('shared/link')).toBe(true)
+  })
+
+  it('keeps it out of the suggestions, because the reader never chose it', () => {
+    registerDimmed('shared/link')
+
+    expect(openedSlugs()).toEqual([])
+  })
+
+  it('does not demote a repository the reader did choose', () => {
+    rememberRepository('a/one')
+    registerDimmed('a/one')
+
+    expect(openedSlugs()).toEqual(['a/one'])
+  })
+
+  it('brings it under the same budget as everything else', () => {
+    for (let index = 1; index <= MAX_ENTRIES + 1; index += 1) registerDimmed(`shared/r${index}`)
+
+    expect(retained()).toHaveLength(MAX_ENTRIES)
+  })
+})
+
+describe('holdsData', () => {
+  it('is false for a repository this browser has never held anything for', () => {
+    expect(holdsData('never/opened')).toBe(false)
+  })
+
+  it('is true for a key the index has not caught up with, which is still the reader\u2019s', () => {
+    store.set(dimmedKey('stray/repo'), '["issue-1"]')
+
+    expect(holdsData('stray/repo')).toBe(true)
+  })
+
+  it('answers under any spelling of the repository', () => {
+    hold('Acme/App')
+
+    expect(holdsData('ACME/APP')).toBe(true)
+  })
+
+  it('is false again once the data is cleared', () => {
+    hold('o/one')
+    clearRepositoryData('o/one')
+
+    expect(holdsData('o/one')).toBe(false)
   })
 })
 
@@ -173,6 +316,26 @@ describe('evictLeastRecent', () => {
     // Nothing else is left to surrender, and saying so is what stops a retry loop.
     expect(evictLeastRecent('o/writing')).toBe(false)
     expect(store.has(cacheKey('o/writing'))).toBe(true)
+  })
+
+  /* The caller retries its own write for as long as this says yes. An index that did not record
+     the removal reads back unchanged, so the same victim is chosen again and again — a
+     synchronous loop with the tab frozen, in the very path meant to recover from a full quota. */
+
+  it('reports no eviction when the index would not record it', () => {
+    hold('o/old')
+    hold('o/new')
+
+    installStorage(
+      {
+        setItem: () => {
+          throw new DOMException('exceeded', 'QuotaExceededError')
+        },
+      },
+      store,
+    )
+
+    expect(evictLeastRecent('o/new')).toBe(false)
   })
 
   it('matches the protected repository by identity rather than by spelling', () => {

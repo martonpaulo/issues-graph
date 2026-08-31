@@ -49,7 +49,7 @@ import {
   type SessionFailure,
   type SessionState,
 } from './graphSession'
-import { dimmedKey } from './retention'
+import { dimmedKey, holdsData, registerDimmed } from './retention'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
@@ -1198,8 +1198,17 @@ function Canvas({
 
   // Dimming is a reading aid, and it is worth keeping across a reload precisely because a reload
   // costs requests. Nothing here is ever written back to GitHub.
+  //
+  // An empty set writes nothing. This effect runs on mount, so it used to create a key for every
+  // repository whose graph was merely looked at — including one drawn from somebody else's shared
+  // link, which deliberately saves nothing else and so left that key belonging to no budget and
+  // reachable by no clear control. A repository that does hold dimmed cards is registered with
+  // retention, which is what makes it counted and clearable.
   useEffect(() => {
+    if (dimmed.size === 0 && !holdsData(identity)) return
+
     writeStored(dimmedKey(identity), [...dimmed])
+    registerDimmed(identity)
   }, [identity, dimmed])
 
   const share = useCallback(() => {
@@ -1582,6 +1591,11 @@ function GraphLoad({
   // disappear on their own; this is the part that says so out loud, and the part that says when
   // the browser refused.
   const [cleared, setCleared] = useState<string | null>(null)
+  // Offered for anything this browser holds, not only for a copy it can still read. A dimmed set
+  // saved from a shared link, or a saved graph too corrupt to open, is the reader's data too, and
+  // the gate is the only place they are told it exists. Re-read after clearing, which is what
+  // takes the control away once there is nothing left to take.
+  const hasStoredData = holdsData(identity)
 
   const clearSavedData = () => {
     const result = session.forgetSavedCopy()
@@ -1650,7 +1664,7 @@ function GraphLoad({
             {/* Sits apart from the two buttons that open the graph, because it is the one that
                 takes something away. Offered only where there is something to take away, which
                 is also the only place the reader can see what they are removing. */}
-            {cached && (
+            {hasStoredData && (
               <button
                 className="button button--small button--aside"
                 type="button"

@@ -20,6 +20,12 @@ function installStorage(
     getItem: (key: string) => entries.get(key) ?? null,
     setItem: (key: string, value: string) => void entries.set(key, value),
     removeItem: (key: string) => void entries.delete(key),
+    // Enumerable, like the real thing: the retention index discovers keys older builds left
+    // behind, and a fake that cannot be walked would silently pass every test about that.
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
     ...overrides,
   }
   Object.defineProperty(globalThis, 'window', {
@@ -386,6 +392,32 @@ describe('writeCache', () => {
     expect(entries.has(cacheKey('o/old'))).toBe(false)
     expect(entries.has(dimmedKey('o/old'))).toBe(false)
     expect(readCache('martonpaulo/tabelo')).not.toBeNull()
+  })
+
+  /* The freeze this guards. Removals succeed while every write is refused, so each eviction
+     frees keys but never records itself; the index reads back unchanged, the same victim is
+     chosen again, and the retry spins synchronously with the tab frozen — in the exact
+     quota-failure path this recovery exists for. The write must give up instead. */
+
+  it('gives up rather than spinning when the index cannot record an eviction', () => {
+    writeCache('o/old', graph({ issues: [issues[0]], blockers: new Map() }))
+    writeCache('martonpaulo/tabelo', graph())
+
+    let writes = 0
+    installStorage(
+      {
+        setItem: () => {
+          writes += 1
+          // Far above any bound the write could legitimately need, and low enough that a runaway
+          // loop is reported as a failure here instead of hanging the suite until it times out.
+          if (writes > 500) throw new Error('writeCache did not terminate')
+          throw new DOMException('exceeded', 'QuotaExceededError')
+        },
+      },
+      entries,
+    )
+
+    expect(writeCache('martonpaulo/tabelo', graph())).toMatchObject({ reason: 'quota' })
   })
 
   it('reports a quota it cannot free rather than looping', () => {

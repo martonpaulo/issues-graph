@@ -98,6 +98,32 @@ export function writeStoredText(key: string, text: string): StorageWriteResult {
   }
 }
 
+/**
+ * Every key currently in storage, or nothing when the browser will not enumerate them.
+ *
+ * Needed because this page's own keys outlive any list it kept of them: builds before the
+ * retention index wrote one key per repository and tracked only six names, so the rest are
+ * discoverable from storage or not at all. Enumeration is guarded like every other access —
+ * `length` and `key` are absent from some non-browser and stubbed storages, and an empty result
+ * has to mean "cannot enumerate" rather than "nothing is stored", so callers treat it as no
+ * information rather than as proof.
+ */
+export function storedKeys(): string[] {
+  try {
+    const storage = window.localStorage
+    if (typeof storage.key !== 'function' || typeof storage.length !== 'number') return []
+
+    const keys: string[] = []
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index)
+      if (key !== null) keys.push(key)
+    }
+    return keys
+  } catch {
+    return []
+  }
+}
+
 export function clearStored(key: string): StorageWriteResult {
   try {
     window.localStorage.removeItem(key)
