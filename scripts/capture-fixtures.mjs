@@ -51,8 +51,8 @@ const project = (issue) => ({
 /**
  * GitHub follows a renamed repository silently, so `repos/<old>/issues` answers with the new
  * repository's issues and the capture would be written under a name that no longer exists — every
- * captured issue then reads as external to the target the tests name. Verified the hard way,
- * when a sibling repository was captured under the name it had already lost.
+ * captured issue then reads as external to the target the tests name. Verified the hard way:
+ * `martonpaulo/agent-workflows` is now `martonpaulo/arbaro`.
  */
 const assertNotRenamed = (slug) => {
   const actual = JSON.parse(execFileSync('gh', ['api', `repos/${slug}`])).full_name

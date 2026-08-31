@@ -40,7 +40,7 @@ Three repositories divide this work, and the boundary is the point:
 | Repository | Owns |
 | --- | --- |
 | [`martonpaulo/skills`](https://github.com/martonpaulo/skills) | The agent skills that capture, plan and groom issues, and that **create and verify** the GitHub dependencies rendered here |
-| [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro) | The local-first board that drives those issues through planning, implementation, CI and review with AI agents |
+| [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro) | The reusable GitHub Actions engine that implements issues and reviews pull requests |
 | **`martonpaulo/issues-graph`** | This repository. It reads and draws; it never writes |
 
 Data flows one way — skills create the dependencies, GitHub holds them, this renders them — and this
