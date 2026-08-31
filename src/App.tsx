@@ -30,6 +30,7 @@ import {
   UNAUTHENTICATED_HOURLY_LIMIT,
   type LoadFailure,
   type RateLimitStatus,
+  type RepositoryGraphData,
 } from './github'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
@@ -38,6 +39,7 @@ import { IssueCard, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
 import { parseRoute, pathForTarget, slugOf, titleForRoute, type RepoTarget } from './route'
 import { readStored, writeStored } from './storage'
+import { buildSnapshotUrl, hasSnapshot, readSnapshot } from './snapshot'
 import { rememberTarget } from './suggestions'
 import { readToken, writeToken } from './token'
 import { describeAge, describeUntil } from './time'
@@ -66,6 +68,12 @@ const hiddenKey = (slug: string) => `issue-graph:hidden:${slug}`
 export interface SavedCopyProvenance {
   savedAt: Date
   includedClosed: boolean
+  /**
+   * Whose copy this is. A saved copy is the viewer's own earlier read; a shared one arrived in a
+   * link and was taken by somebody else. Both are point-in-time, but only one of them is theirs,
+   * and a recipient deciding whether to trust what is on screen needs to know which.
+   */
+  source: 'saved' | 'shared'
 }
 
 export type SavedCopyDecision =
@@ -89,6 +97,7 @@ export function decideSavedCopyOpen(
     provenance: {
       savedAt: cached.savedAt,
       includedClosed: cached.data.includedClosed,
+      source: 'saved',
     },
   }
 }
@@ -101,7 +110,32 @@ export function describeSavedCopy(
   savedCopy: SavedCopyProvenance,
   now: Date = new Date(),
 ): string {
-  return `Saved copy · ${describeAge(savedCopy.savedAt, now)} · ${savedCopyCoverage(savedCopy.includedClosed)}`
+  const what = savedCopy.source === 'shared' ? 'Shared copy' : 'Saved copy'
+  return `${what} · ${describeAge(savedCopy.savedAt, now)} · ${savedCopyCoverage(savedCopy.includedClosed)}`
+}
+
+/* Sharing the graph ------------------------------------------------------
+   The link carries the whole graph in its fragment, so the recipient draws it
+   without spending a request. Every outcome says something: a link that cannot
+   be built is a fact worth stating, never a button that quietly does nothing. */
+
+export type ShareOutcome =
+  | { kind: 'copied'; url: string }
+  | { kind: 'manual'; url: string }
+  | { kind: 'too-large'; chars: number; limit: number }
+  | { kind: 'unsupported' }
+
+export function describeShare(outcome: ShareOutcome): string {
+  switch (outcome.kind) {
+    case 'copied':
+      return 'Link copied. It draws this graph without spending anyone\u2019s GitHub budget.'
+    case 'manual':
+      return 'Copy this link. It draws this graph without spending anyone\u2019s GitHub budget.'
+    case 'too-large':
+      return `This graph needs ${outcome.chars.toLocaleString('en')} characters, past the ${outcome.limit.toLocaleString('en')} a link can carry. Nothing was shortened.`
+    case 'unsupported':
+      return 'This browser cannot build a shared link.'
+  }
 }
 
 /**
@@ -665,6 +699,8 @@ function TopRightBar({
   onToggleHighlight,
   onClearHighlight,
   onFitView,
+  onShare,
+  sharing,
   onAskAgain,
 }: {
   labelCounts: { name: string; count: number }[]
@@ -672,6 +708,8 @@ function TopRightBar({
   onToggleHighlight: (label: string) => void
   onClearHighlight: () => void
   onFitView: () => void
+  onShare: () => void
+  sharing: boolean
   onAskAgain: () => void
 }) {
   return (
@@ -691,6 +729,16 @@ function TopRightBar({
         onClick={() => void onFitView()}
       >
         <Icon name="fit" />
+      </button>
+      <button
+        className="iconbutton"
+        type="button"
+        disabled={sharing}
+        aria-label="Copy a link that draws this graph"
+        data-tip="Copy a shareable link"
+        onClick={onShare}
+      >
+        <Icon name="link" />
       </button>
       <button className="button button--small" type="button" onClick={onAskAgain}>
         <Icon name="reload" size={12} /> Read latest from GitHub
@@ -786,15 +834,69 @@ function GraphStatus({
   )
 }
 
+/**
+ * What came of pressing share.
+ *
+ * A dialog rather than a toast for the manual case, because the URL has to be selectable; the
+ * short outcomes are announced instead, so a screen reader hears the same thing the eye sees.
+ */
+function ShareResult({ outcome, onClose }: { outcome: ShareOutcome; onClose: () => void }) {
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    closeRef.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div
+        className="dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="share-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="dialog__title" id="share-title">
+          {outcome.kind === 'too-large' ? 'Too large to share as a link' : 'Shareable link'}
+        </p>
+        <p className="dialog__body">{describeShare(outcome)}</p>
+        {outcome.kind === 'manual' && (
+          <p className="dialog__url">
+            <code>{outcome.url}</code>
+          </p>
+        )}
+        <div className="dialog__actions">
+          <button className="button button--primary" type="button" ref={closeRef} onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** The graph as it can be shared: the data it was drawn from, and when that read happened. */
+export interface SnapshotSource {
+  data: RepositoryGraphData
+  capturedAt: Date
+}
+
 function Canvas({
   graph,
   slug,
   savedCopy,
+  snapshot,
   onAskAgain,
 }: {
   graph: IssueGraph
   slug: string
   savedCopy: SavedCopyProvenance | null
+  snapshot: SnapshotSource
   /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
   onAskAgain: () => void
 }) {
@@ -803,6 +905,8 @@ function Canvas({
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
+  const [sharing, setSharing] = useState(false)
+  const [shared, setShared] = useState<ShareOutcome | null>(null)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
     () => new Set(readStored<string[]>(hiddenKey(slug), [])),
   )
@@ -812,6 +916,34 @@ function Canvas({
   useEffect(() => {
     writeStored(hiddenKey(slug), [...hidden])
   }, [slug, hidden])
+
+  const share = useCallback(() => {
+    setSharing(true)
+    setShared(null)
+    void buildSnapshotUrl(
+      slug,
+      snapshot.data,
+      snapshot.capturedAt,
+      window.location.origin,
+      BASE,
+    )
+      .then(async (link): Promise<ShareOutcome> => {
+        if (link.kind !== 'ready') return link
+        try {
+          await navigator.clipboard.writeText(link.url)
+          return { kind: 'copied', url: link.url }
+        } catch {
+          // Clipboard access is refusable and is unavailable outside a secure context. Showing
+          // the link is a worse experience than copying it, and a better one than a dead button.
+          return { kind: 'manual', url: link.url }
+        }
+      })
+      .catch((): ShareOutcome => ({ kind: 'unsupported' }))
+      .then((outcome) => {
+        setShared(outcome)
+        setSharing(false)
+      })
+  }, [slug, snapshot])
 
   const selectIssue = useCallback((id: string, additive: boolean) => {
     setSelected((current) => nextIssueSelection(current, id, additive))
@@ -1002,6 +1134,8 @@ function Canvas({
         onToggleHighlight={toggleHighlight}
         onClearHighlight={() => setHighlight(new Set())}
         onFitView={fitView}
+        onShare={share}
+        sharing={sharing}
         onAskAgain={onAskAgain}
       />
 
@@ -1015,6 +1149,19 @@ function Canvas({
       />
 
       <GraphStatus graph={graph} savedCopy={savedCopy} />
+
+      {/* Mounted before there is anything to say, because a live region added at the same moment
+          as its text is not reliably announced. It carries no chrome while it is empty. */}
+      <Panel
+        position="bottom-left"
+        className={shared?.kind === 'copied' ? 'said' : 'said said--quiet'}
+      >
+        <p role="status">{shared?.kind === 'copied' ? describeShare(shared) : ''}</p>
+      </Panel>
+
+      {shared && shared.kind !== 'copied' && (
+        <ShareResult outcome={shared} onClose={() => setShared(null)} />
+      )}
     </ReactFlow>
   )
 }
@@ -1029,7 +1176,13 @@ type Phase =
   /** The layout runs off the main path of the load, and on a large graph it is not instant. */
   | { kind: 'drawing' }
   | { kind: 'failed'; failure: LoadFailure }
-  | { kind: 'ready'; graph: IssueGraph; savedCopy: SavedCopyProvenance | null }
+  | {
+      kind: 'ready'
+      graph: IssueGraph
+      savedCopy: SavedCopyProvenance | null
+      /** Kept beside the drawn graph because a shareable link is built from the data, not the layout. */
+      snapshot: SnapshotSource
+    }
 
 function GraphView({
   target,
@@ -1047,6 +1200,12 @@ function GraphView({
   }, [showClosed])
 
   const reload = useCallback((why: string | null = null) => {
+    // A shared link is a point-in-time copy; asking for the latest leaves it behind. Clearing the
+    // fragment first means the remount below reads a plain repository URL, and that the address
+    // bar stops offering a snapshot the page is no longer showing.
+    if (window.location.hash) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    }
     setNote(why)
     setAttempt((value) => value + 1)
   }, [])
@@ -1116,12 +1275,23 @@ function GraphLoad({
   const slug = slugOf(target)
   // Read once per mount: the gate has to describe a copy that does not change under it.
   const [cached] = useState<CachedGraph | null>(() => readCache(slug))
-  const [phase, setPhase] = useState<Phase>({ kind: 'gate', status: null, checking: true })
+  // Read once per mount, for the same reason as the saved copy: neither may change under the page
+  // it produced. A snapshot in the fragment skips the gate entirely — there is nothing to weigh,
+  // because drawing it costs nothing.
+  const [fragment] = useState(() => window.location.hash)
+  const sharedLink = hasSnapshot(fragment)
+  const [phase, setPhase] = useState<Phase>(
+    sharedLink ? { kind: 'drawing' } : { kind: 'gate', status: null, checking: true },
+  )
+  const [linkProblem, setLinkProblem] = useState<string | null>(null)
   const abort = useRef<AbortController | null>(null)
 
   // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
   // can always open with real numbers instead of an assumption about what is left.
   useEffect(() => {
+    // A shared link spends nothing, so it asks nothing — not even the free budget read, which
+    // still names api.github.com in a request the recipient never chose to make.
+    if (sharedLink) return
     const controller = new AbortController()
     void readRateLimit({ signal: controller.signal, token }).then((status) => {
       if (controller.signal.aborted) return
@@ -1131,9 +1301,56 @@ function GraphLoad({
     })
     return () => controller.abort()
     // Saving or removing a token changes the budget, so the gate has to read it again.
-  }, [target, token])
+  }, [target, token, sharedLink])
 
   useEffect(() => () => abort.current?.abort(), [])
+
+  /**
+   * Draws the shared link, or explains why it cannot and falls back to the ordinary gate.
+   *
+   * The snapshot is drawn at the coverage the read that produced it had, not at the recipient's
+   * own preference: a copy cannot gain closed blockers it never contained, and pretending
+   * otherwise would label the graph with a claim the data does not support. Nothing is written to
+   * this browser's cache either — it is somebody else's copy, and a later visit must not be
+   * offered it as this viewer's own.
+   */
+  useEffect(() => {
+    if (!sharedLink) return
+    let cancelled = false
+
+    void readSnapshot(fragment, slug)
+      .then(async (read) => {
+        if (cancelled) return
+        if (read.kind !== 'snapshot') {
+          setLinkProblem(read.kind === 'invalid' ? read.reason : null)
+          setPhase({ kind: 'gate', status: null, checking: true })
+          return
+        }
+
+        const showClosedInLink = read.data.includedClosed
+        const graph = await buildGraph(read.data, target, { showClosed: showClosedInLink })
+        if (cancelled) return
+        setPhase({
+          kind: 'ready',
+          graph,
+          savedCopy: {
+            savedAt: read.savedAt,
+            includedClosed: showClosedInLink,
+            source: 'shared',
+          },
+          snapshot: { data: read.data, capturedAt: read.savedAt },
+        })
+      })
+      .catch(() => {
+        if (cancelled) return
+        setLinkProblem('This shared link could not be read.')
+        setPhase({ kind: 'gate', status: null, checking: true })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [sharedLink, fragment, slug, target])
 
   /**
    * A load already in flight carries the token it started with: `LoadOptions` is built once, so
@@ -1208,7 +1425,14 @@ function GraphLoad({
             writeCache(slug, result.data)
             setPhase({ kind: 'drawing' })
             const graph = await buildGraph(result.data, target, { showClosed: includeClosed })
-            if (!controller.signal.aborted) setPhase({ kind: 'ready', graph, savedCopy: null })
+            if (!controller.signal.aborted) {
+              setPhase({
+                kind: 'ready',
+                graph,
+                savedCopy: null,
+                snapshot: { data: result.data, capturedAt: new Date() },
+              })
+            }
           } else if (result.failure.kind === 'cancelled') {
             onReload(null)
           } else {
@@ -1236,7 +1460,12 @@ function GraphLoad({
 
       setPhase({ kind: 'drawing' })
       void buildGraph(copy.data, target, { showClosed }).then((graph) =>
-        setPhase({ kind: 'ready', graph, savedCopy: decision.provenance }),
+        setPhase({
+          kind: 'ready',
+          graph,
+          savedCopy: decision.provenance,
+          snapshot: { data: copy.data, capturedAt: copy.savedAt },
+        }),
       )
     },
     [target, showClosed],
@@ -1252,6 +1481,7 @@ function GraphLoad({
           graph={phase.graph}
           slug={slug}
           savedCopy={phase.savedCopy}
+          snapshot={phase.snapshot}
           onAskAgain={() => onReload()}
         />
       </ReactFlowProvider>
@@ -1264,6 +1494,11 @@ function GraphLoad({
       {phase.kind === 'gate' && (
         <>
           {note && <p className="notice">{note}</p>}
+          {linkProblem && (
+            <p className="notice" role="status">
+              {linkProblem} Reading {slug} from GitHub is still an option.
+            </p>
+          )}
           {stopped && (
             <p className="notice" role="status">
               {stopped}
