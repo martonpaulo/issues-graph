@@ -1276,8 +1276,8 @@ function GraphLoad({
   // Read once per mount: the gate has to describe a copy that does not change under it.
   const [cached] = useState<CachedGraph | null>(() => readCache(slug))
   // Read once per mount, for the same reason as the saved copy: neither may change under the page
-  // it produced. A snapshot in the fragment skips the gate entirely — there is nothing to weigh,
-  // because drawing it costs nothing.
+  // it produced. A snapshot in the fragment opens straight into the drawing, skipping the gate —
+  // there is nothing to weigh, because drawing it costs nothing.
   const [fragment] = useState(() => window.location.hash)
   const sharedLink = hasSnapshot(fragment)
   const [phase, setPhase] = useState<Phase>(
@@ -1288,10 +1288,15 @@ function GraphLoad({
 
   // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
   // can always open with real numbers instead of an assumption about what is left.
+  //
+  // The condition is the gate itself, not the address that opened the page. A shared link spends
+  // nothing and so asks nothing — not even this free read, which still names api.github.com in a
+  // request the recipient never chose to make — but a link that turns out to be unreadable lands
+  // back here, and the gate it lands on has to be usable. Keying on the phase means every route to
+  // the gate is quoted a budget; keying on the URL left the recovery path waiting forever on a
+  // request that had already been declined.
   useEffect(() => {
-    // A shared link spends nothing, so it asks nothing — not even the free budget read, which
-    // still names api.github.com in a request the recipient never chose to make.
-    if (sharedLink) return
+    if (phase.kind !== 'gate') return
     const controller = new AbortController()
     void readRateLimit({ signal: controller.signal, token }).then((status) => {
       if (controller.signal.aborted) return
@@ -1300,8 +1305,9 @@ function GraphLoad({
       )
     })
     return () => controller.abort()
-    // Saving or removing a token changes the budget, so the gate has to read it again.
-  }, [target, token, sharedLink])
+    // Saving or removing a token changes the budget, so the gate has to read it again. The status
+    // this sets leaves `kind` alone, so recording it cannot re-trigger the read that produced it.
+  }, [target, token, phase.kind])
 
   useEffect(() => () => abort.current?.abort(), [])
 
@@ -1318,12 +1324,19 @@ function GraphLoad({
     if (!sharedLink) return
     let cancelled = false
 
+    // A link that could not be read is not worth retrying on the next reload, and leaving it in
+    // the address bar would describe a graph the page is not showing.
+    const giveUp = (reason: string | null) => {
+      setLinkProblem(reason)
+      setPhase({ kind: 'gate', status: null, checking: true })
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
+    }
+
     void readSnapshot(fragment, slug)
       .then(async (read) => {
         if (cancelled) return
         if (read.kind !== 'snapshot') {
-          setLinkProblem(read.kind === 'invalid' ? read.reason : null)
-          setPhase({ kind: 'gate', status: null, checking: true })
+          giveUp(read.kind === 'invalid' ? read.reason : null)
           return
         }
 
@@ -1343,8 +1356,7 @@ function GraphLoad({
       })
       .catch(() => {
         if (cancelled) return
-        setLinkProblem('This shared link could not be read.')
-        setPhase({ kind: 'gate', status: null, checking: true })
+        giveUp('This shared link could not be read.')
       })
 
     return () => {
@@ -1659,10 +1671,24 @@ export function App() {
   const setToken = useCallback((value: string) => setStoredToken(writeToken(value)), [])
   const tokenState = useMemo(() => ({ token, setToken }), [token, setToken])
 
+  /**
+   * Arriving at a shared link for the repository already on screen changes only the fragment, and
+   * the browser treats that as staying on the same document: nothing reloads, and the link would
+   * appear to do nothing. Counting the navigations rather than storing the fragment keeps this
+   * honest — `replaceState`, which is how the page clears a fragment it has finished with, fires
+   * no event, so only a real navigation remounts.
+   */
+  const [hashNav, setHashNav] = useState(0)
+
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
+    const onHashChange = () => setHashNav((count) => count + 1)
     window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
+    window.addEventListener('hashchange', onHashChange)
+    return () => {
+      window.removeEventListener('popstate', onPopState)
+      window.removeEventListener('hashchange', onHashChange)
+    }
   }, [])
 
   const navigate = useCallback((next: string) => {
@@ -1688,7 +1714,11 @@ export function App() {
     <TokenContext.Provider value={tokenState}>
       <OpenExternalContext.Provider value={openExternal}>
         {route.kind === 'graph' ? (
-          <GraphView key={slugOf(route.target)} target={route.target} onOpen={openTarget} />
+          <GraphView
+            key={`${slugOf(route.target)}:${hashNav}`}
+            target={route.target}
+            onOpen={openTarget}
+          />
         ) : (
           <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
         )}
