@@ -34,10 +34,16 @@ function byRef(a: GraphNode, b: GraphNode): number {
 }
 
 /**
- * Both sides of every drawn edge, per node.
+ * Both sides of every drawn dependency, per node.
  *
  * One pass over the edges. A node with no edge still gets an entry, because "nothing blocks this"
  * is an answer a reader needs and an absent entry is not one.
+ *
+ * Only `dependency` edges count. `graph.edges` also carries `hierarchy` edges, which say that one
+ * issue contains another and say nothing about which comes first — the canvas draws them without
+ * an arrowhead for exactly that reason. Reading one as a blocker would invent an ordering that
+ * neither GitHub nor the drawing claims, and would do it only for the reader who cannot see that
+ * the arrowhead is missing.
  */
 export function adjacencyOf(graph: IssueGraph): Map<string, Adjacency> {
   const byId = new Map(graph.nodes.map((node) => [node.id, node]))
@@ -46,6 +52,7 @@ export function adjacencyOf(graph: IssueGraph): Map<string, Adjacency> {
   )
 
   for (const edge of graph.edges) {
+    if (edge.kind !== 'dependency') continue
     const source = byId.get(edge.source)
     const target = byId.get(edge.target)
     if (!source || !target) continue
@@ -94,7 +101,9 @@ export interface DependencyRow {
 }
 
 /**
- * Every drawn edge, once, in a stable order: the table a reader traverses instead of the picture.
+ * Every drawn dependency, once, in a stable order: the table a reader traverses instead of the
+ * picture. Hierarchy edges are left out for the same reason they are left out of the adjacency —
+ * containment is not an ordering, and this table only claims to hold orderings.
  *
  * Sorted by the blocker and then by what it blocks, so an issue holding several others up reads as
  * one run of rows rather than as entries scattered through the list.
@@ -104,6 +113,7 @@ export function dependencyRows(graph: IssueGraph): DependencyRow[] {
   const rows: DependencyRow[] = []
 
   for (const edge of graph.edges) {
+    if (edge.kind !== 'dependency') continue
     const blocker = byId.get(edge.source)
     const dependent = byId.get(edge.target)
     if (!blocker || !dependent) continue

@@ -85,7 +85,9 @@ describe('adjacencyOf', () => {
     for (const [id, entry] of adjacency) {
       for (const blocker of entry.blockedBy) pairs.push(`${blocker.id}->${id}`)
     }
-    expect(pairs.sort()).toEqual(graph.edges.map((edge) => edge.id).sort())
+    expect(pairs.sort()).toEqual(
+      graph.edges.filter((edge) => edge.kind === 'dependency').map((edge) => edge.id).sort(),
+    )
 
     // The mirror side has to agree edge for edge, or a card would announce one direction only.
     const mirrored: string[] = []
@@ -167,6 +169,58 @@ describe('describeNode', () => {
     expect(describe_(graph, 'acme/app#4')).toBe(
       'Issue #4. Blocked by #1, #2 and #3. Blocks nothing.',
     )
+  })
+})
+
+describe('a sub-issue hierarchy', () => {
+  /**
+   * `graph.edges` carries containment as well as ordering. Containment says which issue holds
+   * another, never which comes first, and the canvas draws it without an arrowhead to say so.
+   * A reader who cannot see the missing arrowhead is exactly the reader this model exists for,
+   * so counting one as a blocker would mislead precisely the person it is meant to inform.
+   */
+  async function withParent() {
+    return buildGraph(
+      dataFrom(
+        [
+          issue({ number: 5, title: 'The parent' }),
+          issue({
+            number: 6,
+            title: 'A sub-issue',
+            parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
+          }),
+          issue({ number: 7, title: 'A real blocker' }),
+        ],
+        { 6: [issue({ number: 7 })] },
+      ),
+      { owner: 'acme', repo: 'app' },
+    )
+  }
+
+  it('draws the hierarchy edge, so the rest of this is a real case', async () => {
+    const graph = await withParent()
+    expect(graph.edges.filter((edge) => edge.kind === 'hierarchy')).toHaveLength(1)
+    expect(graph.edges.filter((edge) => edge.kind === 'dependency')).toHaveLength(1)
+  })
+
+  it('never reads containment as an ordering', async () => {
+    const graph = await withParent()
+
+    // The parent contains #6; it does not block it, and #6 does not wait on it.
+    expect(describe_(graph, 'acme/app#5')).toBe(
+      'Issue #5. Blocked by nothing. Blocks nothing.',
+    )
+    // The child waits on its real blocker and on nothing else.
+    expect(describe_(graph, 'acme/app#6')).toBe('Issue #6. Blocked by #7. Blocks nothing.')
+    expect(describe_(graph, 'acme/app#7')).toBe('Issue #7. Blocked by nothing. Blocks #6.')
+  })
+
+  it('keeps containment out of the table of orderings', async () => {
+    const rows = dependencyRows(await withParent())
+
+    expect(rows.map((row) => `${row.blocker.id}->${row.dependent.id}`)).toEqual([
+      'acme/app#7->acme/app#6',
+    ])
   })
 })
 
