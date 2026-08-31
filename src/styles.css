@@ -48,6 +48,17 @@
   --completed-line: #b0bac7;
   --not-planned-fill: #f2f4f7;
   --not-planned-line: #c6ced9;
+  /* Nobody is on it. Neutral rather than green: it is not a queue this reader can pull from yet. */
+  --unassigned-fill: #ffffff;
+  --unassigned-line: #cfd7e1;
+  /* Somebody is on it right now. */
+  --in-progress-fill: #ddeafb;
+  --in-progress-line: #7aa6dd;
+  /* Already written and waiting on a review. */
+  --in-review-fill: #d9f0f2;
+  --in-review-line: #6cb6bd;
+  /* Containment, drawn fainter than a dependency so the two never read as the same relation. */
+  --hierarchy-edge: #b6c0cd;
 
   /* Every surface here is light; telling the browser stops it from theming form controls dark. */
   color-scheme: light;
@@ -391,6 +402,13 @@ code {
   fill: var(--edge);
 }
 
+/* Containment, not ordering. Dashed and paler than a dependency, and drawn with no arrowhead at
+   all, so the difference survives a reader who never looks for the marker. */
+.edge--hierarchy .react-flow__edge-path {
+  stroke: var(--hierarchy-edge);
+  stroke-dasharray: 5 4;
+}
+
 .edge--lit .react-flow__edge-path {
   stroke: var(--accent);
   stroke-width: 2;
@@ -499,6 +517,18 @@ code {
   border-color: var(--not-planned-line);
   border-style: dashed;
 }
+.card--unassigned {
+  background: var(--unassigned-fill);
+  border-color: var(--unassigned-line);
+}
+.card--in-progress {
+  background: var(--in-progress-fill);
+  border-color: var(--in-progress-line);
+}
+.card--in-review {
+  background: var(--in-review-fill);
+  border-color: var(--in-review-line);
+}
 
 /* An issue from another repository, reached because it blocks something here. Its neutral surface,
    dashed edge and leading bar identify it without projecting this repository's workflow state. */
@@ -595,6 +625,22 @@ code {
 .card__number {
   flex: none;
   opacity: 0.75;
+}
+
+/* A parent's sub-issue count. Shares the head row with the number and the state word, which is
+   why it is written as compactly as it can be and still be a sentence. */
+.card__progress {
+  /* The one item in the row allowed to give way: the number identifies the card and the state word
+     is the thing this whole convention exists to keep readable, so the count ellipsizes first. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.03em;
+  opacity: 0.6;
+  white-space: nowrap;
 }
 
 .card__state {
