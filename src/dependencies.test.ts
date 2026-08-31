@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
 import arbaroIssues from './__fixtures__/arbaro.issues.json'
+import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
+import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import {
   adjacencyOf,
   containmentRows,
@@ -176,6 +178,69 @@ describe('describeNode', () => {
   })
 })
 
+describe('a sub-issue hierarchy, as GitHub actually returned one', () => {
+  const TABELO = { owner: 'martonpaulo', repo: 'tabelo' }
+
+  /**
+   * The captured `tabelo` read is the only breakdown any fixture holds, and it is the awkward
+   * shape rather than the tidy one: #294 was split into #296 and #297, and also blocks #297. A repository doing both at once is what the two relations have to stay apart under, and
+   * it is the case a hand-written payload could only assume.
+   */
+  async function tabelo() {
+    return buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+  }
+
+  it('says every drawn hierarchy edge, and says it as containment', async () => {
+    const graph = await tabelo()
+    const drawn = graph.edges.filter((edge) => edge.kind === 'hierarchy')
+    expect(drawn.length).toBeGreaterThan(0)
+
+    // The table reaches each one exactly once.
+    expect(containmentRows(graph).map((row) => row.id).sort()).toEqual(
+      drawn.map((edge) => edge.id).sort(),
+    )
+
+    // And both cards of every edge say it, in containment's own words.
+    for (const edge of drawn) {
+      const parent = graph.nodes.find((node) => node.id === edge.source)!
+      const child = graph.nodes.find((node) => node.id === edge.target)!
+      expect(describe_(graph, parent.id)).toContain(`Contains `)
+      expect(describe_(graph, child.id)).toContain(`Part of ${issueRef(parent)}`)
+    }
+  })
+
+  it('keeps the ordering and the containment apart on the issue that has both', async () => {
+    const graph = await tabelo()
+
+    // #294 contains #296 and #297, and separately blocks #297. The same pair therefore carries
+    // both relations at once, and each is said in its own words: "Blocks #297" and "Contains …"
+    // stand side by side without either borrowing the other's meaning.
+    expect(describe_(graph, 'martonpaulo/tabelo#294')).toBe(
+      'Issue #294. Blocked by nothing. Blocks #297. Contains #296 and #297.',
+    )
+    expect(describe_(graph, 'martonpaulo/tabelo#297')).toBe(
+      'Issue #297. Blocked by #294. Blocks nothing. Part of #294.',
+    )
+    // #296 is contained and nothing more: no ordering clause acquires it.
+    expect(describe_(graph, 'martonpaulo/tabelo#296')).toBe(
+      'Issue #296. Blocked by nothing. Blocks nothing. Part of #294.',
+    )
+
+    // The two tables partition the drawn edges: neither holds one of the other's.
+    const dependencies = dependencyRows(graph).map((row) => row.id)
+    const containment = containmentRows(graph).map((row) => row.id)
+    expect(dependencies.filter((id) => containment.includes(id))).toEqual([])
+    expect([...dependencies, ...containment].sort()).toEqual(
+      graph.edges.map((edge) => edge.id).sort(),
+    )
+  })
+})
+
+/**
+ * Topologies no captured read contains: a parent in another repository, a closed parent, and the
+ * inverted edge. Built from the synthetic payload helper this file and `graph.test.ts` already use
+ * for exactly that purpose — a capture cannot be made to hold a case GitHub has not produced.
+ */
 describe('a sub-issue hierarchy', () => {
   /**
    * `graph.edges` carries containment as well as ordering. Containment says which issue holds

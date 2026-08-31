@@ -7,6 +7,8 @@ import { describe, expect, it } from 'vitest'
 
 import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
 import arbaroIssues from './__fixtures__/arbaro.issues.json'
+import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
+import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import {
   App,
   blockerStateText,
@@ -398,23 +400,6 @@ describe('describeUnresolved', () => {
 })
 
 describe('the dependencies as text', () => {
-  /** The smallest payload `buildGraph` accepts, for the cases that need no fixture. */
-  const ISSUE: IssuePayload = {
-    number: 1,
-    title: 'An issue',
-    state: 'open',
-    state_reason: null,
-    html_url: 'https://github.com/acme/app/issues/1',
-    repository_url: 'https://api.github.com/repos/acme/app',
-    labels: [],
-    issue_dependencies_summary: {
-      blocked_by: 0,
-      total_blocked_by: 0,
-      blocking: 0,
-      total_blocking: 0,
-    },
-  }
-
   it('renders one row per drawn edge, both ends named', async () => {
     const graph = await buildGraph(
       {
@@ -463,18 +448,17 @@ describe('the dependencies as text', () => {
   })
 
   it('renders containment in its own table, which claims no ordering', async () => {
+    // The captured `tabelo` read, which holds a real breakdown: #294 split into #296 and #297, and
+    // #297 blocked by #294 as well. A repository that does both is exactly what this table has to
+    // survive, and no hand-written payload would prove the API produces it.
     const graph = await buildGraph(
       {
-        issues: [
-          { ...ISSUE, number: 5, title: 'The parent' },
-          {
-            ...ISSUE,
-            number: 6,
-            title: 'A sub-issue',
-            parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
-          },
-        ],
-        blockers: new Map(),
+        issues: tabeloIssues as IssuePayload[],
+        blockers: new Map(
+          Object.entries(tabeloBlockedBy as Record<string, IssuePayload[]>).map(
+            ([number, list]) => [Number(number), list],
+          ),
+        ),
         complete: true,
         unresolved: [],
         rateLimited: false,
@@ -483,18 +467,26 @@ describe('the dependencies as text', () => {
         rateLimit: null,
         includedClosed: true,
       },
-      { owner: 'acme', repo: 'app' },
+      { owner: 'martonpaulo', repo: 'tabelo' },
     )
 
     const rows = containmentRows(graph)
     const html = renderToStaticMarkup(createElement(ContainmentTable, { rows }))
 
     // Every hierarchy edge the canvas draws, reachable without tracing it.
-    expect(rows).toHaveLength(
-      graph.edges.filter((edge) => edge.kind === 'hierarchy').length,
-    )
-    expect(html).toContain('<span class="deps__ref">#5</span> <span class="deps__title">')
-    expect(html).toContain('<span class="deps__ref">#6</span> <span class="deps__title">')
+    const drawn = graph.edges.filter((edge) => edge.kind === 'hierarchy')
+    expect(drawn.length).toBeGreaterThan(0)
+    expect(rows).toHaveLength(drawn.length)
+    for (const edge of drawn) {
+      const parent = graph.nodes.find((node) => node.id === edge.source)!
+      const child = graph.nodes.find((node) => node.id === edge.target)!
+      expect(html, edge.id).toContain(
+        `<span class="deps__ref">${issueRef(parent)}</span> <span class="deps__title">`,
+      )
+      expect(html, edge.id).toContain(
+        `<span class="deps__ref">${issueRef(child)}</span> <span class="deps__title">`,
+      )
+    }
 
     // Containment, in containment's own words. Nothing here says one issue comes before another,
     // and the dependency table's own legend never appears on it.
