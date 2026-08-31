@@ -27,10 +27,9 @@
 - Release and signing policy: Not applicable. Nothing is packaged or signed; deployment is a GitHub Pages build from `main`.
 - Secret-storage policy: the product has no credential and every product read is unauthenticated. Agent-automation credentials, when provisioned, live only as GitHub Actions repository secrets and never in the repository or agent transcripts.
 - Client guidance: Gemini CLI (`unavailable`) uses `GEMINI.md -> AGENTS.md`; Antigravity CLI (`unavailable`) uses root `AGENTS.md`. Functional verification is pending for both clients.
-- Agent orchestration: Enabled for Agent Orchestrator local workers. Auto-merge through GitHub's own arming remains disarmed until `main` has required status checks; merging is performed by `skd merge` on the orchestrator's recorded verdict.
-- Skills baseline revision: `98870ac5785c6d24b4d34d75ce193ed4e1e30937`
+- Agent orchestration: Enabled for Agent Orchestrator local workers. `main` now carries required status checks (`validate`, `pr-conventions`), so auto-merge is armable under the predicates recorded in `.ao/worker-rules.md`; `skd merge` remains the path for a verdict the orchestrator recorded.
+- Skills baseline revision: `10d02773253766a032f490f1a5ec27d2157f3281`
 - Skills baseline applied: `2026-08-31`
-- Skills baseline divergence `label-taxonomy-established-history` at `98870ac5785c6d24b4d34d75ce193ed4e1e30937`: 29 issues predate the canonical taxonomy; `project-groom` owns mapping and removal of legacy labels, so setup preserved them.
 
 Treat these values as stable project decisions. Change an established identifier, license, visibility, branch policy, versioning model, localization strategy, landing-page contract, agent-automation decision, or release policy only through an explicit task that describes the migration and downstream effects.
 
@@ -271,8 +270,8 @@ The card is the record; it is not the asking.
 
 So whenever the client offers a native structured-question facility — `AskUserQuestion` in Claude
 Code, the equivalent elicitation or form input in other agents — put the question through it. The
-tool call is what actually holds the turn open and what puts the session in the *needs you*
-column. Map the card onto it directly: the card's heading becomes the question, each row of the
+tool call is what actually holds the turn open, and it is what makes an orchestrated session
+report **Blocked** rather than looking finished. Map the card onto it directly: the card's heading becomes the question, each row of the
 options table becomes one option with its tradeoffs as the description, and the recommended option
 goes first, marked as recommended.
 
