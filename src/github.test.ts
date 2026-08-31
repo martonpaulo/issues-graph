@@ -407,6 +407,46 @@ describe('paginated blockers', () => {
     expect(result.data.unresolved.map((u) => u.reason)).toContain('rate limit reached')
   })
 
+  it('never spends a request the viewer did not approve, however many pages GitHub offers', async () => {
+    // The summary was read before the dependency phase began; the issue grew from 100 blockers to
+    // 101 in between, so GitHub now offers a second page that nobody agreed to pay for.
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      seen.push(href)
+      if (!href.includes('/dependencies/blocked_by')) return json([issue(1, 100)])
+      return json(blockerPage(1000, DEPENDENCY_PAGE_SIZE), {
+        headers: {
+          link:
+            '<https://api.github.com/repos/acme/app/issues/1/dependencies/blocked_by' +
+            '?per_page=100&page=2>; rel="next"',
+        },
+      })
+    })
+    const asked: number[] = []
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      confirmDependencies: (cost) => {
+        asked.push(cost)
+        return true
+      },
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(asked).toEqual([1])
+    // Exactly what was quoted: one list request and the one approved dependency page.
+    expect(seen.filter((url) => url.includes('/dependencies/blocked_by'))).toHaveLength(1)
+    expect(result.data.requestCount).toBe(2)
+    // And the truncation is reported rather than drawn.
+    expect(result.data.blockers.has(1)).toBe(false)
+    expect(result.data.complete).toBe(false)
+    expect(result.data.unresolved).toEqual([
+      { number: 1, reason: 'more blockers than the approved requests could read' },
+    ])
+  })
+
   it('counts progress in pages, and reaches its total even when a page fails', async () => {
     const { fetchImpl } = repositoryWith(201, 3)
     const progress: { done: number; total: number }[] = []

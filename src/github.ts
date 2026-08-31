@@ -349,33 +349,43 @@ function plannedPages(issue: IssuePayload, includeClosed: boolean): number {
 }
 
 /**
- * Every page of one issue's blockers.
+ * Every page of one issue's blockers, up to the number of requests the viewer approved for it.
  *
- * `Link` is the loop condition rather than the quoted page count: the summary is what the viewer
- * approved spending, but only GitHub's own `rel="next"` knows whether another page exists. A page
- * that fails throws, and the caller records the whole issue as unresolved — half a blocker list
- * drawn as if it were the whole one is the silent truncation this pagination exists to end.
+ * Two authorities are in play and neither may override the other. `rel="next"` is the only thing
+ * that knows whether another page exists, so it is the loop condition. The quote derived from the
+ * summary count is what the viewer agreed to spend, so it is the ceiling: the summary was read
+ * before the dependency phase began and the repository can have moved since — an issue that grew
+ * from 100 blockers to 101 offers a second page nobody approved.
+ *
+ * When `rel="next"` survives the last approved page, the extra request is not sent. The issue is
+ * reported as `exhausted` and the caller records it unresolved, because a list cut short at the
+ * quote is the same silent truncation as one cut short at 30, and spending an unquoted request to
+ * avoid it is the thing the viewer was asked about in the first place.
  */
 async function fetchBlockedBy(
   target: RepoTarget,
   issueNumber: number,
   options: LoadOptions,
   count: RequestCounter,
+  approvedPages: number,
   onPage: () => void,
-): Promise<IssuePayload[]> {
+): Promise<{ blockers: IssuePayload[]; exhausted: boolean }> {
   const blockers: IssuePayload[] = []
+  let spent = 0
   let url: string | null =
     `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
     `/issues/${issueNumber}/dependencies/blocked_by?per_page=${DEPENDENCY_PAGE_SIZE}`
 
   while (url) {
+    if (spent === approvedPages) return { blockers, exhausted: true }
     const response = await request(url, options, count)
+    spent += 1
     blockers.push(...((await response.json()) as IssuePayload[]))
     onPage()
     url = nextPageUrl(response.headers.get('link'))
   }
 
-  return blockers
+  return { blockers, exhausted: false }
 }
 
 /**
@@ -425,8 +435,8 @@ export async function loadRepositoryGraph(
     // again would only make the caller re-render for an unchanged number.
     if (done === reported) return
     reported = done
-    // A summary count that undercounts the real list widens the bar rather than overflowing it.
-    options.onProgress?.({ done, total: Math.max(plannedTotal, done) })
+    // The quote is a ceiling, not an estimate, so `done` can never exceed it.
+    options.onProgress?.({ done, total: plannedTotal })
   }
 
   reportProgress()
@@ -450,15 +460,29 @@ export async function loadRepositoryGraph(
         }
       } else {
         try {
-          const list = await fetchBlockedBy(target, issue.number, options, count, () => {
-            pagesDone[index] += 1
-            reportProgress()
-          })
-          // Whatever GitHub returns is what the graph draws. A summary count that disagrees with the
-          // list is GitHub's own inconsistency — a blocker in a repository this reader cannot see,
-          // for one — and reporting it as a gap only tells the reader something they can do nothing
-          // with.
-          blockers.set(issue.number, list)
+          const page = await fetchBlockedBy(
+            target,
+            issue.number,
+            options,
+            count,
+            planned[index],
+            () => {
+              pagesDone[index] += 1
+              reportProgress()
+            },
+          )
+          if (page.exhausted) {
+            failures[index] = {
+              number: issue.number,
+              reason: 'more blockers than the approved requests could read',
+            }
+          } else {
+            // Whatever GitHub returns is what the graph draws. A summary count that disagrees with
+            // the list is GitHub's own inconsistency — a blocker in a repository this reader cannot
+            // see, for one — and reporting it as a gap only tells the reader something they can do
+            // nothing with.
+            blockers.set(issue.number, page.blockers)
+          }
         } catch (error) {
           if (error instanceof DOMException && error.name === 'AbortError') throw error
           if (!(error instanceof RequestFailure)) throw error
