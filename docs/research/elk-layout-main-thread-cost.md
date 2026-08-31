@@ -37,9 +37,13 @@ all of them out rather than pack them loose.
 as a loose block, and ELK is barely asked to do anything. The cost tracks edges, not issues.
 
 Everything else is a single uninterruptible task past the 50 ms threshold, growing faster than the
-graph does — 672 ms at 250 nodes, during which the page cannot paint or answer a click. No budget
-that anyone would agree to survives that, so the issue's conditional criterion was triggered and the
-worker was built.
+graph does — 672 ms at 250 nodes, during which the page cannot paint or answer a click.
+
+**This measurement does not by itself decide anything.** #16 makes worker adoption conditional on an
+agreed long-task budget, and no budget is recorded anywhere in this repository. The numbers above
+are the evidence that decision needs; the decision itself is the owner's, and is outstanding. What
+follows records what the worker was measured to do, so the choice can be made against real figures
+rather than an estimate — not a conclusion that it should ship.
 
 ## After: the same measurement with ELK in a worker
 
@@ -54,9 +58,13 @@ The work costs the same; it simply no longer happens where the page is. Wall-clo
 CPU time measured before, which is the second confirmation that the layout really moved: the
 bundled engine's throttled timers are gone with it.
 
-## What is deployed
+## What the worker path costs to keep
 
 `src/layoutWorker.ts` is the only file that knows about the worker. `src/graph.ts` imports it lazily
-and falls back to `elk.bundled.js` where `Worker` does not exist, which is how the tests run the
-same algorithm under Node. The build therefore emits both engines; the bundled one is a lazy chunk
-that no browser ever fetches.
+and falls back to `elk.bundled.js` where `Worker` does not exist, which is how the tests run the same
+algorithm under Node. The build therefore emits both engines; the bundled one is a lazy chunk that no
+browser ever fetches.
+
+That containment is what makes the decision cheap either way: adopting the worker is one file and one
+branch in `createEngine`, and declining it removes the same file and branch without touching the
+retry, failure-typing or stale-result work, which is unconditional and independent of it.

@@ -438,9 +438,13 @@ let engine: Promise<ElkEngine> | null = null
  * A real worker where the platform has one, and the bundled engine where it does not.
  *
  * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for the
- * 25-node `agent-workflows` graph, 672 ms at 250 nodes — so a graph large enough to be worth
- * drawing is also large enough to freeze the page while it is drawn. The worker moves that off the
- * main thread and makes the work stoppable, which is the only way an ELK layout can be stopped.
+ * 25-node `agent-workflows` graph, 672 ms at 250 nodes — during which the page cannot paint or
+ * answer a click. The worker moves that off the main thread and makes the work stoppable, which is
+ * the only way an ELK layout can be stopped.
+ *
+ * Whether that cost is worth this file is the owner's call, not this comment's: #16 gates worker
+ * adoption on a long-task budget the repository has not recorded. See
+ * `docs/research/elk-layout-main-thread-cost.md` for the figures the decision rests on.
  *
  * The fallback is not a nicety: the tests run this module under Node, where `Worker` does not
  * exist, and the layout they assert on is the same algorithm either way.

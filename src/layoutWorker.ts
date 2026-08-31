@@ -10,6 +10,9 @@ import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url'
  * platform's own 50 ms definition of a long task, and growing faster than the graph does. Nothing
  * on the page can paint or answer a click for that whole time.
  *
+ * Those figures are evidence, not a verdict. #16 makes adopting a worker conditional on a long-task
+ * budget that is not recorded anywhere, so whether this file stays is the owner's decision.
+ *
  * `elk-api` is the same engine with the worker left to the caller, so this is the only file that
  * differs, and it is the browser-only one: `graph.ts` imports it lazily and falls back to the
  * bundled engine where `Worker` does not exist, which is how the tests run ELK under Node.
