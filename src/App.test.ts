@@ -6,8 +6,10 @@ import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
   App,
+  budgetParts,
   decideSavedCopyOpen,
   describeSavedCopy,
+  failureText,
   graphBounds,
   nextIssueSelection,
 } from './App'
@@ -208,5 +210,38 @@ describe('graphBounds', () => {
       requestCount: 0,
     })
     expect(Number.isFinite(bounds.width)).toBe(false)
+  })
+})
+
+/**
+ * The two places a rate-limit figure reaches the reader. Both have to follow whether a token is
+ * set, because quoting 60 to a viewer who supplied one understates what they can spend.
+ */
+describe('what the reader is told about the budget', () => {
+  const target = { owner: 'acme', repo: 'app' }
+
+  it('quotes the unauthenticated ceiling when GitHub’s numbers are unavailable', () => {
+    expect(budgetParts(null, false).main).toBe('60/hour')
+    expect(budgetParts(null, true).main).toBe('5000/hour')
+  })
+
+  it('prefers GitHub’s own numbers over either ceiling', () => {
+    const status = { limit: 5000, remaining: 4987, reset: null }
+    expect(budgetParts(status, true).main).toBe('4987/5000 left')
+    expect(budgetParts(status, false).main).toBe('4987/5000 left')
+  })
+
+  it('offers a token when the limit is hit without one, and does not when it is hit with one', () => {
+    const failure = { kind: 'rate-limited', reset: null } as const
+
+    expect(failureText(target, failure, false).body).toContain('Adding a token')
+    expect(failureText(target, failure, true).body).not.toContain('Adding a token')
+    expect(failureText(target, failure, true).body).not.toContain('Unauthenticated')
+  })
+
+  it('says a rejected token is the thing to fix', () => {
+    const text = failureText(target, { kind: 'bad-credentials' }, true)
+    expect(text.title).toContain('token')
+    expect(text.body).toContain('remove it')
   })
 })

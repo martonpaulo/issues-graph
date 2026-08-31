@@ -22,7 +22,7 @@ const BLUR_GRACE_MS = 120
  * The two suggestion sources merged for the text currently typed: repositories opened before, and
  * live GitHub search, debounced and abandoned as soon as the text moves on.
  */
-function useRepoSuggestions(typed: string): string[] {
+function useRepoSuggestions(typed: string, token: string): string[] {
   // Keyed by the query it answered, so a stale result is simply not used and nothing has to be
   // cleared on every keystroke.
   const [found, setFound] = useState<{ query: string; slugs: string[] }>({ query: '', slugs: [] })
@@ -32,7 +32,7 @@ function useRepoSuggestions(typed: string): string[] {
 
     const controller = new AbortController()
     const timer = window.setTimeout(() => {
-      void searchRepositories(typed, { signal: controller.signal }).then((slugs) => {
+      void searchRepositories(typed, { signal: controller.signal, token }).then((slugs) => {
         if (!controller.signal.aborted) setFound({ query: typed, slugs })
       })
     }, DEBOUNCE_MS)
@@ -41,7 +41,7 @@ function useRepoSuggestions(typed: string): string[] {
       controller.abort()
       window.clearTimeout(timer)
     }
-  }, [typed])
+  }, [typed, token])
 
   return useMemo(
     () => mergeSuggestions(typed, found.query === typed ? found.slugs : []),
@@ -140,9 +140,12 @@ function SuggestionList({
 export function RepoInput({
   initial = '',
   onOpen,
+  token = '',
 }: {
   initial?: string
   onOpen: (target: RepoTarget) => void
+  /** Search has its own budget, and a token raises that one too. */
+  token?: string
 }) {
   const [value, setValue] = useState(initial)
   const [error, setError] = useState<string | null>(null)
@@ -152,7 +155,7 @@ export function RepoInput({
   // Opening the repository already open does nothing, so the control that would do it is off.
   const unchanged = initial.length > 0 && typed.toLowerCase() === initial.toLowerCase()
 
-  const suggestions = useRepoSuggestions(typed)
+  const suggestions = useRepoSuggestions(typed, token)
   const list = useComboboxNavigation(suggestions.length)
 
   const submit = useCallback(
