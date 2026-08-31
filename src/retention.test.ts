@@ -208,6 +208,74 @@ describe('saveDimmed', () => {
   })
 })
 
+describe('a refused index write destroys nothing', () => {
+  /* Deciding what to evict and destroying it were one step, inside a `save(enforce(...))`
+     expression, so the keys went before the write that was meant to authorise them. A refused
+     write then left the repository's data gone while the stored index still listed it — and a
+     valid index is exactly the case where the keys are never re-read, so nothing would ever
+     correct it. */
+
+  function refuseTheIndex(): void {
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          store.set(key, value)
+        },
+      },
+      store,
+    )
+  }
+
+  it('leaves the repository it would have evicted holding its data', () => {
+    for (let index = 1; index <= MAX_ENTRIES; index += 1) hold(`o/r${index}`)
+    refuseTheIndex()
+
+    rememberRepository('o/newcomer')
+
+    // `o/r1` is the least recent, and would have been the victim.
+    expect(store.get(cacheKey('o/r1'))).toBe('x'.repeat(10))
+    expect(store.get(dimmedKey('o/r1'))).toBe('["issue-1"]')
+  })
+
+  it('does not leave the index claiming data it just deleted', () => {
+    for (let index = 1; index <= MAX_ENTRIES; index += 1) hold(`o/r${index}`)
+    refuseTheIndex()
+
+    rememberRepository('o/newcomer')
+
+    // Every repository the index still names has data genuinely present. Checked against the
+    // store rather than through `holdsData`, which answers from the index first and so cannot
+    // catch the index lying about itself.
+    for (const entry of retained()) {
+      const identity = canonicalSlug(entry.slug)
+      const present = store.has(cacheKey(identity)) || store.has(dimmedKey(identity))
+      expect(present, `${entry.slug} is named by the index but holds nothing`).toBe(true)
+    }
+  })
+
+  it('costs nobody their saved graph when a shared link cannot be indexed', () => {
+    for (let index = 1; index <= MAX_ENTRIES; index += 1) hold(`o/r${index}`)
+    refuseTheIndex()
+
+    saveDimmed('shared/link', ['issue-1'])
+
+    expect(store.has(cacheKey('o/r1'))).toBe(true)
+    expect(store.has(dimmedKey('shared/link'))).toBe(false)
+  })
+
+  it('gives up the eviction rather than performing it unrecorded', () => {
+    hold('o/old')
+    hold('o/new')
+    refuseTheIndex()
+
+    expect(evictLeastRecent('o/new')).toBe(false)
+    expect(store.get(cacheKey('o/old'))).toBe('x'.repeat(10))
+  })
+})
+
 describe('saveDimmed holds its two halves together', () => {
   /* Storing the cards and recording the repository were two independent writes, and either could
      succeed alone: a value written past a refused index update is a key no budget can see, and an

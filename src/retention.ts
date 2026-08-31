@@ -198,13 +198,18 @@ function dropKeys(slug: string): StorageWriteResult {
 }
 
 /**
- * The list trimmed to both budgets, with everything past the cut removed from storage.
+ * The list split at both budgets: what is kept, and what has to go.
+ *
+ * It decides and removes nothing. Deciding and destroying were one step here, inside a
+ * `save(enforce(...))` expression, which is precisely how a refused index write came to delete a
+ * repository nobody had agreed to lose. The caller does the removing, after the decision is
+ * durable.
  *
  * The most recent entry survives whatever it costs. It is the repository the reader is looking at,
  * and evicting it would mean a large backlog never gets saved at all — every visit paying GitHub
  * requests to produce a copy that is thrown away as it is written.
  */
-function enforce(entries: RetentionEntry[]): RetentionEntry[] {
+function enforce(entries: RetentionEntry[]): { kept: RetentionEntry[]; evicted: RetentionEntry[] } {
   let cut = entries.length
   let total = 0
 
@@ -216,8 +221,7 @@ function enforce(entries: RetentionEntry[]): RetentionEntry[] {
     }
   }
 
-  for (const evicted of entries.slice(cut)) dropKeys(evicted.slug)
-  return entries.slice(0, cut)
+  return { kept: entries.slice(0, cut), evicted: entries.slice(cut) }
 }
 
 /**
@@ -232,7 +236,18 @@ function promote(
   const entries = retained()
   const existing = entries.find((entry) => canonicalSlug(entry.slug) === identity)
   const rest = entries.filter((entry) => canonicalSlug(entry.slug) !== identity)
-  return save(enforce([next(existing), ...rest]))
+  const { kept, evicted } = enforce([next(existing), ...rest])
+
+  // The index goes first, and nothing is destroyed until it has taken. Evicting before knowing
+  // that would spend another repository's data on a write that then failed — and because the
+  // stored index still listed the victim, it would go on claiming data that no longer existed,
+  // uncorrectable because a valid index is exactly when the keys are never re-read. A refused
+  // write now leaves every repository holding what it held.
+  const saved = save(kept)
+  if (!saved.ok) return saved
+
+  for (const entry of evicted) dropKeys(entry.slug)
+  return saved
 }
 
 /**
@@ -377,13 +392,18 @@ export function evictLeastRecent(keep: string): boolean {
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     if (canonicalSlug(entries[index].slug) === identity) continue
-    dropKeys(entries[index].slug)
+    // Recorded first, then removed, for the same reason as `promote`: a refused index write must
+    // not have cost anybody their saved graph.
+    //
     // Only a recorded eviction counts. The caller retries its own write while this keeps saying
     // yes, and an index that did not take the removal reads back unchanged: the same entry is
-    // chosen again, its already-absent keys are removed again, and the loop never ends. Reporting
-    // the failed write is what makes the retry terminate — on a page where the alternative is a
-    // synchronous spin with the tab frozen.
-    return save([...entries.slice(0, index), ...entries.slice(index + 1)]).ok
+    // chosen again and the loop never ends. Reporting the failed write is what makes the retry
+    // terminate — on a page where the alternative is a synchronous spin with the tab frozen.
+    const saved = save([...entries.slice(0, index), ...entries.slice(index + 1)])
+    if (!saved.ok) return false
+
+    dropKeys(entries[index].slug)
+    return true
   }
 
   return false
@@ -393,6 +413,13 @@ export function evictLeastRecent(keep: string): boolean {
  * Removes everything this browser holds for one repository: its saved graph, its dimmed cards,
  * and its place in the list. Scoped on purpose — the reader asked about this repository, not
  * about the others, and not about the token, which is cleared where it is set.
+ *
+ * The data goes before the index here, which is the opposite order to eviction and deliberately
+ * so. Eviction is this module's own housekeeping, and it must not destroy anything it has not
+ * recorded; this is the reader asking for their data to be gone, so removing it is the thing that
+ * must actually happen. What is reported is the removal, and a refused index write after a
+ * successful one leaves an entry naming data that is already gone — cosmetic, self-correcting on
+ * the next successful write, and about this repository only.
  */
 export function clearRepositoryData(slug: string): StorageWriteResult {
   const identity = canonicalSlug(slug)
