@@ -128,7 +128,7 @@ function CardActions({
       <button
         type="button"
         className="iconbutton"
-        aria-label={`Open ${node.external ? node.repo : ''}${label} on GitHub`}
+        aria-label={`Open ${label} on GitHub`}
         data-tip="Open on GitHub · Enter"
         onClick={() => onOpen(node.url, `${label} · ${node.title}`)}
       >
