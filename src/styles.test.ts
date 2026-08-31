@@ -125,6 +125,9 @@ const pairs: ReadonlyArray<readonly [string, string, string]> = [
   ['accent text on a panel', token('accent'), token('surface')],
   ['accent text on its own soft fill', token('accent'), token('accent-soft')],
   ['the label picker while it is on', declaration('.iconbutton.is-highlighting', 'color'), token('highlight-soft')],
+  // The info panel's warning paints both halves itself rather than inheriting the panel's, so the
+  // pair is read off the rule instead of assembled from the tokens it happens to name.
+  ['the canvas warning', ...painted('.info__warn')],
 ]
 
 describe('token pairs', () => {
