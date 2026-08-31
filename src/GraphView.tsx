@@ -34,6 +34,7 @@ import {
   dependencyRows,
   describeNode,
   issueRef,
+  type Adjacency,
   type ContainmentRow,
   type DependencyRow,
 } from './dependencies'
@@ -76,6 +77,7 @@ import {
   type RepoTarget,
 } from './route'
 import { dimmedKey, holdsData, releaseDimmed, saveDimmed } from './retention'
+import { reuse } from './reuse'
 import { difference, union } from './sets'
 import {
   asBoolean,
@@ -1045,6 +1047,133 @@ function ShareResult({ outcome, onClose }: { outcome: ShareOutcome; onClose: () 
   )
 }
 
+/**
+ * What the reader has done to the canvas, as opposed to what the repository put on it: which cards
+ * are selected, which are dimmed, and which labels are picked out. Each of these changes one card,
+ * or a handful, and leaves the rest of a large backlog exactly as it was.
+ */
+export interface CanvasView {
+  selected: ReadonlySet<string>
+  dimmed: ReadonlySet<string>
+  highlight: ReadonlySet<string>
+}
+
+/** What a drawn card needs that comes from neither the graph nor the current view. */
+export interface CanvasHandlers {
+  /** Each card's own blockers and dependents, for the sentence read to a screen reader. */
+  adjacency: Map<string, Adjacency>
+  onSelectGroup: (members: string[]) => void
+  onSelectIssue: (id: string, additive: boolean) => void
+  onToggleDimmed: (id: string) => void
+  onOpen: (url: string, label: string) => void
+}
+
+/** The frames and the cards React Flow draws, from the graph and the reader's current view. */
+function buildNodes(graph: IssueGraph, view: CanvasView, handlers: CanvasHandlers): Node[] {
+  const { selected, dimmed, highlight } = view
+
+  const frames: GroupNode[] = graph.groups.map((group) => ({
+    id: group.id,
+    type: 'frame' as const,
+    position: group.position,
+    data: {
+      group,
+      selected: group.members.every((id) => selected.has(id)),
+      onSelect: handlers.onSelectGroup,
+    },
+    style: { width: group.width, height: group.height },
+    draggable: false,
+    selectable: false,
+    // Behind the cards and the edges, which is the only thing that makes it a frame.
+    zIndex: -1,
+  }))
+
+  const cards: IssueNode[] = graph.nodes.map((node) => {
+    const highlighted = highlight.size > 0 && node.allLabels.some((label) => highlight.has(label))
+    return {
+      id: node.id,
+      type: 'issue' as const,
+      position: node.position,
+      data: {
+        node,
+        selected: selected.has(node.id),
+        dimmed: dimmed.has(node.id),
+        highlighted,
+        faded: highlight.size > 0 && !highlighted,
+        description: describeNode(node, handlers.adjacency.get(node.id)),
+        onSelect: handlers.onSelectIssue,
+        onToggleDimmed: handlers.onToggleDimmed,
+        onOpen: handlers.onOpen,
+      },
+      // The height is the card's own, computed from its title, so React Flow measures and packs
+      // the node exactly as the layout assumed.
+      style: { width: NODE_WIDTH, height: node.height },
+      draggable: false,
+    }
+  })
+
+  return [...frames, ...cards]
+}
+
+/** The edges React Flow draws, lit or dimmed by the same view. */
+function buildEdges(graph: IssueGraph, view: CanvasView): DependencyEdgeType[] {
+  const { selected, dimmed } = view
+
+  return graph.edges.map((edge) => {
+    const touchesDimmed = dimmed.has(edge.source) || dimmed.has(edge.target)
+    const lit = !touchesDimmed && (selected.has(edge.source) || selected.has(edge.target))
+    const hierarchy = edge.kind === 'hierarchy'
+    return {
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: 'dependency' as const,
+      data: { points: edge.points, inverted: edge.inverted },
+      // A lit edge is drawn last so it crosses over the ones it shares a channel with.
+      zIndex: lit ? 5 : 0,
+      className: [
+        // Dashed and paler, so containment reads as a different relation before the reader
+        // has looked for an arrowhead.
+        hierarchy ? 'edge--hierarchy' : null,
+        touchesDimmed ? 'edge--dim' : lit ? 'edge--lit' : null,
+      ]
+        .filter(Boolean)
+        .join(' ') || undefined,
+      // No shared arrowhead on a hierarchy edge: an arrow is what says "this one first", and a
+      // parent says nothing of the sort about its children. An inverted one draws its own head
+      // in the containment stroke instead, which `DependencyEdge` owns.
+      markerEnd: hierarchy
+        ? undefined
+        : { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+    }
+  })
+}
+
+/**
+ * A canvas that remembers what it last drew.
+ *
+ * Rebuilding everything and then reconciling, rather than patching only what moved, is deliberate:
+ * the build stays a plain map over the graph that any new field joins without a second place to
+ * update, while the identity React Flow re-renders from comes out of one comparison that cannot be
+ * forgotten. Selecting a card in a 250-issue backlog then re-renders that card, not 250.
+ *
+ * Each call is idempotent — the same inputs twice give the same objects back — so a render React
+ * chooses to run twice reaches the same answer.
+ */
+export interface CanvasBuilder {
+  nodes(graph: IssueGraph, view: CanvasView, handlers: CanvasHandlers): Node[]
+  edges(graph: IssueGraph, view: CanvasView): DependencyEdgeType[]
+}
+
+export function createCanvasBuilder(): CanvasBuilder {
+  let nodes: Node[] = []
+  let edges: DependencyEdgeType[] = []
+  return {
+    nodes: (graph, view, handlers) => (nodes = reuse(nodes, buildNodes(graph, view, handlers))),
+    edges: (graph, view) => (edges = reuse(edges, buildEdges(graph, view))),
+  }
+}
+
 function Canvas({
   graph,
   slug,
@@ -1187,93 +1316,34 @@ function Canvas({
     })
   }, [])
 
-  const nodes = useMemo<Node[]>(() => {
-    const frames: GroupNode[] = graph.groups.map((group) => ({
-      id: group.id,
-      type: 'frame' as const,
-      position: group.position,
-      data: {
-        group,
-        selected: group.members.every((id) => selected.has(id)),
-        onSelect: selectGroup,
-      },
-      style: { width: group.width, height: group.height },
-      draggable: false,
-      selectable: false,
-      // Behind the cards and the edges, which is the only thing that makes it a frame.
-      zIndex: -1,
-    }))
-
-    const cards: IssueNode[] = graph.nodes.map((node) => {
-      const highlighted =
-        highlight.size > 0 && node.allLabels.some((label) => highlight.has(label))
-      return {
-        id: node.id,
-        type: 'issue' as const,
-        position: node.position,
-        data: {
-          node,
-          selected: selected.has(node.id),
-          dimmed: dimmed.has(node.id),
-          highlighted,
-          faded: highlight.size > 0 && !highlighted,
-          description: describeNode(node, adjacency.get(node.id)),
-          onSelect: selectIssue,
-          onToggleDimmed: toggleDimmed,
-          onOpen: openExternal,
-        },
-        // The height is the card's own, computed from its title, so React Flow measures and packs
-        // the node exactly as the layout assumed.
-        style: { width: NODE_WIDTH, height: node.height },
-        draggable: false,
-      }
-    })
-
-    return [...frames, ...cards]
-  }, [
-    graph,
-    adjacency,
-    selected,
-    dimmed,
-    highlight,
-    selectGroup,
-    selectIssue,
-    toggleDimmed,
-    openExternal,
-  ])
-
-  const edges = useMemo<DependencyEdgeType[]>(
-    () =>
-      graph.edges.map((edge) => {
-        const touchesDimmed = dimmed.has(edge.source) || dimmed.has(edge.target)
-        const lit = !touchesDimmed && (selected.has(edge.source) || selected.has(edge.target))
-        const hierarchy = edge.kind === 'hierarchy'
-        return {
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          type: 'dependency' as const,
-          data: { points: edge.points, inverted: edge.inverted },
-          // A lit edge is drawn last so it crosses over the ones it shares a channel with.
-          zIndex: lit ? 5 : 0,
-          className: [
-            // Dashed and paler, so containment reads as a different relation before the reader
-            // has looked for an arrowhead.
-            hierarchy ? 'edge--hierarchy' : null,
-            touchesDimmed ? 'edge--dim' : lit ? 'edge--lit' : null,
-          ]
-            .filter(Boolean)
-            .join(' ') || undefined,
-          // No shared arrowhead on a hierarchy edge: an arrow is what says "this one first", and a
-          // parent says nothing of the sort about its children. An inverted one draws its own head
-          // in the containment stroke instead, which `DependencyEdge` owns.
-          markerEnd: hierarchy
-            ? undefined
-            : { type: MarkerType.ArrowClosed, width: 15, height: 15 },
-        }
-      }),
-    [graph, selected, dimmed],
+  /**
+   * What the reader has done to the canvas, as one object, so a builder takes a single argument
+   * that changes exactly when they changed something.
+   */
+  const view = useMemo<CanvasView>(
+    () => ({ selected, dimmed, highlight }),
+    [selected, dimmed, highlight],
   )
+
+  const handlers = useMemo<CanvasHandlers>(
+    () => ({
+      adjacency,
+      onSelectGroup: selectGroup,
+      onSelectIssue: selectIssue,
+      onToggleDimmed: toggleDimmed,
+      onOpen: openExternal,
+    }),
+    [adjacency, selectGroup, selectIssue, toggleDimmed, openExternal],
+  )
+
+  /** Holds the canvas as it was last drawn, so a rebuild can hand back what did not change. */
+  const builder = useMemo(() => createCanvasBuilder(), [])
+
+  const nodes = useMemo(
+    () => builder.nodes(graph, view, handlers),
+    [builder, graph, view, handlers],
+  )
+  const edges = useMemo(() => builder.edges(graph, view), [builder, graph, view])
 
   const { translateExtent, minZoom } = useGraphLayout(graph)
   useCanvasShortcuts({

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 
-import { ReactFlowProvider } from '@xyflow/react'
+import { ReactFlowProvider, type Node } from '@xyflow/react'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -12,6 +12,7 @@ import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import {
   blockerStateText,
   ContainmentTable,
+  createCanvasBuilder,
   CONTAINMENT_LEGEND,
   DependencyTable,
   DIRECTION_LEGEND,
@@ -30,12 +31,14 @@ import {
   relationshipSummary,
   SelectionBar,
   TopChrome,
+  type CanvasHandlers,
+  type CanvasView,
 } from './GraphView'
 import { decideSavedCopyOpen, describeSaveProblem } from './graphSession'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { containmentRows, dependencyRows, issueRef } from './dependencies'
+import { adjacencyOf, containmentRows, dependencyRows, issueRef } from './dependencies'
 import { buildGraph, NODE_WIDTH, type GraphNode, type IssueGraph } from './graph'
 
 const narrowData: RepositoryGraphData = {
@@ -908,5 +911,145 @@ describe('what takes the canvas keys away from the canvas', () => {
      a shut picker is an ordinary button on the toolbar. */
   it('leaves the canvas its keys while the focus rests on a shut picker', () => {
     expect(selectors).not.toContain('.picker')
+  })
+})
+
+describe('what a local interaction rebuilds', () => {
+  /*
+   * The canvas is rebuilt from the graph on every selection, dimming and highlight change, so what
+   * these assert is the identity React Flow re-renders from: a card the reader did not touch has
+   * to come back as the same object, or a one-card change costs a whole-backlog reconciliation.
+   */
+  function captured(): Promise<IssueGraph> {
+    const blockers = new Map(
+      Object.entries(arbaroBlockedBy as Record<string, IssuePayload[]>).map(([number, list]) => [
+        Number(number),
+        list,
+      ]),
+    )
+    return buildGraph(
+      {
+        issues: arbaroIssues as IssuePayload[],
+        blockers,
+        complete: true,
+        unresolved: [],
+        rateLimited: false,
+        rateLimitReset: null,
+        requestCount: 1 + blockers.size,
+        rateLimit: null,
+        includedClosed: true,
+      },
+      { owner: 'martonpaulo', repo: 'arbaro' },
+    )
+  }
+
+  const NONE: ReadonlySet<string> = new Set()
+
+  function viewOf(view: Partial<CanvasView>): CanvasView {
+    return { selected: NONE, dimmed: NONE, highlight: NONE, ...view }
+  }
+
+  function handlersFor(graph: IssueGraph): CanvasHandlers {
+    return {
+      adjacency: adjacencyOf(graph),
+      onSelectGroup: () => {},
+      onSelectIssue: () => {},
+      onToggleDimmed: () => {},
+      onOpen: () => {},
+    }
+  }
+
+  function byId(nodes: readonly Node[]): Map<string, Node> {
+    return new Map(nodes.map((node) => [node.id, node]))
+  }
+
+  it('hands back the very same canvas when nothing about the view changed', async () => {
+    const graph = await captured()
+    const handlers = handlersFor(graph)
+    const builder = createCanvasBuilder()
+    const view = viewOf({})
+    const nodes = builder.nodes(graph, view, handlers)
+    const edges = builder.edges(graph, view)
+
+    expect(builder.nodes(graph, view, handlers)).toBe(nodes)
+    expect(builder.edges(graph, view)).toBe(edges)
+  })
+
+  it('replaces only the selected card, and leaves every other node the object it was', async () => {
+    const graph = await captured()
+    const handlers = handlersFor(graph)
+    const builder = createCanvasBuilder()
+    const before = builder.nodes(graph, viewOf({}), handlers)
+    const picked = graph.nodes[0].id
+    const after = builder.nodes(graph, viewOf({ selected: new Set([picked]) }), handlers)
+
+    expect(graph.nodes.length).toBeGreaterThan(3)
+    expect(after).not.toBe(before)
+
+    const was = byId(before)
+    const changed = after.filter((node) => node !== was.get(node.id)).map((node) => node.id)
+    // The card itself, and any frame that has just become wholly selected because it holds only
+    // that card. Nothing else in the backlog.
+    expect(changed).toContain(picked)
+    for (const id of changed) {
+      if (id === picked) continue
+      const group = graph.groups.find((candidate) => candidate.id === id)
+      expect(group?.members).toEqual([picked])
+    }
+  })
+
+  it('keeps the data object of an untouched card, which is what the card renders from', async () => {
+    const graph = await captured()
+    const handlers = handlersFor(graph)
+    const builder = createCanvasBuilder()
+    const before = builder.nodes(graph, viewOf({}), handlers)
+    const picked = graph.nodes[0].id
+    const after = builder.nodes(graph, viewOf({ dimmed: new Set([picked]) }), handlers)
+
+    const was = byId(before)
+    const untouched = after.find((node) => node.id === graph.nodes[1].id)
+    expect(untouched?.data).toBe(was.get(graph.nodes[1].id)?.data)
+
+    const dimmed = after.find((node) => node.id === picked)
+    expect(dimmed?.data.dimmed).toBe(true)
+    // Only the volatile flag moved: the layout the card is drawn at is the same object.
+    expect(dimmed?.position).toBe(was.get(picked)?.position)
+  })
+
+  it('relights only the edges incident to the selection', async () => {
+    const graph = await captured()
+    const builder = createCanvasBuilder()
+    const before = builder.edges(graph, viewOf({}))
+    const picked = graph.edges[0].source
+    const after = builder.edges(graph, viewOf({ selected: new Set([picked]) }))
+
+    expect(graph.edges.length).toBeGreaterThan(3)
+    const was = new Map(before.map((edge) => [edge.id, edge]))
+    for (const edge of after) {
+      const incident = edge.source === picked || edge.target === picked
+      if (incident) expect(edge).not.toBe(was.get(edge.id))
+      else expect(edge).toBe(was.get(edge.id))
+    }
+  })
+
+  it('leaves a card outside both highlights alone when the reader swaps one for the other', async () => {
+    const graph = await captured()
+    const handlers = handlersFor(graph)
+    const labels = [...new Set(graph.nodes.flatMap((node) => node.allLabels))].sort()
+    expect(labels.length).toBeGreaterThan(1)
+    const [first, second] = labels
+
+    const builder = createCanvasBuilder()
+    const before = builder.nodes(graph, viewOf({ highlight: new Set([first]) }), handlers)
+    const after = builder.nodes(graph, viewOf({ highlight: new Set([second]) }), handlers)
+
+    const was = byId(before)
+    const outside = graph.nodes.filter(
+      (node) => !node.allLabels.includes(first) && !node.allLabels.includes(second),
+    )
+    expect(outside.length).toBeGreaterThan(0)
+    for (const node of outside) {
+      expect(after.find((candidate) => candidate.id === node.id)).toBe(was.get(node.id))
+    }
   })
 })
