@@ -243,6 +243,14 @@ code {
   transform: none;
 }
 
+/* The tools bar sits inside the left-hand panel now, so the rule above no longer reaches it; its
+   hints still belong on the side the bar is on. */
+.react-flow__panel .bar--tools [data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
 /* Floating chrome ---------------------------------------------------------
    Everything sits over the canvas rather than stacking bars above it, so the
    graph itself is the page. */
@@ -265,10 +273,46 @@ code {
   box-shadow: var(--shadow);
 }
 
+/* One strip across the top holding both bars, so they lay each other out instead of being pinned
+   to opposite corners and hoping the middle stays empty. The strip is transparent to the pointer;
+   the bars inside it are not, so a drag between them still pans the canvas. */
+.react-flow__panel.topbar {
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin: 0;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+.topbar > .bar {
+  pointer-events: auto;
+}
+
+/* Nothing here may push its neighbour off the window: a bar shrinks, then wraps inside itself. */
+.bar {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The tools keep the right-hand side on a line they share, and keep it on a line of their own. */
+.bar--tools {
+  margin-left: auto;
+}
+
+/* The identity stays one line whatever the repository is called: the slug is the part that gives
+   way, so a long name shortens the name rather than growing a three-line bar over the graph. */
+.bar--identity {
+  flex-wrap: nowrap;
+}
+
 .bar__slug {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font: inherit;
   padding: 2px 4px;
   border: 0;
@@ -277,6 +321,14 @@ code {
   color: var(--text);
   text-decoration: none;
   cursor: pointer;
+}
+
+/* Only the text gives way, and only inside the button: an outline drawn on the button itself is
+   never clipped by this. */
+.bar__slugtext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bar__slug {
@@ -342,13 +394,6 @@ code {
 @media (max-width: 900px) {
   .bar__counts {
     display: none;
-  }
-}
-
-/* Keep the latest-read label visible on phones without letting the two fixed top panels overlap. */
-@media (max-width: 640px) {
-  .react-flow__panel.bar--tools {
-    top: 48px;
   }
 }
 
