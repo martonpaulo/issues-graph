@@ -50,7 +50,7 @@ import {
   type SessionFailure,
   type SessionState,
 } from './graphSession'
-import { dimmedKey, holdsData, registerDimmed, releaseDimmed } from './retention'
+import { dimmedKey, holdsData, releaseDimmed, saveDimmed } from './retention'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
@@ -1495,8 +1495,10 @@ function Canvas({
       return
     }
 
-    writeStored(dimmedKey(identity), [...dimmed])
-    registerDimmed(identity)
+    // One operation, because storing the cards and recording the repository have to hold or fail
+    // together. The result is not surfaced: an unremembered preference is not worth interrupting
+    // a reader over, unlike a saved graph, which costs GitHub requests to produce again.
+    saveDimmed(identity, [...dimmed])
   }, [identity, dimmed])
 
   const share = useCallback(() => {

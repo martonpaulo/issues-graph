@@ -11,8 +11,8 @@ import {
   MAX_ENTRIES,
   openedSlugs,
   recordCacheSize,
-  registerDimmed,
   releaseDimmed,
+  saveDimmed,
   rememberRepository,
   retained,
   touchRepository,
@@ -175,34 +175,120 @@ describe('adopting a browser that predates the index', () => {
   })
 })
 
-describe('registerDimmed', () => {
+describe('saveDimmed', () => {
   /* Dimming is the one thing saved for a repository the reader never chose: a shared link draws
      somebody else's copy and saves nothing, but dimming a card on it writes a key. */
 
   it('counts a repository held only by its dimmed cards', () => {
-    registerDimmed('shared/link')
+    saveDimmed('shared/link', ['issue-1'])
 
     expect(slugs()).toEqual(['shared/link'])
     expect(holdsData('shared/link')).toBe(true)
   })
 
   it('keeps it out of the suggestions, because the reader never chose it', () => {
-    registerDimmed('shared/link')
+    saveDimmed('shared/link', ['issue-1'])
 
     expect(openedSlugs()).toEqual([])
   })
 
   it('does not demote a repository the reader did choose', () => {
     rememberRepository('a/one')
-    registerDimmed('a/one')
+    saveDimmed('a/one', ['issue-1'])
 
     expect(openedSlugs()).toEqual(['a/one'])
   })
 
   it('brings it under the same budget as everything else', () => {
-    for (let index = 1; index <= MAX_ENTRIES + 1; index += 1) registerDimmed(`shared/r${index}`)
+    for (let index = 1; index <= MAX_ENTRIES + 1; index += 1) {
+      saveDimmed(`shared/r${index}`, ['issue-1'])
+    }
 
     expect(retained()).toHaveLength(MAX_ENTRIES)
+  })
+})
+
+describe('saveDimmed holds its two halves together', () => {
+  /* Storing the cards and recording the repository were two independent writes, and either could
+     succeed alone: a value written past a refused index update is a key no budget can see, and an
+     index entry written past a refused value is a slot held for nothing. */
+
+  it('leaves nothing behind when the repository cannot be indexed', () => {
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          store.set(key, value)
+        },
+      },
+      store,
+    )
+
+    expect(saveDimmed('shared/link', ['issue-1'])).toMatchObject({ ok: false, reason: 'quota' })
+    expect(store.has(dimmedKey('shared/link'))).toBe(false)
+    expect(holdsData('shared/link')).toBe(false)
+  })
+
+  it('registers nothing when the cards themselves cannot be stored', () => {
+    installStorage(
+      {
+        setItem: (key: string) => {
+          if (key === dimmedKey('shared/link')) {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          throw new Error('the index must not be written when the value was not')
+        },
+      },
+      store,
+    )
+
+    expect(saveDimmed('shared/link', ['issue-1'])).toMatchObject({ ok: false })
+    expect(retained()).toEqual([])
+  })
+
+  it('puts back the cards that were already there', () => {
+    saveDimmed('shared/link', ['issue-1'])
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          store.set(key, value)
+        },
+      },
+      store,
+    )
+    // A second repository, so the one being written is not already the index's own head.
+    store.set('issue-graph:retention', JSON.stringify({ version: 1, entries: [] }))
+
+    saveDimmed('shared/link', ['issue-1', 'issue-2'])
+
+    expect(store.get(dimmedKey('shared/link'))).toBe(JSON.stringify(['issue-1']))
+  })
+
+  /* A repository the index already knows is the case where rolling back would do harm: a failed
+     registration costs only a stale position in the recency order, while discarding the dimming
+     the reader just did would repair something nothing depends on. */
+
+  it('keeps new dimming on a repository the index already holds', () => {
+    hold('o/one')
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          store.set(key, value)
+        },
+      },
+      store,
+    )
+
+    expect(saveDimmed('o/one', ['issue-7'])).toEqual({ ok: true })
+    expect(store.get(dimmedKey('o/one'))).toBe(JSON.stringify(['issue-7']))
   })
 })
 
@@ -212,7 +298,7 @@ describe('releaseDimmed', () => {
      somebody wanted, and still offering to clear data that no longer existed. */
 
   it('gives the slot back when nothing else is held for the repository', () => {
-    registerDimmed('shared/link')
+    saveDimmed('shared/link', ['issue-1'])
     expect(slugs()).toEqual(['shared/link'])
 
     releaseDimmed('shared/link')
@@ -222,8 +308,7 @@ describe('releaseDimmed', () => {
   })
 
   it('removes the dimmed key rather than leaving an empty one', () => {
-    store.set(dimmedKey('shared/link'), '["issue-1"]')
-    registerDimmed('shared/link')
+    saveDimmed('shared/link', ['issue-1'])
 
     releaseDimmed('shared/link')
 
@@ -242,7 +327,7 @@ describe('releaseDimmed', () => {
 
   it('leaves every other repository where it was', () => {
     hold('o/keeps')
-    registerDimmed('shared/link')
+    saveDimmed('shared/link', ['issue-1'])
 
     releaseDimmed('shared/link')
 
@@ -250,7 +335,7 @@ describe('releaseDimmed', () => {
   })
 
   it('works under any spelling of the repository', () => {
-    registerDimmed('Shared/Link')
+    saveDimmed('Shared/Link', ['issue-1'])
 
     releaseDimmed('SHARED/LINK')
 

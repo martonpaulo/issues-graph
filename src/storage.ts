@@ -98,13 +98,24 @@ export function writeStoredText(key: string, text: string): StorageWriteResult {
   }
 }
 
+/**
+ * The stored text exactly as it was written, or null when the key holds nothing.
+ *
+ * Unparsed on purpose: this is what a caller keeps in hand to put a value back the way it found
+ * it when a paired write turns out to be impossible, and re-encoding a decoded value is a
+ * different string than the one that was there.
+ */
+export function readStoredText(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
 /** Whether a key currently holds anything, without paying to parse what it holds. */
 export function hasStored(key: string): boolean {
-  try {
-    return window.localStorage.getItem(key) !== null
-  } catch {
-    return false
-  }
+  return readStoredText(key) !== null
 }
 
 /**

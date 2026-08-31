@@ -4,8 +4,10 @@ import {
   clearStored,
   hasStored,
   readStored,
+  readStoredText,
   storedKeys,
   writeStored,
+  writeStoredText,
   type StorageWriteResult,
 } from './storage'
 
@@ -301,6 +303,11 @@ export function touchRepository(identity: string): void {
  *
  * The entry goes only when nothing else is held under it. A repository with a saved graph stays,
  * because the graph is what its slot is for.
+ *
+ * The key is removed before the index is updated, so a refused index write leaves an entry
+ * holding a slot for nothing until the next successful one corrects it. That is the right way
+ * round: the other order would leave a dimmed key no index knows about, and rolling the removal
+ * back would restore dimming the reader had just cleared.
  */
 export function releaseDimmed(identity: string): void {
   const key = canonicalSlug(identity)
@@ -312,13 +319,50 @@ export function releaseDimmed(identity: string): void {
   if (kept.length !== entries.length) save(kept)
 }
 
-export function registerDimmed(identity: string): void {
-  promote(identity, (existing) => ({
+function registerDimmed(identity: string): StorageWriteResult {
+  return promote(identity, (existing) => ({
     slug: existing?.slug ?? identity,
     usedAt: Date.now(),
     chars: existing?.chars ?? 0,
     opened: existing?.opened ?? false,
   }))
+}
+
+/** Puts a value back exactly as it was, including having been absent. */
+function restore(key: string, previous: string | null): void {
+  if (previous === null) clearStored(key)
+  else writeStoredText(key, previous)
+}
+
+/**
+ * Stores the dimmed cards for a repository and registers it, as one operation that either does
+ * both or leaves the repository as it found it.
+ *
+ * Storing the value and recording it were two independent writes, and either could succeed alone:
+ * a value written past a refused index update is a key no budget can see, and the same
+ * undiscoverable growth the graph cache had. So the value goes first — a failure there registers
+ * nothing, which is what stops the opposite phantom, an indexed repository holding no data — and
+ * a refused registration puts the previous value back.
+ *
+ * The rollback is skipped when the repository is already indexed, and that is the point of the
+ * check rather than an optimisation. There, a failed registration costs only a stale position in
+ * the recency order, while rolling back would throw away dimming the reader just did in order to
+ * repair something nothing depends on. Only a repository the index does not yet know about can be
+ * left in the state this guards against.
+ */
+export function saveDimmed(identity: string, dimmed: string[]): StorageWriteResult {
+  const key = canonicalSlug(identity)
+  const alreadyIndexed = retained().some((entry) => canonicalSlug(entry.slug) === key)
+  const previous = readStoredText(dimmedKey(key))
+
+  const written = writeStored(dimmedKey(key), dimmed)
+  if (!written.ok) return written
+
+  const registered = registerDimmed(key)
+  if (registered.ok || alreadyIndexed) return written
+
+  restore(dimmedKey(key), previous)
+  return registered
 }
 
 /**
