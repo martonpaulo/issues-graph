@@ -5,8 +5,8 @@ import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url'
  * ELK in a real Web Worker.
  *
  * `elk.bundled.js` runs the same algorithm on the page's own thread. Measured in Chrome against
- * this repository's captured fixtures, one layout is a single long task: 66–88 ms for the 25-node
- * `agent-workflows` graph, 222 ms at 100 nodes, 672 ms at 250 nodes — every one of them past the
+ * this repository's captured fixtures, one layout is a single long task: 66–88 ms for a 25-node
+ * graph, 222 ms at 100 nodes, 672 ms at 250 nodes — every one of them past the
  * platform's own 50 ms definition of a long task, and growing faster than the graph does. Nothing
  * on the page can paint or answer a click for that whole time.
  *
