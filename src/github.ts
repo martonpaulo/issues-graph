@@ -269,7 +269,9 @@ async function request(url: string, options: LoadOptions, count: RequestCounter)
     throw new RequestFailure({
       kind: 'unexpected',
       status: response.status,
-      message: `GitHub answered ${response.status}.`,
+      // No trailing period: this sentence is composed into longer copy — the stage notice and the
+      // per-issue list of unresolved blockers — which supplies its own punctuation.
+      message: `GitHub returned error ${response.status}`,
     })
   }
 

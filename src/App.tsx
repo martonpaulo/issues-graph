@@ -29,6 +29,7 @@ import {
   readRateLimit,
   UNAUTHENTICATED_HOURLY_LIMIT,
   type LoadFailure,
+  type UnresolvedDependency,
   type RateLimitStatus,
 } from './github'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
@@ -416,10 +417,48 @@ export function failureText(
     case 'network':
       return { title: 'GitHub could not be reached', body: failure.message }
     case 'unexpected':
-      return { title: `GitHub answered ${failure.status}`, body: failure.message }
+      // The title already carries the status, so the body must add recovery guidance rather than
+      // repeat `failure.message`, which used to render as "GitHub answered 500. GitHub answered 500."
+      return {
+        title: failure.message,
+        body: 'Nothing about the request needs changing; GitHub failed to answer it. Try again.',
+      }
     case 'cancelled':
       return { title: 'Load cancelled', body: 'No dependency requests were spent.' }
   }
+}
+
+/**
+ * What is missing from an incomplete graph, and why — one issue at a time.
+ *
+ * The loader records a separate reason per unresolved issue, and reporting only the first one told
+ * the reader that a rate limit caused a 404. Identical reasons are grouped, because "#3, #7 — rate
+ * limit reached" is the same fact twice; different reasons are never merged.
+ */
+export function describeUnresolved(unresolved: readonly UnresolvedDependency[]): string {
+  if (unresolved.length === 0) return 'Some blocker data is missing, and GitHub did not say why.'
+
+  // First appearance orders the groups, so the sentence follows the order the issues were read in.
+  const groups = new Map<string, number[]>()
+  for (const entry of unresolved) {
+    const reason = withoutTrailingPeriod(entry.reason) || 'the request failed'
+    const numbers = groups.get(reason)
+    if (numbers) numbers.push(entry.number)
+    else groups.set(reason, [entry.number])
+  }
+
+  const parts = [...groups.entries()].map(
+    ([reason, numbers]) => `${numbers.map((number) => `#${number}`).join(', ')} — ${reason}`,
+  )
+  return `Some blocker data is missing: ${parts.join('; ')}.`
+}
+
+/**
+ * Reasons arrive punctuated inconsistently: some are fragments the loader wrote, others are a
+ * failure message that ends in a period. The sentence above supplies its own.
+ */
+function withoutTrailingPeriod(reason: string): string {
+  return reason.trim().replace(/\.$/, '')
 }
 
 /* Canvas ------------------------------------------------------------------ */
@@ -821,12 +860,11 @@ function GraphStatus({
         <div className="info__row info__row--muted">{describeSavedCopy(savedCopy)}</div>
       )}
       {!graph.complete && (
+        /* One live region holding one complete sentence, so the whole gap is announced once
+           rather than a fragment at a time. */
         <div className="info__warn" role="status">
-          Could not read the blockers of{' '}
-          {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
-          {graph.rateLimited
-            ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
-            : (graph.unresolved[0]?.reason ?? 'the request failed')}
+          {describeUnresolved(graph.unresolved)}
+          {graph.rateLimited && ` The budget ran out; it refills ${describeUntil(graph.rateLimitReset)}.`}
         </div>
       )}
     </Panel>
@@ -1621,7 +1659,8 @@ function GraphLoad({
 
       {phase.kind === 'failed' && (
         <>
-          <p className="notice notice--error">
+          {/* One region carrying the whole message, so it is announced once and in full. */}
+          <p className="notice notice--error" role="status">
             <strong>{failureText(target, phase.failure, token !== '').title}.</strong>{' '}
             {failureText(target, phase.failure, token !== '').body}
           </p>
