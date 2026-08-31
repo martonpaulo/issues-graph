@@ -24,6 +24,7 @@ import {
   nextTrapIndex,
   overlayKeyAction,
   popupTriggerProps,
+  restoresTriggerAfterOutsidePress,
   SelectionBar,
   TopChrome,
 } from './App'
@@ -836,5 +837,25 @@ describe('how a picker declares the panel it opens', () => {
       'aria-expanded': false,
       'aria-controls': undefined,
     })
+  })
+})
+
+describe('where the focus goes when a press outside closes a panel', () => {
+  /* The canvas, the page behind it and the panel's own backdrop take no focus, so closing over one
+     of them removes the control the reader was standing on and leaves them at the top of the
+     document. That is the lost place the whole change is about. */
+  it('takes the focus back when the press landed on nothing that can hold it', () => {
+    expect(restoresTriggerAfterOutsidePress(true, false)).toBe(true)
+  })
+
+  it('leaves a control the reader pressed with the focus they gave it', () => {
+    expect(restoresTriggerAfterOutsidePress(true, true)).toBe(false)
+  })
+
+  /* Somebody reading elsewhere on the page — the repository field, a card — has a place already,
+     and a panel closing behind them is not a reason to move them to its trigger. */
+  it('moves nobody who was standing outside the panel to begin with', () => {
+    expect(restoresTriggerAfterOutsidePress(false, false)).toBe(false)
+    expect(restoresTriggerAfterOutsidePress(false, true)).toBe(false)
   })
 })

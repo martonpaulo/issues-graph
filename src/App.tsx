@@ -249,6 +249,23 @@ export function popupTriggerProps(open: boolean, panelId: string) {
   }
 }
 
+/**
+ * Whether the trigger takes the focus back after a press outside an open panel.
+ *
+ * Two ways to lose a reader's place, and they pull in opposite directions. Pulling the focus back
+ * from a control they just pressed puts them somewhere they did not ask to be; leaving it where a
+ * closing panel dropped it — `<body>`, because the canvas and the page behind it take no focus —
+ * strands them at the top of the document, which is the fault this whole change is about. So the
+ * trigger takes it back only when the reader was standing inside the panel and the press landed on
+ * nothing that could hold the focus instead.
+ */
+export function restoresTriggerAfterOutsidePress(
+  focusWasInsidePanel: boolean,
+  focusLandedOnAControl: boolean,
+): boolean {
+  return focusWasInsidePanel && !focusLandedOnAControl
+}
+
 /** The controls a reader can reach with Tab, in the order Tab reaches them. */
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
@@ -340,7 +357,8 @@ function useModalDialog<Initial extends HTMLElement>(onClose: () => void) {
 
 /**
  * The keyboard lifecycle of a panel hanging off a button: Escape closes it, a press anywhere
- * outside closes it, and the button takes the focus back whenever the reader was standing inside.
+ * outside closes it, and the button takes the focus back whenever the panel would otherwise have
+ * left the reader with nowhere to stand.
  *
  * The focus is not moved on opening. The panel is rendered immediately after its button, so Tab
  * already walks into it, and forcing the focus would change what a pointer does as well.
@@ -350,8 +368,8 @@ function usePopover(open: boolean, onClose: () => void) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   /**
-   * Only when the focus is inside the panel, or nowhere: a press outside has already put the
-   * reader somewhere they chose, and taking that back would be the same lost place this fixes.
+   * Closing from a key: the reader is inside the panel, or on `<body>` because something already
+   * took the panel away, and either way the trigger is where they came from.
    */
   const restoreTrigger = useCallback(() => {
     const active = document.activeElement
@@ -377,10 +395,21 @@ function usePopover(open: boolean, onClose: () => void) {
       event.preventDefault()
       dismissEvent()
     }
+    let settling = 0
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as globalThis.Node | null
       if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
+
+      const wasInside = panelRef.current?.contains(document.activeElement) ?? false
       closeEvent()
+
+      // Where the focus ends up is the browser's answer rather than this handler's, so the rule is
+      // applied once the press has finished being one: `mousedown` focuses the pressed control
+      // after this listener has run, and the panel unmounts in between.
+      settling = window.setTimeout(() => {
+        const landed = document.activeElement !== null && document.activeElement !== document.body
+        if (restoresTriggerAfterOutsidePress(wasInside, landed)) triggerRef.current?.focus()
+      })
     }
 
     window.addEventListener('keydown', onKey)
@@ -388,8 +417,9 @@ function usePopover(open: boolean, onClose: () => void) {
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pointerdown', onPointerDown)
+      window.clearTimeout(settling)
     }
-  }, [open])
+  }, [open, restoreTrigger])
 
   return { triggerRef, panelRef, dismiss }
 }
