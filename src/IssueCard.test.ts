@@ -14,6 +14,7 @@ function issueNode(overrides: Partial<GraphNode>): GraphNode {
     url: 'https://github.com/owner/app/issues/30',
     repo: 'owner/app',
     state: 'ready',
+    open: true,
     external: false,
     repoLabel: '',
     labels: [],

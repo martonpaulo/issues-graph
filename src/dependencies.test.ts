@@ -170,6 +170,67 @@ describe('describeNode', () => {
   })
 })
 
+describe('a closed blocker in another repository', () => {
+  /**
+   * The one node with neither a local workflow state nor an open one. It is only in the picture
+   * because closed blockers were asked for, so the picture has to be able to say why.
+   */
+  it('carries GitHub’s own closed state, which the local presentation state withholds', async () => {
+    const graph = await buildGraph(
+      dataFrom(
+        [issue({ number: 5 })],
+        {
+          5: [
+            issue({
+              number: 9,
+              state: 'closed',
+              state_reason: 'completed',
+              repository_url: 'https://api.github.com/repos/other/lib',
+              html_url: 'https://github.com/other/lib/issues/9',
+            }),
+          ],
+        },
+      ),
+      { owner: 'acme', repo: 'app' },
+      { showClosed: true },
+    )
+
+    const blocker = graph.nodes.find((node) => node.id === 'other/lib#9')
+    expect(blocker?.external).toBe(true)
+    // The label convention behind `state` is this repository's own, so it stays withheld …
+    expect(blocker?.state).toBeNull()
+    // … while open or closed is GitHub's and is the fact a reader of a blocker needs.
+    expect(blocker?.open).toBe(false)
+
+    expect(describe_(graph, 'acme/app#5')).toBe(
+      'Issue #5. Blocked by other/lib#9. Blocks nothing.',
+    )
+    expect(dependencyRows(graph).map((row) => row.blocker.id)).toEqual(['other/lib#9'])
+  })
+
+  it('is left out of the default view, like every other closed blocker', async () => {
+    const graph = await buildGraph(
+      dataFrom(
+        [issue({ number: 5 })],
+        {
+          5: [
+            issue({
+              number: 9,
+              state: 'closed',
+              state_reason: 'completed',
+              repository_url: 'https://api.github.com/repos/other/lib',
+            }),
+          ],
+        },
+      ),
+      { owner: 'acme', repo: 'app' },
+    )
+
+    expect(dependencyRows(graph)).toEqual([])
+    expect(describe_(graph, 'acme/app#5')).toBe('Issue #5. Blocked by nothing. Blocks nothing.')
+  })
+})
+
 describe('dependencyRows', () => {
   it('covers every drawn edge exactly once, in a stable order', async () => {
     const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)

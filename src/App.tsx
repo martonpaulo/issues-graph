@@ -29,7 +29,7 @@ import {
   issueRef,
   type DependencyRow,
 } from './dependencies'
-import { buildGraph, NODE_WIDTH, type IssueGraph } from './graph'
+import { buildGraph, NODE_WIDTH, type GraphNode, type IssueGraph } from './graph'
 import {
   AUTHENTICATED_HOURLY_LIMIT,
   loadRepositoryGraph,
@@ -516,6 +516,20 @@ function LabelPicker({
 }
 
 /**
+ * What the table says about a blocker's state.
+ *
+ * Two facts, and the column needs whichever one it can get. `state` is this repository's own
+ * reading of its backlog and is deliberately absent for an issue in another repository, but open
+ * or closed is GitHub's and is there for every node — which is the fact this column exists for,
+ * since a closed blocker is one that is no longer in the way. Naming the repository here instead
+ * would answer a question the blocker's own cell already answered.
+ */
+export function blockerStateText(node: GraphNode): string {
+  if (node.state) return STATE_TEXT[node.state]
+  return node.open ? 'open' : 'closed'
+}
+
+/**
  * Every drawn edge as a row: the blocker, whether it is finished, and what it holds up.
  *
  * A real table rather than a list of sentences, because a screen reader navigates a table by row
@@ -545,9 +559,7 @@ export function DependencyTable({ rows }: { rows: DependencyRow[] }) {
               <span className="deps__ref">{issueRef(row.blocker)}</span>{' '}
               <span className="deps__title">{row.blocker.title}</span>
             </td>
-            <td className="deps__state">
-              {row.blocker.state ? STATE_TEXT[row.blocker.state] : 'another repository'}
-            </td>
+            <td className="deps__state">{blockerStateText(row.blocker)}</td>
             <td>
               <span className="deps__ref">{issueRef(row.dependent)}</span>{' '}
               <span className="deps__title">{row.dependent.title}</span>
