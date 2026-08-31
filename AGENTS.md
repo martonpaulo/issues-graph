@@ -98,6 +98,16 @@ editing an existing one to fit.
 routing, TypeScript, and Vitest.** It is a static page that reads the public GitHub REST API
 unauthenticated from the browser: no backend, no token, no build-time data.
 
+**ELK runs in a Web Worker, and the bundled engine is the fallback rather than the default.**
+`src/layoutWorker.ts` is the only file that constructs it; `src/graph.ts` imports that module lazily
+and reaches for `elkjs/lib/elk.bundled.js` only where `Worker` is undefined, which is how the Node
+test suite runs the same algorithm. The split is load-bearing in the same way the SPA fallback below
+it is. Every real layout measured on the page's own thread was a single long task past the
+platform's own 50 ms definition — 66–88 ms at 25 nodes, 672 ms at 250 — so importing
+`elk.bundled.js` directly on the browser path would silently restore the stalls the worker was
+adopted to remove, and dropping the fallback would break every test.
+`docs/research/elk-layout-main-thread-cost.md` holds the measurement and the decision.
+
 **The GitHub Pages SPA fallback is load-bearing.** `vite.config.ts` copies `index.html` to
 `404.html` at build time so a real route such as `/dependencies/owner/repo` is served by the same
 document. Pages returns HTTP 404 for that path by design and the client router then renders it; the
