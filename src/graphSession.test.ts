@@ -77,6 +77,8 @@ interface Harness {
   cancelled: (string | null)[]
   cached: [string, RepositoryGraphData][]
   remembered: RepoTarget[]
+  /** Every repository whose saved data the session was asked to remove. */
+  forgotten: string[]
   fragmentsCleared: number
   /** How often the session terminated the layout engine. */
   enginesDiscarded: number
@@ -89,6 +91,7 @@ function open(
   const cancelled: (string | null)[] = []
   const cached: [string, RepositoryGraphData][] = []
   const remembered: RepoTarget[] = []
+  const forgotten: string[] = []
   const record = { fragmentsCleared: 0, enginesDiscarded: 0 }
 
   const effects: SessionEffects = {
@@ -98,8 +101,15 @@ function open(
     discardLayoutEngine: () => void (record.enginesDiscarded += 1),
     readSnapshot: async (): Promise<SnapshotRead> => ({ kind: 'none' }),
     readCache: () => null,
-    writeCache: (slug, value) => void cached.push([slug, value]),
+    writeCache: (slug, value) => {
+      cached.push([slug, value])
+      return { ok: true }
+    },
     rememberTarget: (value) => void remembered.push(value),
+    clearRepositoryData: (slug) => {
+      forgotten.push(slug)
+      return { ok: true }
+    },
     clearFragment: () => void (record.fragmentsCleared += 1),
     now: () => new Date('2026-08-31T12:00:00Z'),
     ...overrides,
@@ -124,6 +134,7 @@ function open(
     cancelled,
     cached,
     remembered,
+    forgotten,
     get fragmentsCleared() {
       return record.fragmentsCleared
     },
@@ -520,6 +531,125 @@ describe('opening the copy this browser saved', () => {
 
     // The layout finished before the session closed, so the engine is the next session's to reuse.
     expect(harness.enginesDiscarded).toBe(0)
+  })
+})
+
+describe('a copy that could not be saved', () => {
+  it('says so beside the drawn graph rather than swallowing the refusal', async () => {
+    const harness = open({
+      writeCache: () => ({
+        ok: false,
+        reason: 'quota',
+        message: 'This browser\u2019s storage is full.',
+      }),
+    })
+    harness.session.start(false)
+    await settle()
+
+    // The graph itself is fine: it was read, and it is drawn. Only the copy for next time is
+    // missing, and that is what the sentence is about.
+    expect(harness.session.getState().phase).toMatchObject({ kind: 'ready' })
+    expect(harness.session.getState().saveProblem).toBe(
+      'This browser\u2019s storage is full. This graph was not saved, so opening it again will read from GitHub.',
+    )
+  })
+
+  it('says nothing when the copy was saved', async () => {
+    const harness = open()
+    harness.session.start(false)
+    await settle()
+
+    expect(harness.session.getState().saveProblem).toBeNull()
+  })
+})
+
+describe('clearing what this browser saved', () => {
+  it('removes the repository\u2019s data and stops offering the copy', async () => {
+    const harness = open({ readCache: () => savedCopy() })
+    harness.session.begin()
+    await settle()
+
+    expect(harness.session.cached).not.toBeNull()
+    expect(harness.session.forgetSavedCopy()).toEqual({ ok: true })
+
+    expect(harness.forgotten).toEqual([IDENTITY])
+    expect(harness.session.cached).toBeNull()
+  })
+
+  it('tells its subscribers, so the page stops naming a copy that is gone', async () => {
+    const harness = open({ readCache: () => savedCopy() })
+    harness.session.begin()
+    await settle()
+
+    let notified = 0
+    harness.session.subscribe(() => void (notified += 1))
+    harness.session.forgetSavedCopy()
+
+    expect(notified).toBe(1)
+  })
+
+  it('reports a browser that refused, rather than claiming the data is gone', async () => {
+    const harness = open({
+      readCache: () => savedCopy(),
+      clearRepositoryData: () => ({
+        ok: false,
+        reason: 'unavailable',
+        message: 'This browser is not letting the page save anything.',
+      }),
+    })
+    harness.session.begin()
+    await settle()
+
+    expect(harness.session.forgetSavedCopy()).toMatchObject({ reason: 'unavailable' })
+  })
+
+  /* The copy is still there when the browser refused to remove it, and the page has to keep
+     saying so. Forgetting it anyway took away the button that opens it and the button that
+     retries, under a sentence saying nothing was removed: the data reappeared on the next
+     reload, which was also the reader's only way back to it. */
+
+  it('keeps offering the copy the browser would not remove', async () => {
+    const harness = open({
+      readCache: () => savedCopy(),
+      clearRepositoryData: () => ({
+        ok: false,
+        reason: 'unavailable',
+        message: 'This browser is not letting the page save anything.',
+      }),
+    })
+    harness.session.begin()
+    await settle()
+
+    let notified = 0
+    harness.session.subscribe(() => void (notified += 1))
+    harness.session.forgetSavedCopy()
+
+    expect(harness.session.cached).not.toBeNull()
+    // Nothing changed, so nothing is published: a re-render here would only redraw the same gate.
+    expect(notified).toBe(0)
+  })
+
+  it('still opens the copy after a refused removal, so retrying is not a reload', async () => {
+    const copy = savedCopy()
+    const harness = open({
+      readCache: () => copy,
+      clearRepositoryData: () => ({
+        ok: false,
+        reason: 'unavailable',
+        message: 'This browser is not letting the page save anything.',
+      }),
+    })
+    harness.session.begin()
+    await settle()
+    harness.session.forgetSavedCopy()
+
+    harness.session.openSavedCopy(false)
+    await settle()
+
+    expect(harness.session.getState().phase).toMatchObject({
+      kind: 'ready',
+      savedCopy: { source: 'saved', savedAt: copy.savedAt },
+    })
   })
 })
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import { readCache, writeCache } from './cache'
+import { cacheKey, dimmedKey, retained } from './retention'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -10,12 +11,21 @@ import type { IssuePayload, RepositoryGraphData } from './github'
  * store is a plain map: what matters here is what cache.ts round-trips through it, not the
  * browser's own quota or eviction behavior.
  */
-function installStorage(overrides: Partial<Storage> = {}): Map<string, string> {
-  const entries = new Map<string, string>()
+function installStorage(
+  overrides: Partial<Storage> = {},
+  existing?: Map<string, string>,
+): Map<string, string> {
+  const entries = existing ?? new Map<string, string>()
   const storage = {
     getItem: (key: string) => entries.get(key) ?? null,
     setItem: (key: string, value: string) => void entries.set(key, value),
     removeItem: (key: string) => void entries.delete(key),
+    // Enumerable, like the real thing: the retention index discovers keys older builds left
+    // behind, and a fake that cannot be walked would silently pass every test about that.
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
     ...overrides,
   }
   Object.defineProperty(globalThis, 'window', {
@@ -333,7 +343,7 @@ describe('writeCache', () => {
     const withExtra = [{ ...issues[0], pull_request: { url: 'https://example.invalid' } }]
     writeCache('martonpaulo/tabelo', graph({ issues: withExtra, blockers: new Map() }))
 
-    expect([...entries.values()][0]).not.toContain('pull_request')
+    expect(entries.get('issue-graph:cache:martonpaulo/tabelo')).not.toContain('pull_request')
     expect(readCache('martonpaulo/tabelo')?.data.issues[0].number).toBe(issues[0].number)
   })
 
@@ -341,17 +351,144 @@ describe('writeCache', () => {
     writeCache('martonpaulo/tabelo', graph())
     writeCache('martonpaulo/tabelo', graph({ issues: [issues[0]], blockers: new Map() }))
 
-    expect(entries.size).toBe(1)
+    // The retention index is the only other key: one saved copy, not two.
+    expect([...entries.keys()].filter((key) => key.startsWith('issue-graph:cache:'))).toEqual([
+      'issue-graph:cache:martonpaulo/tabelo',
+    ])
     expect(readCache('martonpaulo/tabelo')?.data.issues).toHaveLength(1)
   })
 
-  it('stays silent when storage refuses the write', () => {
+  it('records the size of the copy it saved, so the budget has something to measure', () => {
+    writeCache('martonpaulo/tabelo', graph())
+
+    const held = retained()[0]
+    expect(held.slug).toBe('martonpaulo/tabelo')
+    expect(held.chars).toBe(entries.get(cacheKey('martonpaulo/tabelo'))?.length)
+  })
+
+  /* A full quota is not a dead end while an older repository is still holding space. What is
+     surrendered is reconstructible from GitHub; what is being written is the read the viewer just
+     paid for. */
+
+  it('gives up an older repository and saves the copy the reader just paid for', () => {
+    entries.set(cacheKey('o/old'), 'x'.repeat(50))
+    entries.set(dimmedKey('o/old'), '["issue-1"]')
+    writeCache('o/old', graph({ issues: [issues[0]], blockers: new Map() }))
+
+    // The next write is refused until the older repository's copy is gone.
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key.startsWith('issue-graph:cache:') && entries.has(cacheKey('o/old'))) {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          entries.set(key, value)
+        },
+      },
+      entries,
+    )
+
+    expect(writeCache('martonpaulo/tabelo', graph())).toEqual({ ok: true })
+    expect(entries.has(cacheKey('o/old'))).toBe(false)
+    expect(entries.has(dimmedKey('o/old'))).toBe(false)
+    expect(readCache('martonpaulo/tabelo')).not.toBeNull()
+  })
+
+  /* The freeze this guards. Removals succeed while every write is refused, so each eviction
+     frees keys but never records itself; the index reads back unchanged, the same victim is
+     chosen again, and the retry spins synchronously with the tab frozen — in the exact
+     quota-failure path this recovery exists for. The write must give up instead. */
+
+  it('gives up rather than spinning when the index cannot record an eviction', () => {
+    writeCache('o/old', graph({ issues: [issues[0]], blockers: new Map() }))
+    writeCache('martonpaulo/tabelo', graph())
+
+    let writes = 0
+    installStorage(
+      {
+        setItem: () => {
+          writes += 1
+          // Far above any bound the write could legitimately need, and low enough that a runaway
+          // loop is reported as a failure here instead of hanging the suite until it times out.
+          if (writes > 500) throw new Error('writeCache did not terminate')
+          throw new DOMException('exceeded', 'QuotaExceededError')
+        },
+      },
+      entries,
+    )
+
+    expect(writeCache('martonpaulo/tabelo', graph())).toMatchObject({ reason: 'quota' })
+  })
+
+  /* A saved graph the index never learned about is worse than none: `retained()` reads the keys
+     themselves only when there is no valid index, so such a key is unbudgeted *and*
+     undiscoverable for as long as the index stays readable. Reporting success would leave it
+     growing there silently, which is the whole failure this module exists to prevent. */
+
+  it('does not report a copy as saved when the index would not record it', () => {
+    writeCache('martonpaulo/tabelo', graph())
+
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          entries.set(key, value)
+        },
+      },
+      entries,
+    )
+
+    expect(writeCache('o/fresh', graph())).toMatchObject({ ok: false, reason: 'quota' })
+  })
+
+  it('leaves behind no graph key the index does not know about', () => {
+    installStorage(
+      {
+        setItem: (key: string, value: string) => {
+          if (key === 'issue-graph:retention') {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+          entries.set(key, value)
+        },
+      },
+      entries,
+    )
+
+    writeCache('o/fresh', graph())
+
+    expect(entries.has(cacheKey('o/fresh'))).toBe(false)
+    expect(retained().some((entry) => entry.slug === 'o/fresh')).toBe(false)
+  })
+
+  it('reports a quota it cannot free rather than looping', () => {
+    writeCache('martonpaulo/tabelo', graph())
+    installStorage(
+      {
+        setItem: (key: string) => {
+          if (key.startsWith('issue-graph:cache:')) {
+            throw new DOMException('exceeded', 'QuotaExceededError')
+          }
+        },
+      },
+      entries,
+    )
+
+    expect(writeCache('martonpaulo/tabelo', graph())).toMatchObject({ reason: 'quota' })
+  })
+
+  it('reports the refusal rather than throwing when storage will not take the write', () => {
     installStorage({
       setItem: () => {
-        throw new Error('quota exceeded')
+        throw new Error('storage is blocked')
       },
     })
 
-    expect(() => writeCache('martonpaulo/tabelo', graph())).not.toThrow()
+    expect(writeCache('martonpaulo/tabelo', graph())).toEqual({
+      ok: false,
+      reason: 'unavailable',
+      message: 'This browser is not letting the page save anything.',
+    })
   })
 })

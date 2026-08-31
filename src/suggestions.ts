@@ -1,8 +1,6 @@
+import { openedSlugs, rememberRepository } from './retention'
 import { canonicalSlug, parseTargetInput, slugOf, type RepoTarget } from './route'
-import { asStringArray, readStored, writeStored } from './storage'
 
-const RECENT_KEY = 'issue-graph:recent'
-const RECENT_LIMIT = 6
 /** As many options as fit under the field without the list becoming a page of its own. */
 const SUGGESTION_LIMIT = 8
 
@@ -21,18 +19,24 @@ function dedupeByCanonical(slugs: string[]): string[] {
   })
 }
 
+/**
+ * The repositories to offer back, most recently used first.
+ *
+ * They are read from the retention index rather than from a list of their own. Two lists would
+ * have to agree about which repositories this browser knows, and they did not: names survived the
+ * six-slot list while the graphs behind them were kept forever. One list is the fix, and the
+ * suggestions are a view of it — the repositories the reader chose, which is not every repository
+ * the browser holds data for.
+ *
+ * Deduplicating here as well as in the index costs nothing and collapses a list written before
+ * identity was canonical, without the reader having to clear anything.
+ */
 export function recentTargets(): string[] {
-  return readStored(RECENT_KEY, asStringArray, []).filter(
-    (slug) => parseTargetInput(slug) !== null,
-  )
+  return dedupeByCanonical(openedSlugs()).filter((slug) => parseTargetInput(slug) !== null)
 }
 
 export function rememberTarget(target: RepoTarget): void {
-  const slug = slugOf(target)
-  // Deduplicating the whole list, not just the entry being added, collapses a list written before
-  // identity was canonical without the reader having to clear storage.
-  const next = dedupeByCanonical([slug, ...recentTargets()]).slice(0, RECENT_LIMIT)
-  writeStored(RECENT_KEY, next)
+  rememberRepository(slugOf(target))
 }
 
 /**

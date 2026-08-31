@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
-import { asBoolean, asString, asStringArray, readStored, writeStored } from './storage'
+import {
+  asBoolean,
+  asString,
+  asStringArray,
+  clearStored,
+  readStored,
+  writeStored,
+  writeStoredText,
+} from './storage'
 
 /**
  * The tests run under the `node` environment, so `window.localStorage` has to be supplied. The
@@ -13,6 +21,12 @@ function installStorage(overrides: Partial<Storage> = {}): Map<string, string> {
     getItem: (key: string) => entries.get(key) ?? null,
     setItem: (key: string, value: string) => void entries.set(key, value),
     removeItem: (key: string) => void entries.delete(key),
+    // Enumerable, like the real thing: the retention index discovers keys older builds left
+    // behind, and a fake that cannot be walked would silently pass every test about that.
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
     ...overrides,
   }
   Object.defineProperty(globalThis, 'window', {
@@ -166,18 +180,83 @@ describe('writeStored', () => {
     expect(readStored('graph:layout', asString, 'vertical')).toBe('horizontal')
   })
 
-  it('stays silent when storage refuses the write', () => {
+  it('reports that it wrote', () => {
+    expect(writeStored('graph:layout', 'vertical')).toEqual({ ok: true })
+  })
+
+  it('reports rather than throws when storage refuses the write', () => {
     installStorage({
       setItem: () => {
-        throw new Error('quota exceeded')
+        throw new Error('storage is blocked')
       },
     })
 
-    expect(() => writeStored('graph:layout', 'vertical')).not.toThrow()
+    expect(writeStored('graph:layout', 'vertical')).toEqual({
+      ok: false,
+      reason: 'unavailable',
+      message: 'This browser is not letting the page save anything.',
+    })
   })
 
-  it('stays silent when there is no window at all', () => {
+  /* A full quota is told apart from every other refusal because the caller can act on it: the
+     graph cache answers it by giving up an older repository and trying again, which would be the
+     wrong response to a browser that is refusing to store anything at all. */
+
+  it('names a full quota by the standard exception', () => {
+    installStorage({
+      setItem: () => {
+        throw new DOMException('exceeded', 'QuotaExceededError')
+      },
+    })
+
+    expect(writeStored('graph:layout', 'vertical')).toEqual({
+      ok: false,
+      reason: 'quota',
+      message: 'This browser\u2019s storage is full.',
+    })
+  })
+
+  it('names a full quota by the spelling older Firefox threw', () => {
+    installStorage({
+      setItem: () => {
+        throw new DOMException('exceeded', 'NS_ERROR_DOM_QUOTA_REACHED')
+      },
+    })
+
+    expect(writeStored('graph:layout', 'vertical')).toMatchObject({ reason: 'quota' })
+  })
+
+  it('reports rather than throws when there is no window at all', () => {
     removeWindow()
-    expect(() => writeStored('issue-graph:theme', 'dark')).not.toThrow()
+
+    expect(writeStored('issue-graph:theme', 'dark')).toMatchObject({ reason: 'unavailable' })
+  })
+})
+
+describe('writeStoredText', () => {
+  it('stores text that reads back exactly as the value form would have', () => {
+    writeStoredText('graph:filters', JSON.stringify({ closed: true }))
+
+    expect(entries.get('graph:filters')).toBe('{"closed":true}')
+    expect(readStored('graph:filters', anything, null)).toEqual({ closed: true })
+  })
+})
+
+describe('clearStored', () => {
+  it('removes the key and reports that it did', () => {
+    writeStored('graph:layout', 'vertical')
+
+    expect(clearStored('graph:layout')).toEqual({ ok: true })
+    expect(entries.has('graph:layout')).toBe(false)
+  })
+
+  it('reports rather than throws when storage refuses the removal', () => {
+    installStorage({
+      removeItem: () => {
+        throw new Error('storage is blocked')
+      },
+    })
+
+    expect(clearStored('graph:layout')).toMatchObject({ reason: 'unavailable' })
   })
 })

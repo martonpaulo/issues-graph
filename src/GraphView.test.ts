@@ -18,6 +18,7 @@ import {
   budgetParts,
   canvasShortcut,
   CAPTURING_FOCUS,
+  describeClear,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -30,7 +31,7 @@ import {
   SelectionBar,
   TopChrome,
 } from './GraphView'
-import { decideSavedCopyOpen } from './graphSession'
+import { decideSavedCopyOpen, describeSaveProblem } from './graphSession'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -141,6 +142,36 @@ describe('saved copy entry', () => {
     })
   })
 
+  it('offers to clear the saved data exactly where there is saved data to clear', () => {
+    withBrowserStorage(() => {
+      expect(
+        renderToStaticMarkup(createElement(GraphView, { target: TARGET, onOpen: () => {} })),
+      ).not.toContain('Clear saved data')
+
+      writeCache('acme/app', narrowData)
+      expect(
+        renderToStaticMarkup(createElement(GraphView, { target: TARGET, onOpen: () => {} })),
+      ).toContain('Clear saved data')
+    })
+  })
+
+  /* A shared link deliberately saves nothing: it is somebody else's copy, and a later visit must
+     not be offered it as this viewer's own. But the dimming effect ran on mount and wrote an
+     empty set anyway, creating a key under a repository that entered no budget and had no clear
+     control, because that control was gated on there being a saved copy. The gating is what this
+     covers; the write guard itself needs a mounted effect, which this server-rendered harness
+     does not run. */
+
+  it('offers to clear a repository held only by its dimmed cards', () => {
+    withBrowserStorage(() => {
+      window.localStorage.setItem(dimmedKey('acme/app'), JSON.stringify(['issue-1']))
+
+      expect(
+        renderToStaticMarkup(createElement(GraphView, { target: TARGET, onOpen: () => {} })),
+      ).toContain('Clear saved data')
+    })
+  })
+
   it('never offers the budget gate when the address carries a shared link', async () => {
     const link = await buildSnapshotUrl(
       'acme/app',
@@ -185,6 +216,47 @@ describe('saved copy entry', () => {
     )
     expect(describeSavedCopy({ savedAt, includedClosed: true, source: 'shared' }, now)).toBe(
       'Shared copy · 2 hours ago · includes closed blockers',
+    )
+  })
+})
+
+describe('describeClear', () => {
+  it('names the repository that was cleared and says the others were not', () => {
+    expect(describeClear({ ok: true }, 'martonpaulo/tabelo')).toBe(
+      'Everything saved for martonpaulo/tabelo was removed from this browser. Other repositories are untouched.',
+    )
+  })
+
+  it('says nothing was removed when the browser refused', () => {
+    expect(
+      describeClear(
+        {
+          ok: false,
+          reason: 'unavailable',
+          message: 'This browser is not letting the page save anything.',
+        },
+        'martonpaulo/tabelo',
+      ),
+    ).toBe(
+      'This browser is not letting the page save anything. Nothing saved for martonpaulo/tabelo could be removed.',
+    )
+  })
+})
+
+describe('describeSaveProblem', () => {
+  it('says nothing at all when the copy was saved', () => {
+    expect(describeSaveProblem({ ok: true })).toBeNull()
+  })
+
+  it('names the cost of a copy that was not saved, which lands on the next visit', () => {
+    expect(
+      describeSaveProblem({
+        ok: false,
+        reason: 'quota',
+        message: 'This browser\u2019s storage is full.',
+      }),
+    ).toBe(
+      'This browser\u2019s storage is full. This graph was not saved, so opening it again will read from GitHub.',
     )
   })
 })

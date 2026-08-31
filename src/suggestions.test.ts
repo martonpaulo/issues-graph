@@ -15,6 +15,10 @@ function installStorage(): Map<string, string> {
         getItem: (key: string) => entries.get(key) ?? null,
         setItem: (key: string, value: string) => void entries.set(key, value),
         removeItem: (key: string) => void entries.delete(key),
+        key: (index: number) => [...entries.keys()][index] ?? null,
+        get length() {
+          return entries.size
+        },
       },
     },
   })
