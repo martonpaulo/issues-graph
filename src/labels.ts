@@ -1,8 +1,12 @@
 /**
  * Both repositories this viewer was built for label issues as `namespace: value`
- * (`type: bug`, `priority: P1`, `effort: L`, `status: needs-decision`). Parsing the convention
- * generically keeps the cards useful for repositories that follow it; one that does not simply
- * shows three empty slots, and its labels are still reachable through the highlight picker.
+ * (`type: bug`, `priority: P1`, `effort: L`, `status: needs-decision`), and a card leads with
+ * those three.
+ *
+ * It leads with them; it does not require them. Every other repository on GitHub labels issues
+ * however it likes — `bug`, `good first issue`, `Component: DevTools` — and a card that recognized
+ * none of that used to draw three dashed gaps and none of the labels the issue actually carried.
+ * The convention is a hint about ordering here, never a precondition for showing anything.
  */
 
 export interface LabelPayload {
@@ -11,8 +15,8 @@ export interface LabelPayload {
 }
 
 /**
- * The three namespaces a card always shows, in this order. They answer what the work is, how
- * urgent it is, and how big it is — the three questions asked of a backlog item at a glance.
+ * The three namespaces a card leads with, in this order. They answer what the work is, how urgent
+ * it is, and how big it is — the three questions asked of a backlog item at a glance.
  */
 export const CARD_NAMESPACES = ['type', 'priority', 'effort'] as const
 
@@ -25,11 +29,31 @@ export interface ParsedLabel {
   color: string
 }
 
-/** One slot on a card. `value` is null when the issue carries no label for that namespace. */
+/** One chip on a card. */
 export interface CardChip {
-  namespace: CardNamespace
-  value: string | null
+  /** Exactly what the chip draws. GitHub's own text for a real label. */
+  text: string
+  /** The canonical namespace this chip fills or marks as missing; null for every other label. */
+  namespace: CardNamespace | null
+  /** A canonical slot the issue carries no label for, drawn as an outlined gap. */
+  empty: boolean
+  /**
+   * GitHub's own six-digit hex for the label, which `labelColor.ts` turns into the pair the chip
+   * is painted in. Null for an empty slot, which is the card's own colour and not a label's.
+   */
+  color: string | null
 }
+
+/**
+ * How many of the three namespaces an issue must carry before a missing one is drawn as a gap.
+ *
+ * One is not evidence. A repository whose only `namespace: value` label is `effort: M` is not
+ * keeping this taxonomy, so dashed `type` and `priority` slots would assert something about it
+ * that nothing supports — and would crowd out the labels it does use. Two is: an issue carrying
+ * `type:` and `priority:` but no `effort:` is one this convention has something to say about, and
+ * the outlined gap is exactly the thing worth filling in.
+ */
+const CONVENTION_THRESHOLD = 2
 
 export function parseLabel(label: LabelPayload): ParsedLabel {
   const match = /^([a-z][a-z-]*):\s*(.+)$/i.exec(label.name)
@@ -48,31 +72,69 @@ export function parseLabels(labels: LabelPayload[]): ParsedLabel[] {
   return labels.map(parseLabel)
 }
 
-export function hasNamespace(labels: LabelPayload[], namespace: string): boolean {
-  return parseLabels(labels).some((label) => label.namespace === namespace)
-}
+/**
+ * The complete `status:` set this convention defines. `blocked` says the issue waits on something
+ * outside the backlog — an upstream release, a vendor, an access request — and `needs-decision`
+ * says it waits on a human choice evidence cannot settle. There is no third value; absence is the
+ * normal state, and the convention explicitly refuses `status: ready` and anything else that would
+ * turn the label into a board column.
+ *
+ * That closure is the whole reason a card may read this at all. `status:` is a namespace half of
+ * GitHub uses for board columns — `status: backlog`, `status: accepted`, `status: triage` — and
+ * none of those is an exception waiting on anybody.
+ * https://github.com/martonpaulo/skills — `issue-capture/LABELS.md` defines both values.
+ */
+const ATTENTION_STATUSES: ReadonlySet<string> = new Set(['blocked', 'needs-decision'])
 
-export function valueOf(labels: ParsedLabel[], namespace: string): string | null {
-  return labels.find((label) => label.namespace === namespace)?.value ?? null
+/**
+ * Whether the issue is parked, in the sense this backlog's own convention gives that word: it is
+ * waiting on a person, and nothing in the backlog will move it.
+ *
+ * Matched on the value and not on the namespace. Reading `status:` alone claimed far more than the
+ * convention defines, so a repository that uses the namespace for its board showed every issue on
+ * it as needing attention.
+ */
+export function needsAttention(labels: LabelPayload[]): boolean {
+  return parseLabels(labels).some(
+    (label) =>
+      label.namespace === 'status' && ATTENTION_STATUSES.has(label.value.trim().toLowerCase()),
+  )
 }
 
 /**
- * The card's three slots, always all three.
+ * Every label the issue carries, as chips.
  *
- * A missing one is shown as an empty slot rather than left out: a card with two chips and a card
- * with three would otherwise differ in a way that says nothing, while an outlined "effort" says
- * exactly what is missing and is worth filling in. Every other label the issue carries — `area:`,
- * `evidence:`, plain ones — stays off the card and is reachable through the label highlight.
+ * All of them, in one order: the canonical namespaces first and in their reading order, because on
+ * a backlog that keeps them that ordering is the value of the row, then the rest in GitHub's own
+ * order. A card is the primary view of an issue, so a label it does not draw is metadata the
+ * reader does not have; the highlight picker filters the graph and is not a second place to read
+ * one issue. `graph.ts` sizes the card for however many rows these wrap onto.
+ *
+ * A chip draws GitHub's text verbatim rather than a re-rendered `namespace: value`, so a label
+ * spelled `Type: Bug` is shown the way its repository spells it.
  */
 export function cardLabels(labels: LabelPayload[]): CardChip[] {
   const parsed = parseLabels(labels)
-  return CARD_NAMESPACES.map((namespace) => ({
-    namespace,
-    value: valueOf(parsed, namespace),
-  }))
-}
 
-/** How a slot reads on the card: the value when there is one, otherwise just the name. */
-export function chipText(chip: CardChip): string {
-  return chip.value === null ? chip.namespace : `${chip.namespace}: ${chip.value}`
+  const filled = new Map<CardNamespace, ParsedLabel>()
+  for (const namespace of CARD_NAMESPACES) {
+    const match = parsed.find((label) => label.namespace === namespace)
+    if (match) filled.set(namespace, match)
+  }
+  const followsConvention = filled.size >= CONVENTION_THRESHOLD
+
+  const slots: CardChip[] = []
+  for (const namespace of CARD_NAMESPACES) {
+    const match = filled.get(namespace)
+    if (match) slots.push({ text: match.raw, namespace, empty: false, color: match.color })
+    else if (followsConvention)
+      slots.push({ text: namespace, namespace, empty: true, color: null })
+  }
+
+  const taken = new Set([...filled.values()].map((label) => label.raw))
+  const rest: CardChip[] = parsed
+    .filter((label) => !taken.has(label.raw))
+    .map((label) => ({ text: label.raw, namespace: null, empty: false, color: label.color }))
+
+  return [...slots, ...rest]
 }
