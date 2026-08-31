@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+
+import { ReactFlowProvider } from '@xyflow/react'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -8,20 +11,27 @@ import {
   abortOnTokenChange,
   acceptsDrawResult,
   App,
+  blockerStateText,
+  DependencyTable,
+  DIRECTION_LEGEND,
   budgetParts,
   decideSavedCopyOpen,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
+  dimmedKey,
   failureText,
   graphBounds,
   nextIssueSelection,
+  SelectionBar,
   stopsForTokenChange,
+  TopChrome,
 } from './App'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { buildGraph, NODE_WIDTH } from './graph'
+import { dependencyRows, issueRef } from './dependencies'
+import { buildGraph, NODE_WIDTH, type GraphNode, type IssueGraph } from './graph'
 
 const narrowData: RepositoryGraphData = {
   issues: [],
@@ -472,5 +482,273 @@ describe('stopping a load whose token is gone', () => {
 
     expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
     expect(carried.current).toBe('new')
+  })
+})
+
+describe('the dependencies as text', () => {
+  it('renders one row per drawn edge, both ends named', async () => {
+    const graph = await buildGraph(
+      {
+        issues: awIssues as IssuePayload[],
+        blockers: new Map(
+          Object.entries(awBlockedBy as Record<string, IssuePayload[]>).map(
+            ([number, list]) => [Number(number), list],
+          ),
+        ),
+        complete: true,
+        unresolved: [],
+        rateLimited: false,
+        rateLimitReset: null,
+        requestCount: 1,
+        rateLimit: null,
+        includedClosed: true,
+      },
+      { owner: 'martonpaulo', repo: 'agent-workflows' },
+    )
+
+    const rows = dependencyRows(graph)
+    const html = renderToStaticMarkup(createElement(DependencyTable, { rows }))
+
+    // Every edge the canvas draws is reachable without tracing it.
+    expect(rows).toHaveLength(graph.edges.length)
+    for (const edge of graph.edges) {
+      const blocker = graph.nodes.find((node) => node.id === edge.source)!
+      const dependent = graph.nodes.find((node) => node.id === edge.target)!
+      expect(
+        html,
+        edge.id,
+      ).toContain(
+        `<span class="deps__ref">${issueRef(blocker)}</span> <span class="deps__title">`,
+      )
+      expect(html, edge.id).toContain(
+        `<span class="deps__ref">${issueRef(dependent)}</span> <span class="deps__title">`,
+      )
+    }
+
+    // The direction an arrowhead carries, written down.
+    expect(html).toContain(DIRECTION_LEGEND)
+    expect(html).toContain('<th scope="col">Blocker</th>')
+    expect(html).toContain('<th scope="col">Blocks</th>')
+  })
+})
+
+describe('blockerStateText', () => {
+  const node = (over: Partial<GraphNode>): GraphNode => ({
+    id: 'other/lib#9',
+    number: 9,
+    title: 'A blocker',
+    url: 'https://github.com/other/lib/issues/9',
+    repo: 'other/lib',
+    state: null,
+    open: true,
+    subIssues: null,
+    external: true,
+    repoLabel: 'other/lib',
+    labels: [],
+    allLabels: [],
+    titleLines: 1,
+    height: 100,
+    position: { x: 0, y: 0 },
+    ...over,
+  })
+
+  it('says whether an external blocker is finished, which its repository never did', () => {
+    // The column exists to separate a blocker still in the way from one that is not, and naming
+    // the repository instead answered neither.
+    expect(blockerStateText(node({ open: false }))).toBe('closed')
+    expect(blockerStateText(node({ open: true }))).toBe('open')
+  })
+
+  it('prefers the local workflow state where the repository shares that convention', () => {
+    expect(
+      blockerStateText(node({ state: 'blocked', open: true, external: false })),
+    ).toBe('blocked')
+    expect(
+      blockerStateText(node({ state: 'not-planned', open: false, external: false })),
+    ).toBe('not planned')
+  })
+})
+
+/**
+ * The top chrome is a geometry check without a browser: what keeps the identity and the tools from
+ * overlapping is that they are siblings in one flow container, not two panels pinned to opposite
+ * corners with an offset large enough for today's font and today's repository name. These assert
+ * that structure and the declarations it rests on, so reintroducing the pinned pair fails here
+ * rather than at 320 CSS pixels in somebody's hand.
+ */
+describe('what a dimmed set is stored under', () => {
+  it('keeps the key the rename to dimming inherited, so a saved set survives the new copy', () => {
+    // Renaming the control renamed nothing on disk: every reader who dimmed cards before the
+    // rename still finds them dimmed after it.
+    expect(dimmedKey('owner/app')).toBe('issue-graph:hidden:owner/app')
+  })
+})
+
+describe('the selection actions', () => {
+  function bar(props: { canDim: boolean; canRestore: boolean }): string {
+    return renderToStaticMarkup(
+      createElement(
+        ReactFlowProvider,
+        null,
+        createElement(SelectionBar, {
+          selectedCount: 2,
+          onDimSelected: () => {},
+          onRestoreSelected: () => {},
+          onClearSelection: () => {},
+          ...props,
+        }),
+      ),
+    )
+  }
+
+  it('names both actions after the emphasis they change, not after removal', () => {
+    const html = bar({ canDim: true, canRestore: true })
+
+    expect(html).toContain('aria-label="Dim the selected issues"')
+    expect(html).toContain('data-tip="Dim the selected issues \u00b7 D"')
+    expect(html).toContain('aria-label="Restore the selected issues"')
+    expect(html).toContain('data-tip="Restore the selected issues \u00b7 R"')
+    expect(html).not.toMatch(/aria-label="(Hide|Show) /)
+  })
+
+  it('offers each action only where it would change something', () => {
+    expect(bar({ canDim: true, canRestore: false })).not.toContain('Restore the selected')
+    expect(bar({ canDim: false, canRestore: true })).not.toContain('Dim the selected')
+  })
+
+  it('says nothing at all when nothing is selected', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ReactFlowProvider,
+        null,
+        createElement(SelectionBar, {
+          selectedCount: 0,
+          canDim: false,
+          canRestore: false,
+          onDimSelected: () => {},
+          onRestoreSelected: () => {},
+          onClearSelection: () => {},
+        }),
+      ),
+    )
+    expect(html).toBe('')
+  })
+})
+
+describe('top chrome layout', () => {
+  const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
+
+  /** The declarations of the first rule with exactly this selector list. */
+  function ruleFor(selector: string): string {
+    const start = styles.indexOf(`\n${selector} {`) + 1
+    expect(start, `no rule for ${selector}`).toBeGreaterThan(0)
+    return styles.slice(start, styles.indexOf('}', start))
+  }
+
+  const longestSlug = `${'o'.repeat(39)}/${'r'.repeat(100)}`
+
+  /** The toolbar needs a graph to offer a dependency list from; the geometry does not care. */
+  const emptyGraph: IssueGraph = {
+    nodes: [],
+    edges: [],
+    groups: [],
+    identity: 'acme/app',
+    complete: true,
+    unresolved: [],
+    rateLimited: false,
+    rateLimitReset: null,
+    requestCount: 0,
+  }
+
+  function chrome(slug: string) {
+    return renderToStaticMarkup(
+      createElement(TopChrome, {
+        identity: {
+          slug,
+          nodeCount: 12,
+          dependentCount: 5,
+          blockingCount: 4,
+          onOpenExternal: () => {},
+        },
+        tools: {
+          graph: emptyGraph,
+          labelCounts: [{ name: 'type: bug', count: 3 }],
+          highlight: new Set<string>(),
+          onToggleHighlight: () => {},
+          onClearHighlight: () => {},
+          onFitView: () => {},
+          onShare: () => {},
+          sharing: false,
+          onAskAgain: () => {},
+        },
+      }),
+    )
+  }
+
+  it('puts both bars in one panel, in order, so neither can be positioned over the other', () => {
+    const html = chrome('martonpaulo/issues-graph')
+
+    // One panel: two would be independently positioned again, which is the bug.
+    expect(html.match(/react-flow__panel/g)).toHaveLength(1)
+    expect(html).toContain('react-flow__panel topbar top left')
+    expect(html.indexOf('bar bar--identity')).toBeLessThan(html.indexOf('bar bar--tools'))
+  })
+
+  it('keeps the whole slug in the accessible name and in a hint however long the name is', () => {
+    const html = chrome(longestSlug)
+
+    expect(html).toContain(`<span class="bar__slugtext">${longestSlug}</span>`)
+    expect(html).toContain(`data-tip="${longestSlug}"`)
+  })
+
+  it('declares a strip that wraps, shrinks and lets the canvas be dragged through it', () => {
+    const topbar = ruleFor('.react-flow__panel.topbar')
+    expect(topbar).toContain('right: 0')
+    expect(topbar).toContain('flex-wrap: wrap')
+    expect(topbar).toContain('pointer-events: none')
+    expect(ruleFor('.topbar > .bar')).toContain('pointer-events: auto')
+
+    const bar = ruleFor('.bar')
+    expect(bar).toContain('flex-wrap: wrap')
+    expect(bar).toContain('min-width: 0')
+    expect(bar).toContain('max-width: 100%')
+
+    // Only the slug text is clipped, so no focus outline is drawn inside a clipped box.
+    expect(ruleFor('.bar__slugtext')).toContain('text-overflow: ellipsis')
+    for (const rule of styles.split('}')) {
+      if (!/\.(bar|topbar)\b/.test(rule) || /__slugtext/.test(rule)) continue
+      expect(rule, rule).not.toContain('overflow: hidden')
+    }
+  })
+
+  it('keeps the full-slug hint inside the window and lets an unbroken name wrap', () => {
+    const hint = ruleFor('.react-flow__panel .bar__slug[data-tip]::after')
+
+    // A repository name has no space to break at, so the hint must break mid-word...
+    expect(hint).toContain('overflow-wrap: anywhere')
+    // ...and is measured against the identity bar, which the window already bounds.
+    expect(hint).toContain('left: 0')
+    expect(hint).toContain('right: auto')
+    expect(hint).toContain('transform: none')
+    expect(hint).toContain('max-width: 100%')
+    // Without this the box is the bar's width *plus* its own padding, which leaves the window.
+    expect(hint).toContain('box-sizing: border-box')
+
+    expect(ruleFor('.bar--identity')).toContain('position: relative')
+    // The button opts out of being the hint's containing block, so the bar becomes it.
+    expect(styles).toMatch(/\.bar__slug \{[^}]*position: static/)
+
+    // The panel-side alignment rule matches this hint too and sets the same three properties at
+    // the same weight, so only source order decides which of them wins.
+    expect(styles.indexOf('.react-flow__panel .bar__slug[data-tip]::after')).toBeGreaterThan(
+      styles.indexOf('.react-flow__panel.left [data-tip]::after'),
+    )
+  })
+
+  it('positions neither bar with a fixed offset that a longer name or larger text invalidates', () => {
+    for (const rule of styles.split('}')) {
+      if (!/\.bar--tools|\.bar--identity/.test(rule)) continue
+      expect(rule, rule).not.toMatch(/(^|[^-\w])top:/)
+    }
   })
 })

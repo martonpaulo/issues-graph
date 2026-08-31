@@ -120,6 +120,151 @@ describe('readCache', () => {
     expect(readCache('martonpaulo/tabelo')).toBeNull()
   })
 
+  /* Schema drift: a copy written by a build with a different idea of the shape, or edited by
+     hand in devtools. Every one of these parses as JSON, so only a structural check catches it,
+     and the failure it prevents happens in the layout rather than here. */
+
+  function corrupt(change: (stored: Record<string, unknown>) => void): void {
+    writeCache('martonpaulo/tabelo', graph())
+    const key = 'issue-graph:cache:martonpaulo/tabelo'
+    const stored = JSON.parse(entries.get(key) as string) as Record<string, unknown>
+    change(stored)
+    entries.set(key, JSON.stringify(stored))
+  }
+
+  it('ignores a copy whose issues are not an array', () => {
+    corrupt((stored) => {
+      stored.issues = { 0: { number: 1 } }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy holding an issue that lost a field the cards read', () => {
+    corrupt((stored) => {
+      delete (stored.issues as Record<string, unknown>[])[0].html_url
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  /* The dependency summary is nested two levels down and is the field the drawing depends on
+     most: `graph.ts` reads `blocked_by` to decide blocked or ready, and the quote reads
+     `total_blocked_by` to price the dependency phase. Both go through `?? 0`, which catches an
+     absent summary but not a present one holding the wrong type. */
+
+  it('ignores a copy whose summary count is a container rather than a number', () => {
+    corrupt((stored) => {
+      ;(stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary = {
+        blocked_by: [],
+        total_blocked_by: 0,
+        blocking: 0,
+        total_blocking: 0,
+      }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose summary lost one of its counts', () => {
+    corrupt((stored) => {
+      ;(stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary = {
+        blocked_by: 2,
+        blocking: 0,
+        total_blocking: 0,
+      }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose summary counts something a fraction or a negative number of times', () => {
+    corrupt((stored) => {
+      ;(stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary = {
+        blocked_by: -1,
+        total_blocked_by: 1.5,
+        blocking: 0,
+        total_blocking: 0,
+      }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  // GitHub omits the summary for an issue with no dependencies at all, so absent stays valid.
+  // Only a summary that is present has to be whole.
+  it('reads back an issue that carries no summary at all', () => {
+    corrupt((stored) => {
+      delete (stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary
+    })
+
+    expect(readCache('martonpaulo/tabelo')?.data.issues[0].issue_dependencies_summary).toBeUndefined()
+  })
+
+  it('ignores a copy whose blockers are no longer number-to-issues tuples', () => {
+    corrupt((stored) => {
+      stored.blockers = [['49', []]]
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose includedClosed is not a boolean', () => {
+    corrupt((stored) => {
+      stored.includedClosed = 'true'
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose unresolved entries lost their reason', () => {
+    corrupt((stored) => {
+      stored.unresolved = [{ number: 49 }]
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  // Finite is not enough: the ECMAScript time range is ±8.64e15 ms, and 1e20 yields an Invalid
+  // Date that the banner would render as `NaN days ago`.
+  it('ignores a copy whose savedAt is outside the range a Date can hold', () => {
+    corrupt((stored) => {
+      stored.savedAt = 1e20
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy written by a version this build does not know', () => {
+    corrupt((stored) => {
+      stored.version = 2
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores text that is not JSON at all', () => {
+    writeCache('martonpaulo/tabelo', graph())
+    const [key] = [...entries][0]
+    entries.set(key, 'not json')
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  // The cache is reconstructible from GitHub, so an unreadable copy is ignored rather than
+  // deleted: removing a value this build merely fails to understand would destroy one another
+  // build still reads, and nothing here touches a key it did not read.
+  it('leaves the copy it refused, and every other key, in place', () => {
+    entries.set('issue-graph:unrelated', '"kept"')
+    corrupt((stored) => {
+      stored.version = 2
+    })
+    const before = new Map(entries)
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+    expect([...entries]).toEqual([...before])
+  })
+
   it('keeps one repository from reading another repository’s copy', () => {
     writeCache('martonpaulo/tabelo', graph())
 
@@ -145,17 +290,43 @@ describe('writeCache', () => {
 
     expect(Object.keys(stored.issues[0]).sort()).toEqual(
       [
+        'assignees',
         'html_url',
         'issue_dependencies_summary',
         'labels',
         'number',
+        'parent_issue_url',
         'repository_url',
         'state',
         'state_reason',
+        'sub_issues_summary',
         'title',
       ].sort(),
     )
     expect(Object.keys(stored.issues[0].labels[0]).sort()).toEqual(['color', 'name'])
+    // The login and nothing else: GitHub's user object is several hundred bytes per issue that
+    // nothing reads, and this projection is what keeps a copy inside the storage quota.
+    const parent = stored.issues.find((issue: { number: number }) => issue.number === 294)
+    expect(parent.sub_issues_summary).toEqual({ total: 2, completed: 0, percent_completed: 0 })
+    const child = stored.issues.find((issue: { number: number }) => issue.number === 296)
+    expect(child.parent_issue_url).toBe('https://api.github.com/repos/martonpaulo/tabelo/issues/294')
+  })
+
+  it('round-trips a copy written before assignees and sub-issues were read', () => {
+    // `version` stays at 1 because the shape is a superset: an older copy must still parse and
+    // still derive the states it used to derive.
+    const older = issues.map((issue) => {
+      const copy = { ...issue }
+      delete copy.assignees
+      delete copy.sub_issues_summary
+      delete copy.parent_issue_url
+      return copy
+    })
+    writeCache('martonpaulo/tabelo', graph({ issues: older, blockers: new Map() }))
+
+    const read = readCache('martonpaulo/tabelo')!
+    expect(read.data.issues[0].assignees).toBeUndefined()
+    expect(read.data.issues).toHaveLength(older.length)
   })
 
   it('drops a payload field the graph does not read', () => {

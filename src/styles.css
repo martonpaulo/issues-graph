@@ -48,6 +48,17 @@
   --completed-line: #b0bac7;
   --not-planned-fill: #f2f4f7;
   --not-planned-line: #c6ced9;
+  /* Nobody is on it. Neutral rather than green: it is not a queue this reader can pull from yet. */
+  --unassigned-fill: #ffffff;
+  --unassigned-line: #cfd7e1;
+  /* Somebody is on it right now. */
+  --in-progress-fill: #ddeafb;
+  --in-progress-line: #7aa6dd;
+  /* Already written and waiting on a review. */
+  --in-review-fill: #d9f0f2;
+  --in-review-line: #6cb6bd;
+  /* Containment, drawn fainter than a dependency so the two never read as the same relation. */
+  --hierarchy-edge: #b6c0cd;
 
   /* Every surface here is light; telling the browser stops it from theming form controls dark. */
   color-scheme: light;
@@ -243,6 +254,14 @@ code {
   transform: none;
 }
 
+/* The tools bar sits inside the left-hand panel now, so the rule above no longer reaches it; its
+   hints still belong on the side the bar is on. */
+.react-flow__panel .bar--tools [data-tip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
 /* Floating chrome ---------------------------------------------------------
    Everything sits over the canvas rather than stacking bars above it, so the
    graph itself is the page. */
@@ -265,10 +284,48 @@ code {
   box-shadow: var(--shadow);
 }
 
+/* One strip across the top holding both bars, so they lay each other out instead of being pinned
+   to opposite corners and hoping the middle stays empty. The strip is transparent to the pointer;
+   the bars inside it are not, so a drag between them still pans the canvas. */
+.react-flow__panel.topbar {
+  right: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  margin: 0;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+.topbar > .bar {
+  pointer-events: auto;
+}
+
+/* Nothing here may push its neighbour off the window: a bar shrinks, then wraps inside itself. */
+.bar {
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* The tools keep the right-hand side on a line they share, and keep it on a line of their own. */
+.bar--tools {
+  margin-left: auto;
+}
+
+/* The identity stays one line whatever the repository is called: the slug is the part that gives
+   way, so a long name shortens the name rather than growing a three-line bar over the graph. It is
+   also what the slug's hint is measured against, below. */
+.bar--identity {
+  position: relative;
+  flex-wrap: nowrap;
+}
+
 .bar__slug {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   font: inherit;
   padding: 2px 4px;
   border: 0;
@@ -279,8 +336,36 @@ code {
   cursor: pointer;
 }
 
+/* Only the text gives way, and only inside the button: an outline drawn on the button itself is
+   never clipped by this. */
+.bar__slugtext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bar__slug {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Every other hint is a phrase this project wrote, so 240px of centred text with the default
+     word breaking fits it. This one carries a repository name: up to 140 characters GitHub allows,
+     with no space in it to break at. So it is measured against the identity bar rather than the
+     button — the bar is already bounded by the window, so the hint cannot leave it — and it breaks
+     mid-word, which is the only way an unbroken name wraps at all. */
+  position: static;
+}
+
+/* Written at the panel-side alignment rule's own weight, and after it, so the alignment this hint
+   needs is decided here rather than by whichever of the two happens to come last. */
+.react-flow__panel .bar__slug[data-tip]::after {
+  left: 0;
+  right: auto;
+  /* Against the bar's own box, padding included, so 100% cannot become 100% plus the padding. */
+  box-sizing: border-box;
+  max-width: 100%;
+  transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .bar__slug:hover {
@@ -340,15 +425,11 @@ code {
 /* The panels float over the canvas, so on a narrow screen the optional ones step aside rather
    than colliding with the repository name and the actions. */
 @media (max-width: 900px) {
-  .bar__counts {
+  .bar__counts,
+  /* The legend steps aside with the counts it explains. Nothing is lost: the dependency table
+     carries the same line on its caption, which is the surface a narrow window still reaches. */
+  .bar__legend {
     display: none;
-  }
-}
-
-/* Keep the latest-read label visible on phones without letting the two fixed top panels overlap. */
-@media (max-width: 640px) {
-  .react-flow__panel.bar--tools {
-    top: 48px;
   }
 }
 
@@ -391,6 +472,13 @@ code {
   fill: var(--edge);
 }
 
+/* Containment, not ordering. Dashed and paler than a dependency, and drawn with no arrowhead at
+   all, so the difference survives a reader who never looks for the marker. */
+.edge--hierarchy .react-flow__edge-path {
+  stroke: var(--hierarchy-edge);
+  stroke-dasharray: 5 4;
+}
+
 .edge--lit .react-flow__edge-path {
   stroke: var(--accent);
   stroke-width: 2;
@@ -415,9 +503,12 @@ code {
 }
 
 /* Group frame -------------------------------------------------------------
-   The two kinds mean opposite things, so they do not share a look: a chain is a
-   solid, filled block of work that has an order, and the independent set is an
-   open dashed area whose members are in no particular relation to each other. */
+   The three kinds mean different things, so they do not share a look: a chain is
+   a solid, filled block of work that has an order; a breakdown is filled too,
+   because its members are just as much one piece of work, but dashed like the
+   containment edges inside it, because nothing in it comes first; and the
+   independent set is an open dashed area with no fill at all, whose members are
+   in no particular relation to each other. */
 
 .group {
   width: 100%;
@@ -429,6 +520,14 @@ code {
 .group--chain {
   border: 1.5px solid #c4d0e4;
   background: color-mix(in srgb, #dce6f6 42%, transparent);
+}
+
+/* Dashed in the same stroke the hierarchy edges inside it are drawn with, so the frame and its
+   contents agree about which relation holds the set together. Filled, because a parent and its
+   sub-issues are one piece of work — that is what separates it from the independent set. */
+.group--breakdown {
+  border: 1.5px dashed var(--hierarchy-edge);
+  background: color-mix(in srgb, #e7ecf3 55%, transparent);
 }
 
 .group--free {
@@ -458,6 +557,10 @@ code {
 
 .group--chain .group__label {
   color: #4a6a9b;
+}
+
+.group--breakdown .group__label {
+  color: #5c6a7d;
 }
 
 .group__label:hover {
@@ -499,6 +602,18 @@ code {
   border-color: var(--not-planned-line);
   border-style: dashed;
 }
+.card--unassigned {
+  background: var(--unassigned-fill);
+  border-color: var(--unassigned-line);
+}
+.card--in-progress {
+  background: var(--in-progress-fill);
+  border-color: var(--in-progress-line);
+}
+.card--in-review {
+  background: var(--in-review-fill);
+  border-color: var(--in-review-line);
+}
 
 /* An issue from another repository, reached because it blocks something here. Its neutral surface,
    dashed edge and leading bar identify it without projecting this repository's workflow state. */
@@ -532,13 +647,13 @@ code {
     0 6px 18px rgba(31, 42, 55, 0.16);
 }
 
-/* Hidden is a reading aid: the card stays where it is, drained of colour and attention. */
-.card--hidden {
+/* Dimming is a reading aid: the card stays where it is, drained of colour and attention. */
+.card--dimmed {
   opacity: 0.32;
   filter: grayscale(1);
 }
 
-.card--hidden:hover {
+.card--dimmed:hover {
   opacity: 0.7;
 }
 
@@ -595,6 +710,22 @@ code {
 .card__number {
   flex: none;
   opacity: 0.75;
+}
+
+/* A parent's sub-issue count. Shares the head row with the number and the state word, which is
+   why it is written as compactly as it can be and still be a sentence. */
+.card__progress {
+  /* The one item in the row allowed to give way: the number identifies the card and the state word
+     is the thing this whole convention exists to keep readable, so the count ellipsizes first. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 10px;
+  line-height: 16px;
+  letter-spacing: 0.03em;
+  opacity: 0.6;
+  white-space: nowrap;
 }
 
 .card__state {
@@ -889,16 +1020,10 @@ code {
 }
 
 .repoinput__option {
-  display: block;
-  width: 100%;
-  font: inherit;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
-  text-align: left;
   padding: 6px 8px;
-  border: 0;
   border-radius: 7px;
-  background: none;
   color: var(--text);
   cursor: pointer;
 }
@@ -906,6 +1031,85 @@ code {
 .repoinput__option.is-active {
   background: var(--accent-soft);
   color: var(--accent);
+}
+
+/* Said, not drawn -----------------------------------------------------------
+   Text that exists for a screen reader and has a visible equivalent on screen already. Clipped
+   rather than hidden, because `display: none` and `visibility: hidden` remove it from the
+   accessibility tree too, which is the one place it is meant to be. */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.bar__legend {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+/* The dependencies as text ------------------------------------------------- */
+
+.deps {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.deps__scroll {
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.deps__table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.deps__caption {
+  caption-side: top;
+  padding: 0 6px 6px;
+  text-align: left;
+  color: var(--muted);
+}
+
+.deps__table th,
+.deps__table td {
+  padding: 5px 6px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.deps__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-top: 0;
+  background: var(--surface);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.deps__ref {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.deps__title {
+  color: var(--muted);
+}
+
+.deps__state {
+  white-space: nowrap;
+  color: var(--muted);
 }
 
 /* Label highlight picker --------------------------------------------------- */

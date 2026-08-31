@@ -23,11 +23,20 @@ import {
 
 import { readCache, writeCache, type CachedGraph } from './cache'
 import {
+  adjacencyOf,
+  dependencyRows,
+  describeNode,
+  issueRef,
+  type DependencyRow,
+} from './dependencies'
+import {
   buildGraph,
+  dependencyCounts,
   discardLayoutEngine,
   drawFailure,
   NODE_WIDTH,
   type DrawFailure,
+  type GraphNode,
   type IssueGraph,
 } from './graph'
 import {
@@ -42,7 +51,7 @@ import {
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
-import { IssueCard, type IssueNode } from './IssueCard'
+import { IssueCard, STATE_TEXT, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
 import {
   canonicalSlugOf,
@@ -52,7 +61,7 @@ import {
   titleForRoute,
   type RepoTarget,
 } from './route'
-import { readStored, writeStored } from './storage'
+import { asBoolean, asStringArray, readStored, writeStored } from './storage'
 import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
 import { rememberTarget } from './suggestions'
 import { readToken, writeToken } from './token'
@@ -77,7 +86,9 @@ const ZOOM_OUT_ALLOWANCE = 0.75
 const ABSOLUTE_MIN_ZOOM = 0.05
 
 const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
-const hiddenKey = (slug: string) => `issue-graph:hidden:${slug}`
+// The stored key still says "hidden": it predates the rename to dimming, and the copy change is
+// not worth stranding every reader's saved set. The value is a list of node IDs either way.
+export const dimmedKey = (slug: string) => `issue-graph:hidden:${slug}`
 
 export interface SavedCopyProvenance {
   savedAt: Date
@@ -576,6 +587,115 @@ function LabelPicker({
   )
 }
 
+/**
+ * What the table says about a blocker's state.
+ *
+ * Two facts, and the column needs whichever one it can get. `state` is this repository's own
+ * reading of its backlog and is deliberately absent for an issue in another repository, but open
+ * or closed is GitHub's and is there for every node — which is the fact this column exists for,
+ * since a closed blocker is one that is no longer in the way. Naming the repository here instead
+ * would answer a question the blocker's own cell already answered.
+ */
+export function blockerStateText(node: GraphNode): string {
+  if (node.state) return STATE_TEXT[node.state]
+  return node.open ? 'open' : 'closed'
+}
+
+/**
+ * Every drawn edge as a row: the blocker, whether it is finished, and what it holds up.
+ *
+ * A real table rather than a list of sentences, because a screen reader navigates a table by row
+ * and column and that is exactly the traversal a graph asks for. The blocker's state is its own
+ * column so a closed blocker — which is only in the picture at all when the reader asked for
+ * closed ones — is never mistaken for one still in the way.
+ */
+export function DependencyTable({ rows }: { rows: DependencyRow[] }) {
+  return (
+    <table className="deps__table">
+      {/* The legend is on the caption as well as in the top bar, so the direction is stated on
+          the surface a reader is actually traversing. */}
+      <caption className="deps__caption">
+        {rows.length} dependenc{rows.length === 1 ? 'y' : 'ies'} · {DIRECTION_LEGEND}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Blocker</th>
+          <th scope="col">State</th>
+          <th scope="col">Blocks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id}>
+            <td>
+              <span className="deps__ref">{issueRef(row.blocker)}</span>{' '}
+              <span className="deps__title">{row.blocker.title}</span>
+            </td>
+            <td className="deps__state">{blockerStateText(row.blocker)}</td>
+            <td>
+              <span className="deps__ref">{issueRef(row.dependent)}</span>{' '}
+              <span className="deps__title">{row.dependent.title}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/**
+ * The dependencies as a table.
+ *
+ * The arrows carry the whole point of this page and they carry it as geometry, which leaves anyone
+ * not reading the drawing with cards and no order between them. This is the same edge list the
+ * canvas draws, read row by row instead of traced: one row per drawn edge, so the two surfaces
+ * cannot disagree about which issue blocks which.
+ *
+ * Mounted only while open, because on a large backlog it is a row per edge and nobody pays for it
+ * until they ask.
+ */
+function DependencyList({ graph }: { graph: IssueGraph }) {
+  const [open, setOpen] = useState(false)
+  const rows = useMemo(() => dependencyRows(graph), [graph])
+
+  if (rows.length === 0) return null
+
+  return (
+    <span className="picker">
+      <button
+        className="iconbutton"
+        type="button"
+        aria-expanded={open}
+        aria-label={`List the ${rows.length} dependencies as text`}
+        data-tip="List the dependencies"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Icon name="list" />
+      </button>
+
+      {open && (
+        <div className="picker__panel deps">
+          <div className="picker__head">
+            <span>Dependencies</span>
+            <button
+              className="iconbutton"
+              type="button"
+              aria-label="Close the dependency list"
+              data-tip="Close the dependency list"
+              onClick={() => setOpen(false)}
+            >
+              <Icon name="close" size={12} />
+            </button>
+          </div>
+          <div className="deps__scroll">
+            <DependencyTable rows={rows} />
+          </div>
+        </div>
+      )}
+    </span>
+  )
+}
+
 export function nextIssueSelection(
   current: ReadonlySet<string>,
   id: string,
@@ -674,20 +794,20 @@ function useCanvasShortcuts({
   graph,
   selected,
   setSelected,
-  setHidden,
+  setDimmed,
   fitView,
   openExternal,
 }: {
   graph: IssueGraph
   selected: ReadonlySet<string>
   setSelected: Dispatch<SetStateAction<ReadonlySet<string>>>
-  setHidden: Dispatch<SetStateAction<ReadonlySet<string>>>
+  setDimmed: Dispatch<SetStateAction<ReadonlySet<string>>>
   fitView: () => void
   openExternal: (url: string, label: string) => void
 }) {
   /**
    * The few keys worth having on a canvas: leave a selection, take all of it, put the graph back
-   * on screen, hide what is selected, and open the one issue that is.
+   * on screen, dim what is selected, and open the one issue that is.
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -709,10 +829,10 @@ function useCanvasShortcuts({
 
       if (event.key.toLowerCase() === 'f') {
         void fitView()
-      } else if (event.key.toLowerCase() === 'h') {
-        setHidden((current) => new Set([...current, ...selected]))
-      } else if (event.key.toLowerCase() === 's') {
-        setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+      } else if (event.key.toLowerCase() === 'd') {
+        setDimmed((current) => new Set([...current, ...selected]))
+      } else if (event.key.toLowerCase() === 'r') {
+        setDimmed((current) => new Set([...current].filter((id) => !selected.has(id))))
       } else if (event.key === 'Enter' && selected.size === 1) {
         const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
         if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
@@ -721,7 +841,24 @@ function useCanvasShortcuts({
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [graph, selected, fitView, openExternal, setSelected, setHidden])
+  }, [graph, selected, fitView, openExternal, setSelected, setDimmed])
+}
+
+/**
+ * What an arrow means, said in words.
+ *
+ * The direction is the whole content of an edge — which of the two issues has to land first — and
+ * an arrowhead is the only place the drawing says it. Anyone not reading the drawing needs it
+ * written down, and anyone reading it for the first time benefits from the same line.
+ */
+export const DIRECTION_LEGEND = 'Arrow: blocker \u2192 dependent'
+
+type TopLeftBarProps = {
+  slug: string
+  nodeCount: number
+  dependentCount: number
+  blockingCount: number
+  onOpenExternal: (url: string, label: string) => void
 }
 
 function TopLeftBar({
@@ -730,25 +867,24 @@ function TopLeftBar({
   dependentCount,
   blockingCount,
   onOpenExternal,
-}: {
-  slug: string
-  nodeCount: number
-  dependentCount: number
-  blockingCount: number
-  onOpenExternal: (url: string, label: string) => void
-}) {
+}: TopLeftBarProps) {
   return (
-    <Panel position="top-left" className="bar">
+    <div className="bar bar--identity">
       {/* The wordmark is not worth the width here: the icon alone is the way back. */}
       <a className="iconbutton" href={BASE} data-tip="Choose another repository">
         <Icon name="graph" />
       </a>
+      {/* The slug is the one piece of chrome whose width the repository decides, so it is the
+          piece that gives way. The text stays whole in the DOM — the button's accessible name is
+          the full slug however narrow the window is — and the hint carries it for a reader who
+          only has the ellipsis. */}
       <button
         className="bar__slug"
         type="button"
+        data-tip={slug}
         onClick={() => onOpenExternal(`https://github.com/${slug}`, slug)}
       >
-        {slug}
+        <span className="bar__slugtext">{slug}</span>
         <Icon name="external" size={11} />
       </button>
       <span className="bar__divider" />
@@ -756,20 +892,14 @@ function TopLeftBar({
         <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong> depend on others ·{' '}
         <strong>{blockingCount}</strong> block others
       </span>
-    </Panel>
+      <span className="bar__divider" />
+      <span className="bar__legend">{DIRECTION_LEGEND}</span>
+    </div>
   )
 }
 
-function TopRightBar({
-  labelCounts,
-  highlight,
-  onToggleHighlight,
-  onClearHighlight,
-  onFitView,
-  onShare,
-  sharing,
-  onAskAgain,
-}: {
+type TopRightBarProps = {
+  graph: IssueGraph
   labelCounts: { name: string; count: number }[]
   highlight: ReadonlySet<string>
   onToggleHighlight: (label: string) => void
@@ -778,9 +908,22 @@ function TopRightBar({
   onShare: () => void
   sharing: boolean
   onAskAgain: () => void
-}) {
+}
+
+function TopRightBar({
+  graph,
+  labelCounts,
+  highlight,
+  onToggleHighlight,
+  onClearHighlight,
+  onFitView,
+  onShare,
+  sharing,
+  onAskAgain,
+}: TopRightBarProps) {
   return (
-    <Panel position="top-right" className="bar bar--tools">
+    <div className="bar bar--tools">
+      <DependencyList graph={graph} />
       <LabelPicker
         labels={labelCounts}
         active={highlight}
@@ -810,23 +953,49 @@ function TopRightBar({
       <button className="button button--small" type="button" onClick={onAskAgain}>
         <Icon name="reload" size={12} /> Read latest from GitHub
       </button>
+    </div>
+  )
+}
+
+/**
+ * Both top bars in one panel, because two panels pinned to opposite corners cannot see each other:
+ * a repository name long enough, or a window narrow enough, and the tools slide underneath the
+ * identity. Laid out in ordinary flex flow they push each other along the line and wrap when the
+ * line runs out, which no breakpoint offset can promise. The strip itself lets gestures through;
+ * only the bars catch them.
+ */
+export function TopChrome({
+  identity,
+  tools,
+}: {
+  identity: TopLeftBarProps
+  tools: TopRightBarProps
+}) {
+  return (
+    <Panel position="top-left" className="topbar">
+      <TopLeftBar {...identity} />
+      <TopRightBar {...tools} />
     </Panel>
   )
 }
 
-function SelectionBar({
+/**
+ * The selection actions. "Dim" and "Restore" name what the buttons actually do: the cards stay on
+ * the canvas, keep their place in the layout and stay reachable — only their emphasis changes.
+ */
+export function SelectionBar({
   selectedCount,
-  canHide,
-  canShow,
-  onHideSelected,
-  onShowSelected,
+  canDim,
+  canRestore,
+  onDimSelected,
+  onRestoreSelected,
   onClearSelection,
 }: {
   selectedCount: number
-  canHide: boolean
-  canShow: boolean
-  onHideSelected: () => void
-  onShowSelected: () => void
+  canDim: boolean
+  canRestore: boolean
+  onDimSelected: () => void
+  onRestoreSelected: () => void
   onClearSelection: () => void
 }) {
   if (selectedCount === 0) return null
@@ -834,24 +1003,24 @@ function SelectionBar({
   return (
     <Panel position="bottom-center" className="actions">
       <span className="actions__count">{selectedCount} selected</span>
-      {canHide && (
+      {canDim && (
         <button
           className="iconbutton"
           type="button"
-          aria-label="Hide the selected issues"
-          data-tip="Hide the selected issues · H"
-          onClick={onHideSelected}
+          aria-label="Dim the selected issues"
+          data-tip="Dim the selected issues · D"
+          onClick={onDimSelected}
         >
           <Icon name="eye-off" />
         </button>
       )}
-      {canShow && (
+      {canRestore && (
         <button
           className="iconbutton"
           type="button"
-          aria-label="Show the selected issues"
-          data-tip="Show the selected issues · S"
-          onClick={onShowSelected}
+          aria-label="Restore the selected issues"
+          data-tip="Restore the selected issues · R"
+          onClick={onRestoreSelected}
         >
           <Icon name="eye" />
         </button>
@@ -965,7 +1134,7 @@ function Canvas({
   const openExternal = useOpenExternal()
 
   // What is stored and what is sent are keyed by the repository the cards actually belong to, not
-  // by the address they were reached through. The two differ after a rename, and the hidden cards
+  // by the address they were reached through. The two differ after a rename, and the dimmed cards
   // are recorded as node IDs qualified with the former.
   const identity = graph.identity
 
@@ -973,15 +1142,15 @@ function Canvas({
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState<ShareOutcome | null>(null)
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(readStored<string[]>(hiddenKey(identity), [])),
+  const [dimmed, setDimmed] = useState<ReadonlySet<string>>(
+    () => new Set(readStored(dimmedKey(identity), asStringArray, [])),
   )
 
-  // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
+  // Dimming is a reading aid, and it is worth keeping across a reload precisely because a reload
   // costs requests. Nothing here is ever written back to GitHub.
   useEffect(() => {
-    writeStored(hiddenKey(identity), [...hidden])
-  }, [identity, hidden])
+    writeStored(dimmedKey(identity), [...dimmed])
+  }, [identity, dimmed])
 
   const share = useCallback(() => {
     setSharing(true)
@@ -1021,35 +1190,34 @@ function Canvas({
     })
   }, [])
 
-  const toggleHidden = useCallback((id: string) => {
-    setHidden((current) => {
+  const toggleDimmed = useCallback((id: string) => {
+    setDimmed((current) => {
       const next = new Set(current)
       if (!next.delete(id)) next.add(id)
       return next
     })
   }, [])
 
-  const hideSelected = useCallback(() => {
-    setHidden((current) => new Set([...current, ...selected]))
+  const dimSelected = useCallback(() => {
+    setDimmed((current) => new Set([...current, ...selected]))
   }, [selected])
 
-  const showSelected = useCallback(() => {
-    setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+  const restoreSelected = useCallback(() => {
+    setDimmed((current) => new Set([...current].filter((id) => !selected.has(id))))
   }, [selected])
 
   /**
-   * How many issues wait on something, and how many hold something up. Both are counted from the
-   * edges actually drawn, so they describe this picture rather than GitHub's own summary.
+   * How many issues wait on something, and how many hold something up. Counted from the edges
+   * actually drawn, so they describe this picture rather than GitHub's own summary.
    */
-  const counts = useMemo(() => {
-    const dependent = new Set<string>()
-    const blocking = new Set<string>()
-    for (const edge of graph.edges) {
-      dependent.add(edge.target)
-      blocking.add(edge.source)
-    }
-    return { dependent: dependent.size, blocking: blocking.size }
-  }, [graph])
+  const counts = useMemo(() => dependencyCounts(graph.edges), [graph])
+
+  /**
+   * What each card says about its own blockers and dependents. Derived from the drawn edges, in
+   * the same pass the canvas is built from, so no card can announce a relationship the picture
+   * does not show or stay silent about one it does.
+   */
+  const adjacency = useMemo(() => adjacencyOf(graph), [graph])
 
   /** Every label in the graph, alphabetically: what the highlight picker offers. */
   const labelCounts = useMemo(() => {
@@ -1097,11 +1265,12 @@ function Canvas({
         data: {
           node,
           selected: selected.has(node.id),
-          hidden: hidden.has(node.id),
+          dimmed: dimmed.has(node.id),
           highlighted,
           faded: highlight.size > 0 && !highlighted,
+          description: describeNode(node, adjacency.get(node.id)),
           onSelect: selectIssue,
-          onToggleHidden: toggleHidden,
+          onToggleDimmed: toggleDimmed,
           onOpen: openExternal,
         },
         // The height is the card's own, computed from its title, so React Flow measures and packs
@@ -1114,20 +1283,22 @@ function Canvas({
     return [...frames, ...cards]
   }, [
     graph,
+    adjacency,
     selected,
-    hidden,
+    dimmed,
     highlight,
     selectGroup,
     selectIssue,
-    toggleHidden,
+    toggleDimmed,
     openExternal,
   ])
 
   const edges = useMemo<DependencyEdgeType[]>(
     () =>
       graph.edges.map((edge) => {
-        const dimmed = hidden.has(edge.source) || hidden.has(edge.target)
-        const lit = !dimmed && (selected.has(edge.source) || selected.has(edge.target))
+        const touchesDimmed = dimmed.has(edge.source) || dimmed.has(edge.target)
+        const lit = !touchesDimmed && (selected.has(edge.source) || selected.has(edge.target))
+        const hierarchy = edge.kind === 'hierarchy'
         return {
           id: edge.id,
           source: edge.source,
@@ -1136,11 +1307,22 @@ function Canvas({
           data: { points: edge.points },
           // A lit edge is drawn last so it crosses over the ones it shares a channel with.
           zIndex: lit ? 5 : 0,
-          className: dimmed ? 'edge--dim' : lit ? 'edge--lit' : undefined,
-          markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15 },
+          className: [
+            // Dashed and paler, so containment reads as a different relation before the reader
+            // has looked for an arrowhead.
+            hierarchy ? 'edge--hierarchy' : null,
+            touchesDimmed ? 'edge--dim' : lit ? 'edge--lit' : null,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
+          // No arrowhead on a hierarchy edge: an arrow is what says "this one first", and a parent
+          // says nothing of the sort about its children.
+          markerEnd: hierarchy
+            ? undefined
+            : { type: MarkerType.ArrowClosed, width: 15, height: 15 },
         }
       }),
-    [graph, selected, hidden],
+    [graph, selected, dimmed],
   )
 
   const { translateExtent, minZoom } = useGraphLayout(graph)
@@ -1148,16 +1330,16 @@ function Canvas({
     graph,
     selected,
     setSelected,
-    setHidden,
+    setDimmed,
     fitView,
     openExternal,
   })
 
   const selectedCount = selected.size
-  // Offering "hide" for a selection that is already hidden, or the reverse, is a control that does
-  // nothing when pressed. Unhiding one card needs no bar at all: the card keeps its own eye.
-  const canHide = [...selected].some((id) => !hidden.has(id))
-  const canShow = [...selected].some((id) => hidden.has(id))
+  // Offering "dim" for a selection that is already dimmed, or the reverse, is a control that does
+  // nothing when pressed. Restoring one card needs no bar at all: the card keeps its own eye.
+  const canDim = [...selected].some((id) => !dimmed.has(id))
+  const canRestore = [...selected].some((id) => dimmed.has(id))
 
   return (
     <ReactFlow
@@ -1180,31 +1362,33 @@ function Canvas({
     >
       <Background variant={BackgroundVariant.Dots} gap={24} size={1} className="dots" />
 
-      <TopLeftBar
-        slug={slug}
-        nodeCount={graph.nodes.length}
-        dependentCount={counts.dependent}
-        blockingCount={counts.blocking}
-        onOpenExternal={openExternal}
-      />
-
-      <TopRightBar
-        labelCounts={labelCounts}
-        highlight={highlight}
-        onToggleHighlight={toggleHighlight}
-        onClearHighlight={() => setHighlight(new Set())}
-        onFitView={fitView}
-        onShare={share}
-        sharing={sharing}
-        onAskAgain={onAskAgain}
+      <TopChrome
+        identity={{
+          slug,
+          nodeCount: graph.nodes.length,
+          dependentCount: counts.dependent,
+          blockingCount: counts.blocking,
+          onOpenExternal: openExternal,
+        }}
+        tools={{
+          graph,
+          labelCounts,
+          highlight,
+          onToggleHighlight: toggleHighlight,
+          onClearHighlight: () => setHighlight(new Set()),
+          onFitView: fitView,
+          onShare: share,
+          sharing,
+          onAskAgain,
+        }}
       />
 
       <SelectionBar
         selectedCount={selectedCount}
-        canHide={canHide}
-        canShow={canShow}
-        onHideSelected={hideSelected}
-        onShowSelected={showSelected}
+        canDim={canDim}
+        canRestore={canRestore}
+        onDimSelected={dimSelected}
+        onRestoreSelected={restoreSelected}
         onClearSelection={() => setSelected(new Set())}
       />
 
@@ -1253,7 +1437,7 @@ function GraphView({
 }) {
   const [attempt, setAttempt] = useState(0)
   const [note, setNote] = useState<string | null>(null)
-  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, false))
+  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, asBoolean, false))
 
   useEffect(() => {
     writeStored(SHOW_CLOSED_KEY, showClosed)
@@ -1348,7 +1532,7 @@ function GraphLoad({
   const { token } = useTokenState()
   // Two spellings of one repository, and they are not interchangeable.
   //
-  // `identity` keys everything stored or matched — the saved copy, the hidden cards, the
+  // `identity` keys everything stored or matched — the saved copy, the dimmed cards, the
   // repository a shared link claims to hold — because keying those on what the reader typed forks
   // one repository's state across its spellings. `slug` is what the reader typed, and it is what
   // the page says back to them: the bar, the repository link, the prefilled input, the copy.
