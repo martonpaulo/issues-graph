@@ -80,6 +80,8 @@ interface Harness {
   /** Every repository whose saved data the session was asked to remove. */
   forgotten: string[]
   fragmentsCleared: number
+  /** How often the session terminated the layout engine. */
+  enginesDiscarded: number
 }
 
 function open(
@@ -90,12 +92,13 @@ function open(
   const cached: [string, RepositoryGraphData][] = []
   const remembered: RepoTarget[] = []
   const forgotten: string[] = []
-  const record = { fragmentsCleared: 0 }
+  const record = { fragmentsCleared: 0, enginesDiscarded: 0 }
 
   const effects: SessionEffects = {
     readRateLimit: async () => BUDGET,
     loadRepositoryGraph: async (): Promise<LoadResult> => ({ ok: true, data }),
     buildGraph: async () => graph,
+    discardLayoutEngine: () => void (record.enginesDiscarded += 1),
     readSnapshot: async (): Promise<SnapshotRead> => ({ kind: 'none' }),
     readCache: () => null,
     writeCache: (slug, value) => {
@@ -134,6 +137,9 @@ function open(
     forgotten,
     get fragmentsCleared() {
       return record.fragmentsCleared
+    },
+    get enginesDiscarded() {
+      return record.enginesDiscarded
     },
   }
 }
@@ -499,6 +505,32 @@ describe('opening the copy this browser saved', () => {
     await settle()
 
     expect(kinds(harness.phases)).toEqual(['drawing'])
+  })
+
+  /**
+   * Dropping the result is only half of it. ELK offers no cancellation, so a layout the session has
+   * walked away from keeps running — but it runs in a worker now, and a worker can be terminated.
+   */
+  it('terminates the engine when it closes mid-layout', async () => {
+    const held = deferred<IssueGraph>()
+    const harness = open({ readCache: () => savedCopy(), buildGraph: () => held.promise })
+    harness.session.openSavedCopy(false)
+    await settle()
+
+    harness.session.close()
+
+    expect(harness.enginesDiscarded).toBe(1)
+  })
+
+  it('keeps the engine when it closes with nothing being laid out', async () => {
+    const harness = open({ readCache: () => savedCopy() })
+    harness.session.openSavedCopy(false)
+    await settle()
+
+    harness.session.close()
+
+    // The layout finished before the session closed, so the engine is the next session's to reuse.
+    expect(harness.enginesDiscarded).toBe(0)
   })
 })
 

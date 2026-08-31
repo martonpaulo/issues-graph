@@ -767,6 +767,72 @@ function useGraphLayout(graph: IssueGraph) {
   return { translateExtent, minZoom }
 }
 
+/** The few keys worth having on a canvas, once it is settled that the canvas is what they meant. */
+export type CanvasShortcut = 'clear' | 'select-all' | 'fit' | 'dim' | 'restore' | 'open'
+
+/** Where the focus is, said in the two terms the shortcut table needs. */
+export interface FocusPlacement {
+  /** In a field, or in a dialog waiting on an answer. Nothing at all reaches the canvas. */
+  captured: boolean
+  /**
+   * On a control the browser already activates with Enter — a card, its two icons, a link in the
+   * chrome. That press belongs to the control alone.
+   */
+  onControl: boolean
+}
+
+/** Focus inside one of these makes the key that element's, not the canvas's. */
+const CAPTURING_FOCUS = 'input, textarea, [contenteditable="true"], .overlay'
+
+/**
+ * Enter activates each of these on its own. Without this list a press on a selected card's eye
+ * would both dim the issue and open it on GitHub: one key, two outcomes, neither asked for.
+ * https://www.w3.org/TR/WCAG22/#keyboard
+ */
+const ENTER_ACTIVATES = 'button, a[href], summary, select, [role="button"]'
+
+function placeFocus(target: EventTarget | null): FocusPlacement {
+  const element = target as HTMLElement | null
+  return {
+    captured: element?.closest(CAPTURING_FOCUS) != null,
+    onControl: element?.closest(ENTER_ACTIVATES) != null,
+  }
+}
+
+/**
+ * What a key press asks of the canvas: leave a selection, take all of it, put the graph back on
+ * screen, dim what is selected, restore it, or open the one issue that is selected.
+ *
+ * Pure, and separate from the effect that runs it, so the whole table — including every
+ * combination the canvas must decline — is exercised without a browser.
+ */
+export function canvasShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+  focus: FocusPlacement,
+  selectionSize: number,
+): CanvasShortcut | null {
+  if (focus.captured) return null
+  if (event.altKey || event.ctrlKey) return null
+
+  if (event.key === 'Escape') return 'clear'
+  if (event.key.toLowerCase() === 'a' && (event.metaKey || event.shiftKey)) return 'select-all'
+  if (event.metaKey) return null
+
+  switch (event.key.toLowerCase()) {
+    case 'f':
+      return 'fit'
+    case 'd':
+      return 'dim'
+    case 'r':
+      return 'restore'
+  }
+
+  // Enter is the one shortcut that shares its key with an activation, so it is the one that has
+  // to stand down when a control has the focus.
+  if (event.key === 'Enter' && selectionSize === 1 && !focus.onControl) return 'open'
+  return null
+}
+
 function useCanvasShortcuts({
   graph,
   selected,
@@ -782,37 +848,34 @@ function useCanvasShortcuts({
   fitView: () => void
   openExternal: (url: string, label: string) => void
 }) {
-  /**
-   * The few keys worth having on a canvas: leave a selection, take all of it, put the graph back
-   * on screen, dim what is selected, and open the one issue that is.
-   */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      // Never steal a key from a field or from a dialog that is waiting on an answer.
-      if (target?.closest('input, textarea, [contenteditable="true"], .overlay')) return
-      if (event.altKey || event.ctrlKey) return
+      const shortcut = canvasShortcut(event, placeFocus(event.target), selected.size)
+      if (shortcut === null) return
+      // The browser's own find-and-select is the only one of these it would otherwise run.
+      if (shortcut === 'select-all') event.preventDefault()
 
-      if (event.key === 'Escape') {
-        setSelected(new Set())
-        return
-      }
-      if (event.key.toLowerCase() === 'a' && (event.metaKey || event.shiftKey)) {
-        event.preventDefault()
-        setSelected(new Set(graph.nodes.map((node) => node.id)))
-        return
-      }
-      if (event.metaKey) return
-
-      if (event.key.toLowerCase() === 'f') {
-        void fitView()
-      } else if (event.key.toLowerCase() === 'd') {
-        setDimmed((current) => union(current, selected))
-      } else if (event.key.toLowerCase() === 'r') {
-        setDimmed((current) => difference(current, selected))
-      } else if (event.key === 'Enter' && selected.size === 1) {
-        const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
-        if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
+      switch (shortcut) {
+        case 'clear':
+          setSelected(new Set())
+          break
+        case 'select-all':
+          setSelected(new Set(graph.nodes.map((node) => node.id)))
+          break
+        case 'fit':
+          void fitView()
+          break
+        case 'dim':
+          setDimmed((current) => union(current, selected))
+          break
+        case 'restore':
+          setDimmed((current) => difference(current, selected))
+          break
+        case 'open': {
+          const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
+          if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
+          break
+        }
       }
     }
 
@@ -1342,6 +1405,10 @@ function Canvas({
       nodesDraggable={false}
       nodesConnectable={false}
       edgesFocusable={false}
+      /* Each node wrapper would otherwise be a `role="group" tabindex="0"` stop wrapping the
+         controls it already contains: a tab stop that looks like nothing and does nothing. The
+         card's own button and its two icons are the intentional stops. */
+      nodesFocusable={false}
       // The React Flow watermark is not part of this page's chrome; the credit is in the README.
       proOptions={{ hideAttribution: true }}
       onPaneClick={() => setSelected(new Set())}

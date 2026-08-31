@@ -272,7 +272,7 @@ describe('readCache', () => {
   it('keeps one repository from reading another repository’s copy', () => {
     writeCache('martonpaulo/tabelo', graph())
 
-    expect(readCache('martonpaulo/agent-workflows')).toBeNull()
+    expect(readCache('martonpaulo/arbaro')).toBeNull()
     expect(readCache('martonpaulo/tabelo')).not.toBeNull()
   })
 

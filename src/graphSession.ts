@@ -21,7 +21,7 @@
 import { readCache, writeCache, type CachedGraph } from './cache'
 import { clearRepositoryData } from './retention'
 import type { StorageWriteResult } from './storage'
-import { buildGraph, type IssueGraph } from './graph'
+import { buildGraph, discardLayoutEngine, type IssueGraph } from './graph'
 import {
   loadRepositoryGraph,
   readRateLimit,
@@ -118,6 +118,8 @@ export interface SessionEffects {
   readRateLimit: typeof readRateLimit
   loadRepositoryGraph: typeof loadRepositoryGraph
   buildGraph: typeof buildGraph
+  /** Terminates the layout engine, which is how a layout is actually stopped rather than ignored. */
+  discardLayoutEngine: typeof discardLayoutEngine
   readSnapshot: (hash: string, slug: string) => Promise<SnapshotRead>
   readCache: (slug: string) => CachedGraph | null
   writeCache: (slug: string, data: RepositoryGraphData) => StorageWriteResult
@@ -132,6 +134,7 @@ export const browserEffects: SessionEffects = {
   readRateLimit,
   loadRepositoryGraph,
   buildGraph,
+  discardLayoutEngine,
   readSnapshot,
   readCache,
   writeCache,
@@ -395,6 +398,11 @@ export class GraphSession {
     this.#closed = true
     this.#probe?.abort()
     this.#probe = null
+    // A layout still running has nowhere left to publish, and ELK offers no cancellation — but the
+    // worker carrying it can be terminated, which is the difference between ignoring the work and
+    // stopping it. Only while one is actually running: otherwise this discards a healthy engine the
+    // next session would have reused.
+    if (this.#state.phase.kind === 'drawing') this.#effects.discardLayoutEngine()
     this.#cancelWork()
   }
 
