@@ -317,26 +317,33 @@ export class GraphSession {
   }
 
   /**
+   * Removes everything this browser holds for the repository, and stops offering the copy.
+   *
+   * The saved copy is read once when the session opens, so dropping it here is what makes the
+   * removal visible: the page stops naming a copy that no longer exists, in the same gesture that
+   * removed it.
+   *
+   * Only when it actually went. A browser that refused the removal still holds the copy, and
+   * forgetting it here would take away both the button that opens it and the button that retries,
+   * under a sentence saying nothing was removed — leaving the reader a reload as their only way
+   * back to data the page had just told them it still had.
+   */
+  forgetSavedCopy(): StorageWriteResult {
+    const result = this.#effects.clearRepositoryData(this.#options.identity)
+    if (!result.ok) return result
+
+    this.#cached = null
+    this.#set({})
+    return result
+  }
+
+  /**
    * Draws the copy this browser saved from an earlier read, when it covers the requested view.
    *
    * The layout is the only asynchronous step, and it is the one that had neither a rejection
    * handler nor a way to be cancelled: a failure left `Laying out the graph…` on screen with
    * nothing coming, and a session closed mid-layout drew into a page that had gone.
    */
-  /**
-   * Removes everything this browser holds for the repository, and stops offering the copy.
-   *
-   * The saved copy is read once when the session opens, so dropping it here is what makes the
-   * removal visible: the page stops naming a copy that no longer exists, in the same gesture that
-   * removed it.
-   */
-  forgetSavedCopy(): StorageWriteResult {
-    const result = this.#effects.clearRepositoryData(this.#options.identity)
-    this.#cached = null
-    this.#set({})
-    return result
-  }
-
   openSavedCopy(showClosed: boolean): void {
     if (this.#closed) return
     const copy = this.#cached

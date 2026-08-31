@@ -602,6 +602,55 @@ describe('clearing what this browser saved', () => {
 
     expect(harness.session.forgetSavedCopy()).toMatchObject({ reason: 'unavailable' })
   })
+
+  /* The copy is still there when the browser refused to remove it, and the page has to keep
+     saying so. Forgetting it anyway took away the button that opens it and the button that
+     retries, under a sentence saying nothing was removed: the data reappeared on the next
+     reload, which was also the reader's only way back to it. */
+
+  it('keeps offering the copy the browser would not remove', async () => {
+    const harness = open({
+      readCache: () => savedCopy(),
+      clearRepositoryData: () => ({
+        ok: false,
+        reason: 'unavailable',
+        message: 'This browser is not letting the page save anything.',
+      }),
+    })
+    harness.session.begin()
+    await settle()
+
+    let notified = 0
+    harness.session.subscribe(() => void (notified += 1))
+    harness.session.forgetSavedCopy()
+
+    expect(harness.session.cached).not.toBeNull()
+    // Nothing changed, so nothing is published: a re-render here would only redraw the same gate.
+    expect(notified).toBe(0)
+  })
+
+  it('still opens the copy after a refused removal, so retrying is not a reload', async () => {
+    const copy = savedCopy()
+    const harness = open({
+      readCache: () => copy,
+      clearRepositoryData: () => ({
+        ok: false,
+        reason: 'unavailable',
+        message: 'This browser is not letting the page save anything.',
+      }),
+    })
+    harness.session.begin()
+    await settle()
+    harness.session.forgetSavedCopy()
+
+    harness.session.openSavedCopy(false)
+    await settle()
+
+    expect(harness.session.getState().phase).toMatchObject({
+      kind: 'ready',
+      savedCopy: { source: 'saved', savedAt: copy.savedAt },
+    })
+  })
 })
 
 describe('a shared link in the fragment', () => {
