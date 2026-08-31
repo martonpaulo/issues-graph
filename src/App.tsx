@@ -83,7 +83,9 @@ const ZOOM_OUT_ALLOWANCE = 0.75
 const ABSOLUTE_MIN_ZOOM = 0.05
 
 const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
-const hiddenKey = (slug: string) => `issue-graph:hidden:${slug}`
+// The stored key still says "hidden": it predates the rename to dimming, and the copy change is
+// not worth stranding every reader's saved set. The value is a list of node IDs either way.
+export const dimmedKey = (slug: string) => `issue-graph:hidden:${slug}`
 
 export interface SavedCopyProvenance {
   savedAt: Date
@@ -774,20 +776,20 @@ function useCanvasShortcuts({
   graph,
   selected,
   setSelected,
-  setHidden,
+  setDimmed,
   fitView,
   openExternal,
 }: {
   graph: IssueGraph
   selected: ReadonlySet<string>
   setSelected: Dispatch<SetStateAction<ReadonlySet<string>>>
-  setHidden: Dispatch<SetStateAction<ReadonlySet<string>>>
+  setDimmed: Dispatch<SetStateAction<ReadonlySet<string>>>
   fitView: () => void
   openExternal: (url: string, label: string) => void
 }) {
   /**
    * The few keys worth having on a canvas: leave a selection, take all of it, put the graph back
-   * on screen, hide what is selected, and open the one issue that is.
+   * on screen, dim what is selected, and open the one issue that is.
    */
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -809,10 +811,10 @@ function useCanvasShortcuts({
 
       if (event.key.toLowerCase() === 'f') {
         void fitView()
-      } else if (event.key.toLowerCase() === 'h') {
-        setHidden((current) => new Set([...current, ...selected]))
-      } else if (event.key.toLowerCase() === 's') {
-        setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+      } else if (event.key.toLowerCase() === 'd') {
+        setDimmed((current) => new Set([...current, ...selected]))
+      } else if (event.key.toLowerCase() === 'r') {
+        setDimmed((current) => new Set([...current].filter((id) => !selected.has(id))))
       } else if (event.key === 'Enter' && selected.size === 1) {
         const node = graph.nodes.find((candidate) => candidate.id === [...selected][0])
         if (node) openExternal(node.url, `#${node.number} · ${node.title}`)
@@ -821,7 +823,7 @@ function useCanvasShortcuts({
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [graph, selected, fitView, openExternal, setSelected, setHidden])
+  }, [graph, selected, fitView, openExternal, setSelected, setDimmed])
 }
 
 /**
@@ -959,19 +961,23 @@ export function TopChrome({
   )
 }
 
-function SelectionBar({
+/**
+ * The selection actions. "Dim" and "Restore" name what the buttons actually do: the cards stay on
+ * the canvas, keep their place in the layout and stay reachable — only their emphasis changes.
+ */
+export function SelectionBar({
   selectedCount,
-  canHide,
-  canShow,
-  onHideSelected,
-  onShowSelected,
+  canDim,
+  canRestore,
+  onDimSelected,
+  onRestoreSelected,
   onClearSelection,
 }: {
   selectedCount: number
-  canHide: boolean
-  canShow: boolean
-  onHideSelected: () => void
-  onShowSelected: () => void
+  canDim: boolean
+  canRestore: boolean
+  onDimSelected: () => void
+  onRestoreSelected: () => void
   onClearSelection: () => void
 }) {
   if (selectedCount === 0) return null
@@ -979,24 +985,24 @@ function SelectionBar({
   return (
     <Panel position="bottom-center" className="actions">
       <span className="actions__count">{selectedCount} selected</span>
-      {canHide && (
+      {canDim && (
         <button
           className="iconbutton"
           type="button"
-          aria-label="Hide the selected issues"
-          data-tip="Hide the selected issues · H"
-          onClick={onHideSelected}
+          aria-label="Dim the selected issues"
+          data-tip="Dim the selected issues · D"
+          onClick={onDimSelected}
         >
           <Icon name="eye-off" />
         </button>
       )}
-      {canShow && (
+      {canRestore && (
         <button
           className="iconbutton"
           type="button"
-          aria-label="Show the selected issues"
-          data-tip="Show the selected issues · S"
-          onClick={onShowSelected}
+          aria-label="Restore the selected issues"
+          data-tip="Restore the selected issues · R"
+          onClick={onRestoreSelected}
         >
           <Icon name="eye" />
         </button>
@@ -1110,7 +1116,7 @@ function Canvas({
   const openExternal = useOpenExternal()
 
   // What is stored and what is sent are keyed by the repository the cards actually belong to, not
-  // by the address they were reached through. The two differ after a rename, and the hidden cards
+  // by the address they were reached through. The two differ after a rename, and the dimmed cards
   // are recorded as node IDs qualified with the former.
   const identity = graph.identity
 
@@ -1118,15 +1124,15 @@ function Canvas({
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState<ShareOutcome | null>(null)
-  const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(readStored(hiddenKey(identity), asStringArray, [])),
+  const [dimmed, setDimmed] = useState<ReadonlySet<string>>(
+    () => new Set(readStored(dimmedKey(identity), asStringArray, [])),
   )
 
-  // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
+  // Dimming is a reading aid, and it is worth keeping across a reload precisely because a reload
   // costs requests. Nothing here is ever written back to GitHub.
   useEffect(() => {
-    writeStored(hiddenKey(identity), [...hidden])
-  }, [identity, hidden])
+    writeStored(dimmedKey(identity), [...dimmed])
+  }, [identity, dimmed])
 
   const share = useCallback(() => {
     setSharing(true)
@@ -1166,20 +1172,20 @@ function Canvas({
     })
   }, [])
 
-  const toggleHidden = useCallback((id: string) => {
-    setHidden((current) => {
+  const toggleDimmed = useCallback((id: string) => {
+    setDimmed((current) => {
       const next = new Set(current)
       if (!next.delete(id)) next.add(id)
       return next
     })
   }, [])
 
-  const hideSelected = useCallback(() => {
-    setHidden((current) => new Set([...current, ...selected]))
+  const dimSelected = useCallback(() => {
+    setDimmed((current) => new Set([...current, ...selected]))
   }, [selected])
 
-  const showSelected = useCallback(() => {
-    setHidden((current) => new Set([...current].filter((id) => !selected.has(id))))
+  const restoreSelected = useCallback(() => {
+    setDimmed((current) => new Set([...current].filter((id) => !selected.has(id))))
   }, [selected])
 
   /**
@@ -1241,12 +1247,12 @@ function Canvas({
         data: {
           node,
           selected: selected.has(node.id),
-          hidden: hidden.has(node.id),
+          dimmed: dimmed.has(node.id),
           highlighted,
           faded: highlight.size > 0 && !highlighted,
           description: describeNode(node, adjacency.get(node.id)),
           onSelect: selectIssue,
-          onToggleHidden: toggleHidden,
+          onToggleDimmed: toggleDimmed,
           onOpen: openExternal,
         },
         // The height is the card's own, computed from its title, so React Flow measures and packs
@@ -1261,19 +1267,19 @@ function Canvas({
     graph,
     adjacency,
     selected,
-    hidden,
+    dimmed,
     highlight,
     selectGroup,
     selectIssue,
-    toggleHidden,
+    toggleDimmed,
     openExternal,
   ])
 
   const edges = useMemo<DependencyEdgeType[]>(
     () =>
       graph.edges.map((edge) => {
-        const dimmed = hidden.has(edge.source) || hidden.has(edge.target)
-        const lit = !dimmed && (selected.has(edge.source) || selected.has(edge.target))
+        const touchesDimmed = dimmed.has(edge.source) || dimmed.has(edge.target)
+        const lit = !touchesDimmed && (selected.has(edge.source) || selected.has(edge.target))
         const hierarchy = edge.kind === 'hierarchy'
         return {
           id: edge.id,
@@ -1287,7 +1293,7 @@ function Canvas({
             // Dashed and paler, so containment reads as a different relation before the reader
             // has looked for an arrowhead.
             hierarchy ? 'edge--hierarchy' : null,
-            dimmed ? 'edge--dim' : lit ? 'edge--lit' : null,
+            touchesDimmed ? 'edge--dim' : lit ? 'edge--lit' : null,
           ]
             .filter(Boolean)
             .join(' ') || undefined,
@@ -1298,7 +1304,7 @@ function Canvas({
             : { type: MarkerType.ArrowClosed, width: 15, height: 15 },
         }
       }),
-    [graph, selected, hidden],
+    [graph, selected, dimmed],
   )
 
   const { translateExtent, minZoom } = useGraphLayout(graph)
@@ -1306,16 +1312,16 @@ function Canvas({
     graph,
     selected,
     setSelected,
-    setHidden,
+    setDimmed,
     fitView,
     openExternal,
   })
 
   const selectedCount = selected.size
-  // Offering "hide" for a selection that is already hidden, or the reverse, is a control that does
-  // nothing when pressed. Unhiding one card needs no bar at all: the card keeps its own eye.
-  const canHide = [...selected].some((id) => !hidden.has(id))
-  const canShow = [...selected].some((id) => hidden.has(id))
+  // Offering "dim" for a selection that is already dimmed, or the reverse, is a control that does
+  // nothing when pressed. Restoring one card needs no bar at all: the card keeps its own eye.
+  const canDim = [...selected].some((id) => !dimmed.has(id))
+  const canRestore = [...selected].some((id) => dimmed.has(id))
 
   return (
     <ReactFlow
@@ -1361,10 +1367,10 @@ function Canvas({
 
       <SelectionBar
         selectedCount={selectedCount}
-        canHide={canHide}
-        canShow={canShow}
-        onHideSelected={hideSelected}
-        onShowSelected={showSelected}
+        canDim={canDim}
+        canRestore={canRestore}
+        onDimSelected={dimSelected}
+        onRestoreSelected={restoreSelected}
         onClearSelection={() => setSelected(new Set())}
       />
 
@@ -1494,7 +1500,7 @@ function GraphLoad({
   const { token } = useTokenState()
   // Two spellings of one repository, and they are not interchangeable.
   //
-  // `identity` keys everything stored or matched — the saved copy, the hidden cards, the
+  // `identity` keys everything stored or matched — the saved copy, the dimmed cards, the
   // repository a shared link claims to hold — because keying those on what the reader typed forks
   // one repository's state across its spellings. `slug` is what the reader typed, and it is what
   // the page says back to them: the bar, the repository link, the prefilled input, the copy.

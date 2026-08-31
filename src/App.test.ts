@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 
+import { ReactFlowProvider } from '@xyflow/react'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -17,9 +18,11 @@ import {
   describeSavedCopy,
   describeShare,
   describeUnresolved,
+  dimmedKey,
   failureText,
   graphBounds,
   nextIssueSelection,
+  SelectionBar,
   stopsForTokenChange,
   TopChrome,
 } from './App'
@@ -540,6 +543,65 @@ describe('blockerStateText', () => {
  * that structure and the declarations it rests on, so reintroducing the pinned pair fails here
  * rather than at 320 CSS pixels in somebody's hand.
  */
+describe('what a dimmed set is stored under', () => {
+  it('keeps the key the rename to dimming inherited, so a saved set survives the new copy', () => {
+    // Renaming the control renamed nothing on disk: every reader who dimmed cards before the
+    // rename still finds them dimmed after it.
+    expect(dimmedKey('owner/app')).toBe('issue-graph:hidden:owner/app')
+  })
+})
+
+describe('the selection actions', () => {
+  function bar(props: { canDim: boolean; canRestore: boolean }): string {
+    return renderToStaticMarkup(
+      createElement(
+        ReactFlowProvider,
+        null,
+        createElement(SelectionBar, {
+          selectedCount: 2,
+          onDimSelected: () => {},
+          onRestoreSelected: () => {},
+          onClearSelection: () => {},
+          ...props,
+        }),
+      ),
+    )
+  }
+
+  it('names both actions after the emphasis they change, not after removal', () => {
+    const html = bar({ canDim: true, canRestore: true })
+
+    expect(html).toContain('aria-label="Dim the selected issues"')
+    expect(html).toContain('data-tip="Dim the selected issues \u00b7 D"')
+    expect(html).toContain('aria-label="Restore the selected issues"')
+    expect(html).toContain('data-tip="Restore the selected issues \u00b7 R"')
+    expect(html).not.toMatch(/aria-label="(Hide|Show) /)
+  })
+
+  it('offers each action only where it would change something', () => {
+    expect(bar({ canDim: true, canRestore: false })).not.toContain('Restore the selected')
+    expect(bar({ canDim: false, canRestore: true })).not.toContain('Dim the selected')
+  })
+
+  it('says nothing at all when nothing is selected', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        ReactFlowProvider,
+        null,
+        createElement(SelectionBar, {
+          selectedCount: 0,
+          canDim: false,
+          canRestore: false,
+          onDimSelected: () => {},
+          onRestoreSelected: () => {},
+          onClearSelection: () => {},
+        }),
+      ),
+    )
+    expect(html).toBe('')
+  })
+})
+
 describe('top chrome layout', () => {
   const styles = readFileSync(new URL('./styles.css', import.meta.url), 'utf8')
 

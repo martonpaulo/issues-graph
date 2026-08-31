@@ -34,24 +34,25 @@ function issueNode(overrides: Partial<GraphNode>): GraphNode {
 function cardData(
   node: GraphNode,
   description = 'Issue #30. Blocked by nothing. Blocks nothing.',
+  dimmed = false,
 ): IssueCardData {
   return {
     node,
     selected: false,
-    hidden: false,
+    dimmed,
     highlighted: false,
     faded: false,
     description,
     onSelect: () => {},
-    onToggleHidden: () => {},
+    onToggleDimmed: () => {},
     onOpen: () => {},
   }
 }
 
-function renderCard(node: GraphNode, description?: string): string {
+function renderCard(node: GraphNode, description?: string, dimmed = false): string {
   return renderToStaticMarkup(
     createElement(ReactFlowProvider, null, createElement(IssueCard, {
-      data: cardData(node, description),
+      data: cardData(node, description, dimmed),
     } as never)),
   )
 }
@@ -77,8 +78,26 @@ describe('IssueCard', () => {
   it('announces a local issue by its number alone', () => {
     expect(accessibleNames(renderCard(issueNode({})))).toEqual([
       'Open #30 on GitHub',
-      'Hide #30',
+      'Dim #30',
     ])
+  })
+
+  it('names the toggle for what it does to the card, in both directions', () => {
+    const lit = renderCard(issueNode({}))
+    expect(lit).toContain('aria-label="Dim #30"')
+    expect(lit).toContain('data-tip="Dim this issue \u00b7 D"')
+    expect(lit).toContain('aria-pressed="false"')
+    expect(lit).not.toContain('card--dimmed')
+
+    // The card is still drawn, still reachable and still announced: only its emphasis drops, so
+    // the control says "restore" rather than "show".
+    const dim = renderCard(issueNode({}), undefined, true)
+    expect(dim).toContain('aria-label="Restore #30"')
+    expect(dim).toContain('data-tip="Restore this issue \u00b7 R"')
+    expect(dim).toContain('aria-pressed="true"')
+    expect(dim).toContain('card--dimmed')
+    expect(dim).not.toContain('aria-hidden="true" class="card"')
+    expect(dim).toContain('Draw the blocking order')
   })
 
   it('announces an external issue with its repository named once', () => {
@@ -95,7 +114,7 @@ describe('IssueCard', () => {
 
     expect(accessibleNames(html)).toEqual([
       'Open other/lib#30 on GitHub',
-      'Hide other/lib#30',
+      'Dim other/lib#30',
     ])
     expect(html).toContain('<span class="card__repo">other/lib</span>')
   })
