@@ -96,6 +96,11 @@ Tests run against fixtures captured from the live API by `scripts/capture-fixtur
 payload rather than hand-writing one — a hand-written payload asserts what somebody assumed the API
 returns.
 
+Card heights are computed without a browser, so `src/interMetrics.ts` holds the label-chip character
+advances captured from the shipped Inter face by `scripts/capture-chip-metrics.mjs`. Regenerate it
+after upgrading `@fontsource-variable/inter` or changing the chip font size; a stale table makes
+cards a row too short and the chips hang out of them.
+
 ## History
 
 Extracted from [`martonpaulo/agent-workflows`](https://github.com/martonpaulo/agent-workflows), where
