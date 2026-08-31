@@ -45,7 +45,7 @@ import {
   titleForRoute,
   type RepoTarget,
 } from './route'
-import { readStored, writeStored } from './storage'
+import { asBoolean, asStringArray, readStored, writeStored } from './storage'
 import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
 import { rememberTarget } from './suggestions'
 import { readToken, writeToken } from './token'
@@ -952,7 +952,7 @@ function Canvas({
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState<ShareOutcome | null>(null)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(readStored<string[]>(hiddenKey(identity), [])),
+    () => new Set(readStored(hiddenKey(identity), asStringArray, [])),
   )
 
   // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
@@ -1235,7 +1235,7 @@ function GraphView({
 }) {
   const [attempt, setAttempt] = useState(0)
   const [note, setNote] = useState<string | null>(null)
-  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, false))
+  const [showClosed, setShowClosed] = useState(() => readStored(SHOW_CLOSED_KEY, asBoolean, false))
 
   useEffect(() => {
     writeStored(SHOW_CLOSED_KEY, showClosed)

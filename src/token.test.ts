@@ -69,4 +69,14 @@ describe('the viewer’s token', () => {
     expect(() => writeToken('github_pat_example')).not.toThrow()
     expect(readToken()).toBe('')
   })
+
+  it('reads nothing when the stored value is not a string', () => {
+    entries.set('issue-graph:token', JSON.stringify({ token: 'github_pat_example' }))
+    expect(readToken()).toBe('')
+  })
+
+  it('reads nothing rather than throwing on stored text that is not JSON', () => {
+    entries.set('issue-graph:token', 'github_pat_example')
+    expect(readToken()).toBe('')
+  })
 })
