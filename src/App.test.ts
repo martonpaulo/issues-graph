@@ -10,12 +10,14 @@ import {
   budgetParts,
   decideSavedCopyOpen,
   describeSavedCopy,
+  describeShare,
   failureText,
   graphBounds,
   nextIssueSelection,
   stopsForTokenChange,
 } from './App'
 import { readCache, writeCache } from './cache'
+import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
 import { buildGraph, NODE_WIDTH } from './graph'
 
@@ -31,7 +33,7 @@ const narrowData: RepositoryGraphData = {
   includedClosed: false,
 }
 
-function withBrowserStorage<T>(run: () => T): T {
+function withBrowserStorage<T>(run: () => T, hash = ''): T {
   const values = new Map<string, string>()
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window')
   const localStorage: Storage = {
@@ -49,7 +51,8 @@ function withBrowserStorage<T>(run: () => T): T {
     configurable: true,
     value: {
       localStorage,
-      location: { pathname: '/dependencies/acme/app' },
+      location: { pathname: '/dependencies/acme/app', search: '', hash },
+      history: { replaceState: () => {} },
     },
   })
 
@@ -115,16 +118,67 @@ describe('saved copy entry', () => {
     })
   })
 
+  it('never offers the budget gate when the address carries a shared link', async () => {
+    const link = await buildSnapshotUrl(
+      'acme/app',
+      { data: narrowData, capturedAt: new Date(), showClosed: false },
+      '',
+      '/',
+    )
+    expect(link.kind).toBe('ready')
+    if (link.kind !== 'ready') return
+
+    withBrowserStorage(() => {
+      // A saved copy exists too, so the only reason the gate could be absent is the fragment.
+      writeCache('acme/app', narrowData)
+      const html = renderToStaticMarkup(createElement(App))
+
+      expect(html).not.toContain('Fetch now')
+      expect(html).not.toContain('Open saved copy')
+      expect(html).not.toContain('Reading costs GitHub requests')
+    }, link.url.slice(link.url.indexOf('#')))
+  })
+
   it('describes a saved canvas with its age and dependency coverage', () => {
     const now = new Date('2026-08-30T08:00:00Z')
     const savedAt = new Date('2026-08-30T06:00:00Z')
 
-    expect(describeSavedCopy({ savedAt, includedClosed: false }, now)).toBe(
+    expect(describeSavedCopy({ savedAt, includedClosed: false, source: 'saved' }, now)).toBe(
       'Saved copy · 2 hours ago · open blockers only',
     )
-    expect(describeSavedCopy({ savedAt, includedClosed: true }, now)).toBe(
+    expect(describeSavedCopy({ savedAt, includedClosed: true, source: 'saved' }, now)).toBe(
       'Saved copy · 2 hours ago · includes closed blockers',
     )
+  })
+
+  it('says a copy that arrived in a link is not the viewer\u2019s own', () => {
+    const now = new Date('2026-08-30T08:00:00Z')
+    const savedAt = new Date('2026-08-30T06:00:00Z')
+
+    expect(describeSavedCopy({ savedAt, includedClosed: false, source: 'shared' }, now)).toBe(
+      'Shared copy · 2 hours ago · open blockers only',
+    )
+    expect(describeSavedCopy({ savedAt, includedClosed: true, source: 'shared' }, now)).toBe(
+      'Shared copy · 2 hours ago · includes closed blockers',
+    )
+  })
+})
+
+describe('describeShare', () => {
+  it('says what a copied link does for whoever receives it', () => {
+    expect(describeShare({ kind: 'copied', url: 'https://example.test/#g=x' })).toBe(
+      'Link copied. It draws this graph without spending anyone\u2019s GitHub budget.',
+    )
+  })
+
+  it('names both numbers when the graph is too large, and says nothing was shortened', () => {
+    expect(describeShare({ kind: 'too-large', chars: 41234, limit: 32000 })).toBe(
+      'This graph needs 41,234 characters, past the 32,000 a link can carry. Nothing was shortened.',
+    )
+  })
+
+  it('states plainly when the browser cannot build one', () => {
+    expect(describeShare({ kind: 'unsupported' })).toBe('This browser cannot build a shared link.')
   })
 })
 

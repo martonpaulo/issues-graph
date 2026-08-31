@@ -249,7 +249,8 @@ code {
 
 .bar,
 .info,
-.actions {
+.actions,
+.said {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -315,6 +316,20 @@ code {
 .info__row--muted {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+/* The live region stays mounted with nothing in it, so it must also take up nothing. */
+.said--quiet {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.said p {
+  margin: 0;
+  max-width: min(64vw, 380px);
 }
 
 .actions__count {

@@ -33,6 +33,28 @@ Nothing is registered under this repository's owner, and no token is ever commit
 who can run scripts in your browser on this origin can read what `localStorage` holds, so use a
 token scoped to public reads and revoke it when you are done.
 
+## Sharing a graph
+
+The link icon on the graph copies a URL that draws exactly what is on screen. Whoever opens it
+spends none of their own GitHub budget: the graph itself travels in the URL, and the page makes no
+request to `api.github.com` at all on that path.
+
+```text
+https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>#g=<the graph>
+```
+
+The graph rides in the fragment — the part after `#` — which browsers never send to a server. It
+therefore reaches neither GitHub Pages nor its logs, and there is nowhere for it to be stored:
+nothing is uploaded, no account is written to, and no short-link service is involved.
+
+A shared graph is a point-in-time copy and says so on screen, with the same age and coverage the
+page shows for your own saved copies. **Read latest from GitHub** leaves it behind and reads the
+repository live.
+
+Very large backlogs are the limit of the approach. Above 32,000 characters — roughly a few hundred
+issues — the link stops surviving being pasted into a message, and the page declines to build one
+and tells you the size instead of handing you a link that arrives truncated.
+
 ## Related repositories
 
 Three repositories divide this work, and the boundary between them is deliberate:
