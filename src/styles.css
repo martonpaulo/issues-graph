@@ -147,10 +147,14 @@ code {
   cursor: not-allowed;
 }
 
+/* Off, but still the primary control: the accent stays and drains to its palest weight, rather
+   than the button becoming a second disabled secondary. White on `--line-strong` was 1.45:1 —
+   WCAG exempts a disabled control, #22 does not — so the label is `--muted` on `--accent-soft`
+   at 4.79:1. */
 .button--primary:disabled {
-  color: #ffffff;
-  background: var(--line-strong);
-  border-color: var(--line-strong);
+  color: var(--muted);
+  background: var(--accent-soft);
+  border-color: var(--line);
 }
 
 .button--small {

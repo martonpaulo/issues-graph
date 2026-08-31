@@ -40,6 +40,16 @@ function declaration(selector: string, property: string): string {
 const token = (name: string) => declaration(':root', `--${name}`)
 const opacity = (selector: string) => Number(declaration(selector, 'opacity'))
 
+/** A `var(--name)` reference resolved against `:root`, or the colour itself when it is literal. */
+function resolve(color: string): string {
+  const name = /var\(--([a-z-]+)\)/.exec(color)
+  return name === null ? color : token(name[1])
+}
+
+/** The rendered pair of a rule that paints both halves itself, read rather than copied. */
+const painted = (selector: string) =>
+  [resolve(declaration(selector, 'color')), resolve(declaration(selector, 'background'))] as const
+
 type Rgb = readonly [number, number, number]
 
 function rgb(color: string): Rgb {
@@ -108,6 +118,10 @@ const pairs: ReadonlyArray<readonly [string, string, string]> = [
   ['muted text on an accent fill', token('muted'), token('accent-soft')],
   ['primary button label', '#ffffff', token('accent')],
   ['primary button label, hovered', '#ffffff', token('accent-strong')],
+  // A disabled control is exempt from 1.4.3, but #22 asked for it anyway: the state is reachable
+  // (an unchanged token, a saved copy that cannot be taken) and its label still has to be read.
+  ['disabled button label', ...painted('.button:disabled')],
+  ['disabled primary button label', ...painted('.button--primary:disabled')],
   ['accent text on a panel', token('accent'), token('surface')],
   ['accent text on its own soft fill', token('accent'), token('accent-soft')],
   ['the label picker while it is on', declaration('.iconbutton.is-highlighting', 'color'), token('highlight-soft')],
@@ -185,15 +199,10 @@ describe('card text over every state fill', () => {
   })
 
   it.each(stateFills)('%s keeps the hovered card actions legible', (_state, fill) => {
-    const button = mix(declaration('.card__actions .iconbutton', 'background'), fill, token1)
+    const button = mix(declaration('.card__actions .iconbutton', 'background'), fill, resolve)
     expect(contrast(token('muted'), button)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
   })
 })
-
-function token1(color: string): string {
-  const name = /var\(--([a-z-]+)\)/.exec(color)
-  return name === null ? color : token(name[1])
-}
 
 /** Group labels sit on a translucent frame fill drawn over the canvas, never over a card. */
 describe('group labels', () => {
@@ -203,12 +212,12 @@ describe('group labels', () => {
   ]
 
   it.each(frames)('%s labels its frame at AA', (frame, label) => {
-    const fill = mix(declaration(frame, 'background'), token('bg'), token1)
+    const fill = mix(declaration(frame, 'background'), token('bg'), resolve)
     expect(contrast(declaration(label, 'color'), fill)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
   })
 
   it('keeps the default label readable on a selected frame', () => {
-    const fill = mix(declaration('.group--selected', 'background'), token('bg'), token1)
+    const fill = mix(declaration('.group--selected', 'background'), token('bg'), resolve)
     expect(contrast(token('muted'), fill)).toBeGreaterThanOrEqual(AA_NORMAL_TEXT)
   })
 })
