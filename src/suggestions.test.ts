@@ -45,6 +45,28 @@ describe('recentTargets', () => {
     expect(recentTargets()).toEqual(['o/r7', 'o/r6', 'o/r5', 'o/r4', 'o/r3', 'o/r2'])
   })
 
+  it('keeps one entry per repository when the same one is opened in different casing', () => {
+    remember('Acme/App', 'acme/app')
+    expect(recentTargets()).toEqual(['acme/app'])
+  })
+
+  it('keeps repositories that differ by more than casing apart', () => {
+    remember('acme/app', 'acme/apps')
+    expect(recentTargets()).toEqual(['acme/apps', 'acme/app'])
+  })
+
+  it('holds six distinct repositories when spellings repeat', () => {
+    remember('o/r1', 'O/R1', 'o/r2', 'o/r3', 'o/r4', 'o/r5', 'o/r6')
+    expect(recentTargets()).toEqual(['o/r6', 'o/r5', 'o/r4', 'o/r3', 'o/r2', 'O/R1'])
+  })
+
+  it('collapses a stored list that already holds both spellings on the next write', () => {
+    store.set('issue-graph:recent', JSON.stringify(['Acme/App', 'b/two', 'acme/app']))
+    remember('c/three')
+
+    expect(recentTargets()).toEqual(['c/three', 'Acme/App', 'b/two'])
+  })
+
   it('drops stored entries that are no longer a valid owner/repo slug', () => {
     store.set('issue-graph:recent', JSON.stringify(['a/one', 'not a slug']))
     expect(recentTargets()).toEqual(['a/one'])
@@ -91,6 +113,11 @@ describe('mergeSuggestions', () => {
   it('appends search results after the recents, without repeating one', () => {
     remember('a/one')
     expect(mergeSuggestions('one', ['a/one', 'c/one'])).toEqual(['a/one', 'c/one'])
+  })
+
+  it('does not offer a search result a recent already names in a different casing', () => {
+    remember('Acme/App')
+    expect(mergeSuggestions('app', ['acme/app', 'other/app'])).toEqual(['Acme/App', 'other/app'])
   })
 
   it('caps the list at eight options', () => {
