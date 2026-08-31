@@ -19,16 +19,18 @@
 - Agent automation: `enabled`
 - Implementation agent: `claude`
 - Review agent: `codex`
+- Orchestration agent: `codex`
 - Merge policy: merge commits only, every commit of the branch preserved. Never squash.
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
+- Review policy: `main` requires one approving review (ruleset `21918709`). The reviewing harness posts a `COMMENT` review because GitHub refuses an approving review from the account that opened the pull request; the approving identity is the operator's GitHub App `marton-agent-approver`, which `skd merge` uses once the orchestrator has recorded an approved verdict.
 - Release and signing policy: Not applicable. Nothing is packaged or signed; deployment is a GitHub Pages build from `main`.
 - Secret-storage policy: the product has no credential and every product read is unauthenticated. Agent-automation credentials, when provisioned, live only as GitHub Actions repository secrets and never in the repository or agent transcripts.
 - Client guidance: Gemini CLI (`unavailable`) uses `GEMINI.md -> AGENTS.md`; Antigravity CLI (`unavailable`) uses root `AGENTS.md`. Functional verification is pending for both clients.
-- Agent orchestration: Enabled for Agent Orchestrator local workers and Jules cloud routing. Auto-merge remains disarmed until `main` has required status checks.
-- Skills baseline revision: `a475ff79c4daf4b47bb87adf7eab576824cadb8d`
-- Skills baseline applied: `2026-08-30`
-- Skills baseline divergence `label-taxonomy-established-history` at `a475ff79c4daf4b47bb87adf7eab576824cadb8d`: 29 issues predate the canonical taxonomy; `project-groom` owns mapping and removal of legacy labels, so setup preserved them.
+- Agent orchestration: Enabled for Agent Orchestrator local workers. Auto-merge through GitHub's own arming remains disarmed until `main` has required status checks; merging is performed by `skd merge` on the orchestrator's recorded verdict.
+- Skills baseline revision: `98870ac5785c6d24b4d34d75ce193ed4e1e30937`
+- Skills baseline applied: `2026-08-31`
+- Skills baseline divergence `label-taxonomy-established-history` at `98870ac5785c6d24b4d34d75ce193ed4e1e30937`: 29 issues predate the canonical taxonomy; `project-groom` owns mapping and removal of legacy labels, so setup preserved them.
 
 Treat these values as stable project decisions. Change an established identifier, license, visibility, branch policy, versioning model, localization strategy, landing-page contract, agent-automation decision, or release policy only through an explicit task that describes the migration and downstream effects.
 
@@ -234,6 +236,16 @@ script work is a separate approved task and never enters through the documentati
 delay the requested task result while waiting on an adjacent proposal, and do not publish the
 proposal externally on your own.
 
+## Skills
+
+This repository owns no skills of its own. Every task follows normal skill triggering from the
+personal collection.
+
+The precedence rule still applies, so it does not have to be rediscovered when the first project
+skill appears: when a project skill and a general skill both cover a task, the project skill owns
+the project-specific procedure and the general skill keeps the process around it. A task no project
+skill claims follows normal skill triggering.
+
 ## User attention cards
 
 When the user must notice and respond to a proposed follow-up, a material choice, a permission
@@ -250,6 +262,27 @@ another after its final response line. When cards are consecutive, one rule may 
 emoji supplements the descriptive heading and never replaces it. Use one card per requested
 decision, approval, action, or issue proposal, and end with an exact response format the user can
 copy.
+
+### Raise the card through the question tool
+
+A card written only as Markdown is a message, and a message ends the turn. The agent stops, the
+orchestrator marks the session idle, and a decision that was genuinely blocking looks answered.
+The card is the record; it is not the asking.
+
+So whenever the client offers a native structured-question facility — `AskUserQuestion` in Claude
+Code, the equivalent elicitation or form input in other agents — put the question through it. The
+tool call is what actually holds the turn open and what puts the session in the *needs you*
+column. Map the card onto it directly: the card's heading becomes the question, each row of the
+options table becomes one option with its tradeoffs as the description, and the recommended option
+goes first, marked as recommended.
+
+Write the card too, in the same turn. The tool renders a compact chooser, while the card carries
+the evidence, the impact and the reasoning that the chooser has no room for. One without the other
+loses something: the tool alone strips the argument, the card alone never asks.
+
+Fall back to the card alone only when the client has no such facility. A run that wrote only the
+card has not asked, however clearly it was worded.
+
 
 ### Proposed issue
 
