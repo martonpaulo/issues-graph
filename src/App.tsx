@@ -707,7 +707,7 @@ function LabelPicker({
   if (labels.length === 0) return null
 
   return (
-    <span className="picker">
+    <span className="picker" data-open={open || undefined}>
       <button
         className={`iconbutton${active.size > 0 ? ' is-highlighting' : ''}`}
         type="button"
@@ -856,7 +856,7 @@ function DependencyList({ graph }: { graph: IssueGraph }) {
   if (rows.length === 0) return null
 
   return (
-    <span className="picker">
+    <span className="picker" data-open={open || undefined}>
       <button
         className="iconbutton"
         type="button"
@@ -1007,11 +1007,19 @@ export interface FocusPlacement {
 }
 
 /**
- * Focus inside one of these makes the key that element's, not the canvas's. A picker is here
- * because Escape now closes its panel: without this the one press would both close the panel and
- * drop the canvas selection, which is two outcomes for a key that asked for one.
+ * Focus inside one of these makes the key that element's, not the canvas's.
+ *
+ * A picker is here only while its panel is open, which is what `data-open` marks. Escape closes an
+ * open panel, and without this the one press would both close it and drop the canvas selection —
+ * two outcomes for a key that asked for one. A closed picker is an ordinary button on the toolbar
+ * and keeps none of the canvas keys from reaching the canvas.
+ *
+ * Exported for the test that pins that scope: widening this back to a bare `.picker` would take
+ * F, D, R and Escape away from anyone whose focus is resting on a shut toolbar control, which is
+ * exactly where Escape leaves it.
  */
-const CAPTURING_FOCUS = 'input, textarea, [contenteditable="true"], .overlay, .picker'
+export const CAPTURING_FOCUS =
+  'input, textarea, [contenteditable="true"], .overlay, .picker[data-open]'
 
 /**
  * Enter activates each of these on its own. Without this list a press on a selected card's eye

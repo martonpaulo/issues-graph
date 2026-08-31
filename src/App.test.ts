@@ -14,6 +14,7 @@ import {
   DIRECTION_LEGEND,
   budgetParts,
   canvasShortcut,
+  CAPTURING_FOCUS,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -615,6 +616,8 @@ describe('top chrome layout', () => {
     expect(html).toContain('aria-haspopup="dialog"')
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('aria-controls')
+    // The mark the canvas reads to stand down. A shut picker does not carry it.
+    expect(html).not.toContain('data-open')
   })
 
   it('keeps the whole slug in the accessible name and in a hint however long the name is', () => {
@@ -857,5 +860,23 @@ describe('where the focus goes when a press outside closes a panel', () => {
   it('moves nobody who was standing outside the panel to begin with', () => {
     expect(restoresTriggerAfterOutsidePress(false, false)).toBe(false)
     expect(restoresTriggerAfterOutsidePress(false, true)).toBe(false)
+  })
+})
+
+describe('what takes the canvas keys away from the canvas', () => {
+  const selectors = CAPTURING_FOCUS.split(',').map((part) => part.trim())
+
+  it('stands down for a field, a dialog, and a picker whose panel is open', () => {
+    expect(selectors).toContain('input')
+    expect(selectors).toContain('textarea')
+    expect(selectors).toContain('.overlay')
+    expect(selectors).toContain('.picker[data-open]')
+  })
+
+  /* Escape leaves the focus on the trigger of the picker it just closed. Matching a bare `.picker`
+     would take F, D, R and Escape away from the canvas for as long as the reader stands there —
+     a shut picker is an ordinary button on the toolbar. */
+  it('leaves the canvas its keys while the focus rests on a shut picker', () => {
+    expect(selectors).not.toContain('.picker')
   })
 })
