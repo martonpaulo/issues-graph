@@ -1,0 +1,89 @@
+# Enforces the pull request naming conventions this project records, on the pull request itself.
+#
+# Copied verbatim into a consuming repository as `.github/workflows/pr-conventions.yml` by
+# project-setup's agent-orchestration opt-in. It is deliberately language-agnostic: it reads the
+# pull request's title and body and nothing else, so it is the same file in every repository.
+#
+# Why this is a check rather than an instruction. The branch name and the `Closes` block are
+# produced mechanically and come out right; the title depends on an agent remembering a convention
+# and, measured across one repository's history, comes out right about half the time — including
+# for the operator. A check makes it deterministic, and in an orchestrated repository it does more
+# than report: a failing check is what Agent Orchestrator's own CI loop drives the worker to fix,
+# so the title is corrected without anyone being asked.
+name: PR conventions
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  conventions:
+    name: pr-conventions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the title and closing block
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+
+          title = (os.environ.get("PR_TITLE") or "").strip()
+          body = (os.environ.get("PR_BODY") or "").replace("\r\n", "\n")
+
+          failures = []
+
+          # `Issue #12 - Description` for one, `Issues #70, #73 - Description` for several.
+          single = re.fullmatch(r"Issue #(\d+) - (\S.*)", title)
+          plural = re.fullmatch(r"Issues ((?:#\d+, )+#\d+) - (\S.*)", title)
+          if single:
+              title_issues = [int(single.group(1))]
+          elif plural:
+              title_issues = [int(n) for n in re.findall(r"#(\d+)", plural.group(1))]
+          else:
+              title_issues = []
+              failures.append(
+                  "title must read 'Issue #<n> - <description>', or "
+                  "'Issues #<a>, #<b> - <description>' when it closes several; got: " + repr(title)
+              )
+
+          if title_issues != sorted(set(title_issues)):
+              failures.append("title issue numbers must be deduplicated and sorted numerically")
+
+          # The closing block is one `Closes #<n>` per line, at the very top of the body.
+          closes = []
+          for line in body.split("\n"):
+              match = re.fullmatch(r"Closes #(\d+)", line.strip())
+              if match:
+                  closes.append(int(match.group(1)))
+              elif closes:
+                  break
+              elif line.strip():
+                  break
+
+          if not closes:
+              failures.append("body must start with one `Closes #<n>` line for every issue it closes")
+          elif sorted(set(closes)) != sorted(set(title_issues)) and title_issues:
+              failures.append(
+                  "the title's issues %s and the closing block's %s must name the same set"
+                  % (sorted(set(title_issues)), sorted(set(closes)))
+              )
+
+          if failures:
+              print("Pull request conventions not met:\n")
+              for failure in failures:
+                  print("  - " + failure)
+              print(
+                  "\nThe conventions are recorded in the project's AGENTS.md. Edit the pull "
+                  "request title or body and this check re-runs on its own."
+              )
+              sys.exit(1)
+
+          print("Title and closing block agree on issue(s) %s." % sorted(set(title_issues)))
+          PY
