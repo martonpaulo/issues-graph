@@ -1301,11 +1301,11 @@ function GraphLoad({
   /**
    * Draws the shared link, or explains why it cannot and falls back to the ordinary gate.
    *
-   * The snapshot is drawn at the coverage the read that produced it had, not at the recipient's
-   * own preference: a copy cannot gain closed blockers it never contained, and pretending
-   * otherwise would label the graph with a claim the data does not support. Nothing is written to
-   * this browser's cache either — it is somebody else's copy, and a later visit must not be
-   * offered it as this viewer's own.
+   * The snapshot is drawn at the choice the sender drew it with, which the link records for
+   * exactly this reason — not at the coverage behind it, which can be wider, and not at the
+   * recipient's own preference, which is about a repository they have not read. Nothing is
+   * written to this browser's cache either: it is somebody else's copy, and a later visit must
+   * not be offered it as this viewer's own.
    */
   useEffect(() => {
     if (!sharedLink) return
