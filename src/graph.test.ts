@@ -410,8 +410,11 @@ describe('buildGraph against captured GitHub data', () => {
 
     expect(issue12.title).toBe('Repair loop after a real CI failure')
     expect(issue12.titleLines).toBe(1)
-    expect(chipRows(issue12.labels.map((chip) => chip.text))).toBe(1)
-    expect(issue12.height).toBe(cardHeight(1, 1))
+    // Four labels — the three namespaces and an `area:` — so the chips take two rows and the card
+    // pays for both. The title is still one line, which is what this card is here to show.
+    expect(issue12.labels).toHaveLength(4)
+    expect(chipRows(issue12.labels.map((chip) => chip.text))).toBe(2)
+    expect(issue12.height).toBe(cardHeight(1, 2))
 
     expect(issue13.title).toBe('Repair loop after changes_requested')
     expect(issue13.titleLines).toBe(2)
