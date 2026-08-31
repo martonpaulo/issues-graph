@@ -303,8 +303,10 @@ code {
 }
 
 /* The identity stays one line whatever the repository is called: the slug is the part that gives
-   way, so a long name shortens the name rather than growing a three-line bar over the graph. */
+   way, so a long name shortens the name rather than growing a three-line bar over the graph. It is
+   also what the slug's hint is measured against, below. */
 .bar--identity {
+  position: relative;
   flex-wrap: nowrap;
 }
 
@@ -333,6 +335,26 @@ code {
 
 .bar__slug {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Every other hint is a phrase this project wrote, so 240px of centred text with the default
+     word breaking fits it. This one carries a repository name: up to 140 characters GitHub allows,
+     with no space in it to break at. So it is measured against the identity bar rather than the
+     button — the bar is already bounded by the window, so the hint cannot leave it — and it breaks
+     mid-word, which is the only way an unbroken name wraps at all. */
+  position: static;
+}
+
+/* Written at the panel-side alignment rule's own weight, and after it, so the alignment this hint
+   needs is decided here rather than by whichever of the two happens to come last. */
+.react-flow__panel .bar__slug[data-tip]::after {
+  left: 0;
+  right: auto;
+  /* Against the bar's own box, padding included, so 100% cannot become 100% plus the padding. */
+  box-sizing: border-box;
+  max-width: 100%;
+  transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
 }
 
 .bar__slug:hover {

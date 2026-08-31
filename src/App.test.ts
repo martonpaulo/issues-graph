@@ -456,6 +456,30 @@ describe('top chrome layout', () => {
     }
   })
 
+  it('keeps the full-slug hint inside the window and lets an unbroken name wrap', () => {
+    const hint = ruleFor('.react-flow__panel .bar__slug[data-tip]::after')
+
+    // A repository name has no space to break at, so the hint must break mid-word...
+    expect(hint).toContain('overflow-wrap: anywhere')
+    // ...and is measured against the identity bar, which the window already bounds.
+    expect(hint).toContain('left: 0')
+    expect(hint).toContain('right: auto')
+    expect(hint).toContain('transform: none')
+    expect(hint).toContain('max-width: 100%')
+    // Without this the box is the bar's width *plus* its own padding, which leaves the window.
+    expect(hint).toContain('box-sizing: border-box')
+
+    expect(ruleFor('.bar--identity')).toContain('position: relative')
+    // The button opts out of being the hint's containing block, so the bar becomes it.
+    expect(styles).toMatch(/\.bar__slug \{[^}]*position: static/)
+
+    // The panel-side alignment rule matches this hint too and sets the same three properties at
+    // the same weight, so only source order decides which of them wins.
+    expect(styles.indexOf('.react-flow__panel .bar__slug[data-tip]::after')).toBeGreaterThan(
+      styles.indexOf('.react-flow__panel.left [data-tip]::after'),
+    )
+  })
+
   it('positions neither bar with a fixed offset that a longer name or larger text invalidates', () => {
     for (const rule of styles.split('}')) {
       if (!/\.bar--tools|\.bar--identity/.test(rule)) continue
