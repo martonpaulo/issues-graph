@@ -120,6 +120,98 @@ describe('readCache', () => {
     expect(readCache('martonpaulo/tabelo')).toBeNull()
   })
 
+  /* Schema drift: a copy written by a build with a different idea of the shape, or edited by
+     hand in devtools. Every one of these parses as JSON, so only a structural check catches it,
+     and the failure it prevents happens in the layout rather than here. */
+
+  function corrupt(change: (stored: Record<string, unknown>) => void): void {
+    writeCache('martonpaulo/tabelo', graph())
+    const key = 'issue-graph:cache:martonpaulo/tabelo'
+    const stored = JSON.parse(entries.get(key) as string) as Record<string, unknown>
+    change(stored)
+    entries.set(key, JSON.stringify(stored))
+  }
+
+  it('ignores a copy whose issues are not an array', () => {
+    corrupt((stored) => {
+      stored.issues = { 0: { number: 1 } }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy holding an issue that lost a field the cards read', () => {
+    corrupt((stored) => {
+      delete (stored.issues as Record<string, unknown>[])[0].html_url
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose blockers are no longer number-to-issues tuples', () => {
+    corrupt((stored) => {
+      stored.blockers = [['49', []]]
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose includedClosed is not a boolean', () => {
+    corrupt((stored) => {
+      stored.includedClosed = 'true'
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose unresolved entries lost their reason', () => {
+    corrupt((stored) => {
+      stored.unresolved = [{ number: 49 }]
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  // Finite is not enough: the ECMAScript time range is ±8.64e15 ms, and 1e20 yields an Invalid
+  // Date that the banner would render as `NaN days ago`.
+  it('ignores a copy whose savedAt is outside the range a Date can hold', () => {
+    corrupt((stored) => {
+      stored.savedAt = 1e20
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy written by a version this build does not know', () => {
+    corrupt((stored) => {
+      stored.version = 2
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores text that is not JSON at all', () => {
+    writeCache('martonpaulo/tabelo', graph())
+    const [key] = [...entries][0]
+    entries.set(key, 'not json')
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  // The cache is reconstructible from GitHub, so an unreadable copy is ignored rather than
+  // deleted: removing a value this build merely fails to understand would destroy one another
+  // build still reads, and nothing here touches a key it did not read.
+  it('leaves the copy it refused, and every other key, in place', () => {
+    entries.set('issue-graph:unrelated', '"kept"')
+    corrupt((stored) => {
+      stored.version = 2
+    })
+    const before = new Map(entries)
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+    expect([...entries]).toEqual([...before])
+  })
+
   it('keeps one repository from reading another repository’s copy', () => {
     writeCache('martonpaulo/tabelo', graph())
 

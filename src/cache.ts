@@ -176,8 +176,8 @@ export function decodeStoredGraph(value: unknown): StoredGraph | undefined {
 }
 
 export function readCache(slug: string): CachedGraph | null {
-  const stored = readStored<StoredGraph | null>(`${KEY_PREFIX}${slug}`, null)
-  if (!stored || stored.version !== 1) return null
+  const stored = readStored(`${KEY_PREFIX}${slug}`, decodeStoredGraph, null)
+  if (stored === null) return null
 
   return { savedAt: new Date(stored.savedAt), data: fromStored(stored) }
 }
