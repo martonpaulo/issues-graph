@@ -5,14 +5,12 @@ import arbaroIssues from './__fixtures__/arbaro.issues.json'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { chipText } from './labels'
 import {
   buildGraph,
   cardHeight,
   chipRows,
   dependencyCounts,
   deriveState,
-  MAX_NODE_HEIGHT,
   MAX_TITLE_LINES,
   NODE_WIDTH,
   parentNodeId,
@@ -137,12 +135,31 @@ describe('chipRows and cardHeight', () => {
     expect(chipRows(['type: 改善改善改善改善改善改善改善改善改善改善改善改善'])).toBe(1)
   })
 
+  it('reserves more for an emoji than for a glyph Inter itself draws', () => {
+    // Inter carries no emoji, so the browser falls back to a face that draws roughly square —
+    // wider than any advance captured off Inter, and wider than the accented latin the same
+    // fallback is the right guess for. Measured against a narrow row so that difference is the
+    // only thing deciding the wrap.
+    expect(chipRows(['\u{1F41B}', '\u{1F41B}'], 52)).toBe(2)
+    expect(chipRows(['é', 'é'], 52)).toBe(1)
+    // A label leading with one still costs a public repository's card only the row it is on.
+    expect(chipRows(['\u{1F41B} bug'])).toBe(1)
+  })
+
+  it('keeps an arbitrary repository\'s labels inside the card', () => {
+    // A 50-character label is the longest GitHub allows; the chip is clamped to the row it wraps
+    // inside, in `styles.css` as well as here, so it costs one row and never more.
+    expect(chipRows(['a'.repeat(50)])).toBe(1)
+    expect(chipRows(['a'.repeat(50), 'b'.repeat(50), 'c'.repeat(50)])).toBe(3)
+    expect(chipRows(['bug', 'good first issue', 'help wanted'])).toBe(1)
+    expect(chipRows(['C++ / stdlib', 'needs: triage'])).toBe(1)
+  })
+
   it('grows one line at a time and only spends chip rows it has chips for', () => {
     const bare = cardHeight(1, 0)
     expect(cardHeight(2, 0) - bare).toBe(cardHeight(3, 0) - cardHeight(2, 0))
     expect(cardHeight(1, 1)).toBeGreaterThan(bare)
     expect(cardHeight(1, 2)).toBeGreaterThan(cardHeight(1, 1))
-    expect(cardHeight(MAX_TITLE_LINES, 2)).toBe(MAX_NODE_HEIGHT)
   })
 })
 
@@ -179,8 +196,11 @@ describe('deriveState', () => {
     expect(deriveState(issue({ labels: [{ name: 'in-review', color: '8B949E' }] }))).toBe('in-review')
     // Matched against the whole name, case-insensitively, exactly as the orchestrator matches it.
     expect(deriveState(issue({ labels: [{ name: 'In-Review', color: '8B949E' }] }))).toBe('in-review')
+    // The prefixed name is not the orchestrator's bare label and never becomes `in-review`. It is
+    // not one of the two `status:` values this convention defines either, so it says nothing at
+    // all rather than standing in for a state.
     expect(deriveState(issue({ labels: [{ name: 'status: in-review', color: '8B949E' }] }))).toBe(
-      'attention',
+      'ready',
     )
   })
 
@@ -195,6 +215,40 @@ describe('deriveState', () => {
     expect(deriveState(issue({ labels: [{ name: 'status: blocked', color: '24292F' }] }))).toBe(
       'attention',
     )
+  })
+
+  /**
+   * `status:` is a namespace half of GitHub uses for a board column. Reading the namespace alone
+   * put every issue on such a board into `needs attention` — the loudest state the card has, and
+   * one that means "a person has to decide something" rather than "this sits in a column".
+   */
+  it('reads a foreign board column as the nothing it says', async () => {
+    for (const name of ['status: backlog', 'status: accepted', 'status: triage', 'status: done']) {
+      const labels = [{ name, color: 'ededed' }]
+      expect(deriveState(issue({ labels, assignees: [{ login: 'octocat' }] }))).toBe('ready')
+      expect(deriveState(issue({ labels, assignees: [] }))).toBe('unassigned')
+      expect(
+        deriveState(
+          issue({
+            labels,
+            assignees: [],
+            issue_dependencies_summary: {
+              blocked_by: 1,
+              total_blocked_by: 1,
+              blocking: 0,
+              total_blocking: 0,
+            },
+          }),
+        ),
+      ).toBe('blocked')
+    }
+
+    // And the two values the convention does define still read as parked, from the same payloads.
+    for (const name of ['status: blocked', 'status: needs-decision']) {
+      expect(deriveState(issue({ labels: [{ name, color: 'ededed' }], assignees: [] }))).toBe(
+        'attention',
+      )
+    }
   })
 
   it('separates an unassigned issue from one that is free to start', async () => {
@@ -248,6 +302,57 @@ describe('deriveState', () => {
         }),
       ),
     ).toBe('completed')
+  })
+})
+
+describe('a card built from a repository this viewer knows nothing about', () => {
+  // `status: backlog` overlaps this backlog's own namespace and means something else entirely,
+  // which is the case a set of labels chosen not to collide would never have caught.
+  const arbitrary = [
+    { name: 'bug', color: 'd73a4a' },
+    { name: 'good first issue', color: '7057ff' },
+    { name: 'help wanted', color: '008672' },
+    { name: '\u{1F41B} needs repro', color: '000000' },
+    { name: 'status: backlog', color: 'ededed' },
+  ]
+
+  it('sizes itself for the chips it actually draws', async () => {
+    const graph = await buildGraph(dataFrom([issue({ labels: arbitrary })], {}), {
+      owner: 'acme',
+      repo: 'app',
+    })
+    const [node] = graph.nodes
+    const texts = node.labels.map((chip) => chip.text)
+
+    expect(texts).toEqual([
+      'bug',
+      'good first issue',
+      'help wanted',
+      '\u{1F41B} needs repro',
+      'status: backlog',
+    ])
+    expect(node.height).toBe(cardHeight(node.titleLines, chipRows(texts)))
+  })
+
+  it('still reads state from GitHub\'s own facts when no label means anything here', () => {
+    // Every taxonomy-derived state is a no-op without a label this convention defines — including
+    // the `status:` one, which is matched on its value. What is left is open or closed, whether a
+    // blocker is outstanding, and whether anybody is on it.
+    const labels = arbitrary
+    expect(deriveState(issue({ labels, assignees: [{ login: 'octocat' }] }))).toBe('ready')
+    expect(deriveState(issue({ labels, assignees: [] }))).toBe('unassigned')
+    expect(
+      deriveState(
+        issue({
+          labels,
+          assignees: [],
+          issue_dependencies_summary: { blocked_by: 1, total_blocked_by: 1, blocking: 0, total_blocking: 0 },
+        }),
+      ),
+    ).toBe('blocked')
+    expect(deriveState(issue({ labels, state: 'closed', state_reason: 'completed' }))).toBe(
+      'completed',
+    )
   })
 })
 
@@ -305,14 +410,17 @@ describe('buildGraph against captured GitHub data', () => {
 
     expect(issue12.title).toBe('Repair loop after a real CI failure')
     expect(issue12.titleLines).toBe(1)
-    expect(chipRows(issue12.labels.map(chipText))).toBe(1)
-    expect(issue12.height).toBe(cardHeight(1, 1))
+    // Four labels — the three namespaces and an `area:` — so the chips take two rows and the card
+    // pays for both. The title is still one line, which is what this card is here to show.
+    expect(issue12.labels).toHaveLength(4)
+    expect(chipRows(issue12.labels.map((chip) => chip.text))).toBe(2)
+    expect(issue12.height).toBe(cardHeight(1, 2))
 
     expect(issue13.title).toBe('Repair loop after changes_requested')
     expect(issue13.titleLines).toBe(2)
   })
 
-  it('sizes every card to its own title, within the allowed range', async () => {
+  it('sizes every card to its own title and its own chips', async () => {
     const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
     const heights = new Set(graph.nodes.map((node) => node.height))
 
@@ -321,7 +429,11 @@ describe('buildGraph against captured GitHub data', () => {
       expect(node.titleLines).toBeGreaterThanOrEqual(1)
       expect(node.titleLines).toBeLessThanOrEqual(MAX_TITLE_LINES)
       expect(node.height).toBeGreaterThanOrEqual(cardHeight(1, 0))
-      expect(node.height).toBeLessThanOrEqual(cardHeight(MAX_TITLE_LINES, 3))
+      // The card pays for exactly the rows its own chips wrap onto. No fixed ceiling: a tabelo
+      // issue carries up to eight labels and the card is drawn for all of them.
+      expect(node.height).toBe(
+        cardHeight(node.titleLines, chipRows(node.labels.map((chip) => chip.text))),
+      )
     }
   })
 
@@ -565,24 +677,63 @@ describe('buildGraph against captured GitHub data', () => {
   ])('puts every %s blocker above what it blocks', async (_name, issues, blockedBy, target) => {
     const graph = await buildGraph(dataFrom(issues, blockedBy), target)
     const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-    // arbaro #18 is blocked by the three sub-issues it was split into, so hierarchy wants the
-    // parent above its children and dependency wants them above the parent. No layout satisfies
-    // both, and the pairs holding that contradiction are the only ones exempt here. Wrapping a
-    // wide rank into sub-rows must still not let any other edge point back up the canvas.
-    const contradictory = new Set<string>()
+    // No exemption. arbaro #18 is blocked by the three sub-issues it was split into, and ordering
+    // wins that contradiction outright: the only edge allowed to point back up the canvas is the
+    // containment edge that says so with a head of its own. Wrapping a wide rank into sub-rows must
+    // not let any other edge point back up either.
     for (const edge of graph.edges) {
-      const reverse = graph.edges.find(
-        (other) => other.source === edge.target && other.target === edge.source,
-      )
-      if (reverse) {
-        contradictory.add(edge.id)
-        contradictory.add(reverse.id)
-      }
+      if (edge.inverted) continue
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeLessThan(byId.get(edge.target)!.position.y)
     }
+  })
+
+  it('draws every arbaro dependency downwards, contradicted or not', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+
+    // #18 is blocked by #37, #38 and #39, which are also its sub-issues. Before the contradiction
+    // was decided here rather than left to ELK, those three blockers were laid out below what they
+    // block, so the reader scanning downwards for "what unlocks what" read them backwards.
+    const blockers = ['arbaro#37', 'arbaro#38', 'arbaro#39'].map((id) => `martonpaulo/${id}`)
+    const parent = byId.get('martonpaulo/arbaro#18')!
+    for (const blocker of blockers) {
+      expect(byId.get(blocker)!.position.y, blocker).toBeLessThan(parent.position.y)
+    }
+
     for (const edge of graph.edges) {
-      if (contradictory.has(edge.id)) continue
-      expect(byId.get(edge.source)!.position.y).toBeLessThan(byId.get(edge.target)!.position.y)
+      if (edge.kind !== 'dependency') continue
+      expect(edge.inverted, edge.id).toBeUndefined()
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeLessThan(byId.get(edge.target)!.position.y)
     }
+  })
+
+  it('marks exactly the contradicted arbaro containment edges, and only those', async () => {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    const marked = graph.edges.filter((edge) => edge.inverted)
+
+    expect(marked.map((edge) => edge.id).sort()).toEqual(
+      [37, 38, 39].map((child) => `martonpaulo/arbaro#18=>martonpaulo/arbaro#${child}`),
+    )
+    // Marked because it is drawn upwards, and drawn upwards is what the mark has to mean.
+    const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+    for (const edge of marked) {
+      expect(edge.kind).toBe('hierarchy')
+      expect(
+        byId.get(edge.source)!.position.y,
+        edge.id,
+      ).toBeGreaterThan(byId.get(edge.target)!.position.y)
+    }
+  })
+
+  it('leaves a repository with no such contradiction unmarked', async () => {
+    const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
+    expect(graph.edges.some((edge) => edge.inverted)).toBe(false)
   })
 
   it.each([

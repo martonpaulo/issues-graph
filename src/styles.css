@@ -415,6 +415,20 @@ code {
   font-variant-numeric: tabular-nums;
 }
 
+/* A gap in the data, reported directly under the row that says where the data came from. It
+   borrows the fill and outline `.notice--error` and a blocked card already use, so the reader
+   meets no new colour. Three cues separate it from the muted row above and only one is hue: it
+   is the only thing in the panel drawn as its own box, it is the heavier weight, and it is
+   `--text` rather than `--muted`. In greyscale the box and the weight still read. */
+.info__warn {
+  padding: 4px 7px;
+  color: var(--text);
+  font-weight: 600;
+  background: var(--blocked-fill);
+  border: 1px solid var(--blocked-line);
+  border-radius: 7px;
+}
+
 /* The live region stays mounted with nothing in it, so it must also take up nothing. */
 .said--quiet {
   padding: 0;
@@ -477,9 +491,31 @@ code {
   stroke-dasharray: 5 4;
 }
 
+/* A parent blocked by the sub-issues it was split into asks for two contradicting directions at
+   once, and only one of them can point down the canvas. Ordering wins it, because an arrowhead
+   still says which end comes first wherever it is drawn while a bare dashed line says nothing but
+   where its ends sit. So the containment edge is the one drawn upwards, and it is given the head
+   its ordinary style does without: the reader sees which end is the parent instead of inferring it
+   from a position that is no longer true. */
+.edge__arrow {
+  fill: var(--hierarchy-edge);
+  stroke: none;
+  opacity: 0.75;
+}
+
+.react-flow__edge:hover .edge__arrow {
+  fill: var(--text);
+  opacity: 1;
+}
+
 .edge--lit .react-flow__edge-path {
   stroke: var(--accent);
   stroke-width: 2;
+  opacity: 1;
+}
+
+.edge--lit .edge__arrow {
+  fill: var(--accent);
   opacity: 1;
 }
 
@@ -759,6 +795,12 @@ code {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 11px;
+  /* The row the chips wrap inside has to be the card's width and not their own. As a flex item in
+     a column container nothing floors its cross size, so one long label from an arbitrary
+     repository would widen the row past the card instead of wrapping — and the chip's own
+     `max-width: 100%` below, resolved against a row that had already grown, would never clamp. */
+  width: 100%;
+  min-width: 0;
 }
 
 .chip {
@@ -771,6 +813,23 @@ code {
   background: color-mix(in srgb, currentColor 10%, transparent);
   opacity: 0.8;
   white-space: nowrap;
+  /* GitHub allows a 50-character label name, and a public repository uses the room. `graph.ts`
+     already sizes the card for a chip clamped to the row it wraps inside; this is that clamp, so a
+     long label ends in an ellipsis instead of hanging past the card's edge. `min-width` is what
+     lets a flex item shrink below its own text at all. */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A chip painted from its label's own colour. `labelColor.ts` computed the pair and guarantees it
+   at AA, but only as the two opaque colours it returned: the element's own `opacity` would
+   composite both of them toward whichever card fill is behind, and alpha compositing does not
+   preserve a contrast ratio. So a painted chip is drawn at full opacity and owes nothing to the
+   fill it sits on. */
+.chip--painted {
+  opacity: 1;
 }
 
 /* A slot the issue has no label for. Outlined and empty, because the gap is the point. */

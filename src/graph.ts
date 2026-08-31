@@ -1,6 +1,6 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
 import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
-import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
+import { cardLabels, needsAttention, type CardChip } from './labels'
 import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
@@ -52,6 +52,28 @@ const CHIP_ROW_WIDTH = 210
 const CHIP_ROW_SLACK = 1
 
 /**
+ * What one emoji costs.
+ *
+ * `CHIP_FALLBACK_CHAR_WIDTH` is the widest advance captured off Inter, which is the right guess
+ * for a glyph Inter draws but the capture did not record — an accented latin letter, a CJK
+ * ideograph the browser resolves to a face of about the same size. An emoji is not that: Inter has
+ * no emoji glyphs at all, so the browser falls back to the system emoji face, which draws roughly
+ * square and therefore wider than any Inter advance. Labels lead with one often enough on public
+ * repositories to matter, and under-reserving is the direction that pushes chips out of the card.
+ * A cluster spelled with several code points over-reserves, which only leaves slack.
+ */
+const CHIP_EMOJI_CHAR_WIDTH = 13
+
+/** Symbol and pictographic blocks the shipped Inter face does not cover. */
+function isEmoji(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
+    (codePoint >= 0x2b00 && codePoint <= 0x2bff) ||
+    codePoint >= 0x1f000
+  )
+}
+
+/**
  * How wide the browser will draw one chip.
  *
  * Summed from the advances captured off the shipped Inter face rather than from an average
@@ -64,7 +86,12 @@ const CHIP_ROW_SLACK = 1
 function chipWidth(text: string): number {
   let width = CHIP_PADDING
   for (const character of text) {
-    width += CHIP_CHAR_WIDTHS[character] ?? CHIP_FALLBACK_CHAR_WIDTH
+    const captured = CHIP_CHAR_WIDTHS[character]
+    if (captured !== undefined) {
+      width += captured
+      continue
+    }
+    width += isEmoji(character.codePointAt(0)!) ? CHIP_EMOJI_CHAR_WIDTH : CHIP_FALLBACK_CHAR_WIDTH
   }
   return width
 }
@@ -130,9 +157,6 @@ export function cardHeight(titleLines: number, rows: number): number {
   return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + chips
 }
 
-/** The tallest a card is expected to get, which is what a bounding estimate has to assume. */
-export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, 2)
-
 export type IssueState =
   | 'ready'
   | 'unassigned'
@@ -168,7 +192,7 @@ export interface GraphNode {
    * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
    */
   repoLabel: string
-  /** The slots the card shows, filled or not. External cards show none. */
+  /** The chips the card draws, canonical slots first. External cards draw none. */
   labels: CardChip[]
   /** Every label on the issue, which is what the highlight picker offers. */
   allLabels: string[]
@@ -203,6 +227,12 @@ export interface GraphEdge {
   target: string
   /** The orthogonal route the layout reserved for this edge, in canvas coordinates. */
   points?: Point[]
+  /**
+   * True when this edge runs against the canvas's top-to-bottom order, so its direction cannot be
+   * read from position and has to be stated. Only ever set on a hierarchy edge; see
+   * {@link invertedEdges}.
+   */
+  inverted?: boolean
 }
 
 /**
@@ -286,8 +316,11 @@ function hasLabel(issue: IssuePayload, name: string): boolean {
  *
  * 1. `in-review` first, because an issue whose change is already written and waiting is the one
  *    error that costs somebody a second implementation of finished work.
- * 2. A `status:` label next. Its description says `in-progress` travels with every one of them, so
- *    the pair means the issue is parked on a human, and parked is the fact worth showing.
+ * 2. A `status:` label whose value this convention defines next. Its description says
+ *    `in-progress` travels with every one of them, so the pair means the issue is parked on a
+ *    human, and parked is the fact worth showing. The value is what is matched, never the
+ *    namespace: `status:` is a namespace half of GitHub uses for board columns, and a repository
+ *    whose issues sit in `status: backlog` is not a repository of issues waiting on somebody.
  * 3. `in-progress` alone: a worker is holding it right now.
  * 4. `blocked_by` counts blockers that are still **open**, while `total_blocked_by` counts open and
  *    closed ones. So `blocked_by > 0` is exactly "has an unfinished blocker", and an issue whose
@@ -304,7 +337,7 @@ export function deriveState(issue: IssuePayload): IssueState {
     return issue.state_reason === 'not_planned' ? 'not-planned' : 'completed'
   }
   if (hasLabel(issue, IN_REVIEW_LABEL)) return 'in-review'
-  if (hasNamespace(issue.labels, 'status')) return 'attention'
+  if (needsAttention(issue.labels)) return 'attention'
   if (hasLabel(issue, IN_PROGRESS_LABEL)) return 'in-progress'
   if ((issue.issue_dependencies_summary?.blocked_by ?? 0) > 0) return 'blocked'
   if (issue.assignees?.length === 0) return 'unassigned'
@@ -341,7 +374,7 @@ function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
   const state = external ? null : deriveState(issue)
   const labels = external ? [] : cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
-  const rows = chipRows(labels.map(chipText))
+  const rows = chipRows(labels.map((chip) => chip.text))
   return {
     id: nodeId(repo, issue.number),
     number: issue.number,
@@ -566,6 +599,41 @@ function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
   return [...groups.values()]
 }
 
+/**
+ * The hierarchy edges that contradict a dependency edge between the same two issues.
+ *
+ * A parent split into sub-issues and then blocked by them is legitimate data, and the two relations
+ * it produces disagree about direction: containment puts the parent above its children, ordering
+ * puts a blocker above what it blocks. No layout satisfies both, so one of them has to be drawn
+ * against the canvas's top-to-bottom order.
+ *
+ * Ordering wins, and the choice is not a coin toss. This canvas exists to answer what unlocks what,
+ * containment carries no order at all — `kindOf` calls a purely contained component a breakdown
+ * rather than a chain, and `dependencyCounts` ignores hierarchy edges outright — and, decisively, a
+ * dependency edge is drawn with an arrowhead while a hierarchy edge deliberately is not. An arrow
+ * still says which end comes first wherever it is drawn; a dashed line with no marker says nothing
+ * but where its ends sit. So the relation whose meaning survives inversion is the one kept upright,
+ * and the one that would lose its meaning is marked instead: these ids get `inverted`, and the
+ * canvas draws them with the arrowhead their ordinary style does without.
+ *
+ * Deciding it here rather than leaving the cycle to ELK also makes it deterministic. Handed a
+ * two-node cycle the engine breaks it however it likes, so the same repository could mark different
+ * edges between two versions of it.
+ */
+export function invertedEdges(edges: GraphEdge[]): Set<string> {
+  const blocks = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind === 'dependency') blocks.add(`${edge.source} ${edge.target}`)
+  }
+
+  const inverted = new Set<string>()
+  for (const edge of edges) {
+    if (edge.kind !== 'hierarchy') continue
+    if (blocks.has(`${edge.target} ${edge.source}`)) inverted.add(edge.id)
+  }
+  return inverted
+}
+
 const GROUP_WORD: Record<GraphGroup['kind'], string> = {
   chain: 'Chain',
   breakdown: 'Breakdown',
@@ -642,6 +710,9 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
   if (nodes.length === 0) return { nodes, groups: [], routes: new Map() }
 
   const components = componentsOf(nodes, edges)
+  // Handed to ELK the other way round, so the engine never sees the two-node cycle a parent blocked
+  // by its own sub-issues makes, and every dependency edge comes back pointing down the canvas.
+  const inverted = invertedEdges(edges)
   const connected = components.filter((group) => group.length > 1)
   const loose = components.filter((group) => group.length === 1).flat()
   const placed = new Map<string, GraphNode>(
@@ -679,7 +750,11 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
         })),
         edges: edges
           .filter((edge) => ids.has(edge.source) && ids.has(edge.target))
-          .map((edge) => ({ id: edge.id, sources: [edge.source], targets: [edge.target] })),
+          .map((edge) =>
+            inverted.has(edge.id)
+              ? { id: edge.id, sources: [edge.target], targets: [edge.source] }
+              : { id: edge.id, sources: [edge.source], targets: [edge.target] },
+          ),
       })
     } catch (error) {
       // The engine that just failed is kept for the rest of the session otherwise, so the retry the
@@ -697,11 +772,11 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
     for (const edge of result.edges ?? []) {
       const section = edge.sections?.[0]
       if (!section) continue
-      routes.set(edge.id, [
-        section.startPoint,
-        ...(section.bendPoints ?? []),
-        section.endPoint,
-      ])
+      const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
+      // The route ELK drew runs the way it was asked, so a reversed edge gets its route turned back
+      // round: the polyline still leaves the parent and arrives at the child, which is where the
+      // arrowhead marking the inversion has to land.
+      routes.set(edge.id, inverted.has(edge.id) ? points.reverse() : points)
     }
 
     for (const component of connected) {
@@ -843,10 +918,15 @@ export async function buildGraph(
   }
 
   const laid = await layout([...nodes.values()], edges)
+  const inverted = invertedEdges(edges)
 
   return {
     nodes: laid.nodes,
-    edges: edges.map((edge) => ({ ...edge, points: laid.routes.get(edge.id) })),
+    edges: edges.map((edge) => ({
+      ...edge,
+      points: laid.routes.get(edge.id),
+      inverted: inverted.has(edge.id) || undefined,
+    })),
     groups: laid.groups,
     identity: canonicalSlug(targetSlug),
     complete: data.complete,
