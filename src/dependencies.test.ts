@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
-import { adjacencyOf, dependencyRows, describeNode, issueRef } from './dependencies'
+import {
+  adjacencyOf,
+  containmentRows,
+  dependencyRows,
+  describeNode,
+  issueRef,
+} from './dependencies'
 import type { IssuePayload, RepositoryGraphData } from './github'
 import { buildGraph, nodeId, type IssueGraph } from './graph'
 
@@ -205,22 +211,121 @@ describe('a sub-issue hierarchy', () => {
 
   it('never reads containment as an ordering', async () => {
     const graph = await withParent()
+    const adjacency = adjacencyOf(graph)
 
     // The parent contains #6; it does not block it, and #6 does not wait on it.
+    expect(adjacency.get('acme/app#5')?.blocks).toEqual([])
+    expect(adjacency.get('acme/app#6')?.blockedBy.map((node) => node.id)).toEqual(['acme/app#7'])
+
+    // The containment is said in clauses of its own, after both ordering clauses.
     expect(describe_(graph, 'acme/app#5')).toBe(
-      'Issue #5. Blocked by nothing. Blocks nothing.',
+      'Issue #5. Blocked by nothing. Blocks nothing. Contains #6.',
     )
-    // The child waits on its real blocker and on nothing else.
-    expect(describe_(graph, 'acme/app#6')).toBe('Issue #6. Blocked by #7. Blocks nothing.')
+    // The child waits on its real blocker and on nothing else, and is part of its parent.
+    expect(describe_(graph, 'acme/app#6')).toBe(
+      'Issue #6. Blocked by #7. Blocks nothing. Part of #5.',
+    )
+    // An issue in no breakdown says nothing about containment rather than "Part of nothing".
     expect(describe_(graph, 'acme/app#7')).toBe('Issue #7. Blocked by nothing. Blocks #6.')
   })
 
-  it('keeps containment out of the table of orderings', async () => {
-    const rows = dependencyRows(await withParent())
+  it('keeps containment out of the table of orderings and in its own', async () => {
+    const graph = await withParent()
 
-    expect(rows.map((row) => `${row.blocker.id}->${row.dependent.id}`)).toEqual([
+    expect(dependencyRows(graph).map((row) => `${row.blocker.id}->${row.dependent.id}`)).toEqual([
       'acme/app#7->acme/app#6',
     ])
+    expect(containmentRows(graph).map((row) => `${row.parent.id}->${row.child.id}`)).toEqual([
+      'acme/app#5->acme/app#6',
+    ])
+  })
+
+  it('reaches every drawn hierarchy edge, once', async () => {
+    const graph = await withParent()
+
+    expect(containmentRows(graph).map((row) => row.id).sort()).toEqual(
+      graph.edges.filter((edge) => edge.kind === 'hierarchy').map((edge) => edge.id).sort(),
+    )
+  })
+
+  it('names a parent by the repository it lives in when that is not the local one', async () => {
+    // A sub-issue whose parent was pulled in as a blocker from another repository: the parent is
+    // an external node, so both surfaces have to qualify it or the number means nothing.
+    const graph = await buildGraph(
+      dataFrom(
+        [
+          issue({
+            number: 6,
+            title: 'A sub-issue',
+            parent_issue_url: 'https://api.github.com/repos/other/lib/issues/9',
+          }),
+        ],
+        {
+          6: [
+            issue({
+              number: 9,
+              title: 'The parent',
+              repository_url: 'https://api.github.com/repos/other/lib',
+              html_url: 'https://github.com/other/lib/issues/9',
+            }),
+          ],
+        },
+      ),
+      { owner: 'acme', repo: 'app' },
+    )
+
+    // The same pair carries a real dependency too, so the two relations are said side by side and
+    // neither borrows the other's words.
+    expect(describe_(graph, 'acme/app#6')).toBe(
+      'Issue #6. Blocked by other/lib#9. Blocks nothing. Part of other/lib#9.',
+    )
+    expect(describe_(graph, 'other/lib#9')).toBe(
+      'Issue other/lib#9. Blocked by nothing. Blocks #6. Contains #6.',
+    )
+    expect(containmentRows(graph).map((row) => `${issueRef(row.parent)}->${issueRef(row.child)}`))
+      .toEqual(['other/lib#9->#6'])
+  })
+
+  it('follows the closed-blocker toggle, exactly as the drawing does', async () => {
+    async function withClosedParent(showClosed: boolean) {
+      return buildGraph(
+        dataFrom(
+          [
+            issue({
+              number: 6,
+              title: 'A sub-issue',
+              parent_issue_url: 'https://api.github.com/repos/other/lib/issues/9',
+            }),
+          ],
+          {
+            6: [
+              issue({
+                number: 9,
+                title: 'The finished parent',
+                state: 'closed',
+                state_reason: 'completed',
+                repository_url: 'https://api.github.com/repos/other/lib',
+                html_url: 'https://github.com/other/lib/issues/9',
+              }),
+            ],
+          },
+        ),
+        { owner: 'acme', repo: 'app' },
+        { showClosed },
+      )
+    }
+
+    // Default view: the closed parent is not drawn, so it is not announced either.
+    const hidden = await withClosedParent(false)
+    expect(hidden.edges.filter((edge) => edge.kind === 'hierarchy')).toHaveLength(0)
+    expect(containmentRows(hidden)).toEqual([])
+    expect(describe_(hidden, 'acme/app#6')).toBe('Issue #6. Blocked by nothing. Blocks nothing.')
+
+    // Asked for: the edge is drawn, so the text carries it, and the table reports the state.
+    const shown = await withClosedParent(true)
+    expect(shown.edges.filter((edge) => edge.kind === 'hierarchy')).toHaveLength(1)
+    expect(describe_(shown, 'acme/app#6')).toContain('Part of other/lib#9.')
+    expect(containmentRows(shown).map((row) => row.parent.open)).toEqual([false])
   })
 })
 

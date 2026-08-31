@@ -10,6 +10,8 @@ import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
   App,
   blockerStateText,
+  ContainmentTable,
+  CONTAINMENT_LEGEND,
   DependencyTable,
   DIRECTION_LEGEND,
   budgetParts,
@@ -21,6 +23,7 @@ import {
   failureText,
   graphBounds,
   nextIssueSelection,
+  relationshipSummary,
   SelectionBar,
   TopChrome,
 } from './App'
@@ -28,7 +31,7 @@ import { decideSavedCopyOpen } from './graphSession'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { dependencyRows, issueRef } from './dependencies'
+import { containmentRows, dependencyRows, issueRef } from './dependencies'
 import { buildGraph, NODE_WIDTH, type GraphNode, type IssueGraph } from './graph'
 
 const narrowData: RepositoryGraphData = {
@@ -395,6 +398,23 @@ describe('describeUnresolved', () => {
 })
 
 describe('the dependencies as text', () => {
+  /** The smallest payload `buildGraph` accepts, for the cases that need no fixture. */
+  const ISSUE: IssuePayload = {
+    number: 1,
+    title: 'An issue',
+    state: 'open',
+    state_reason: null,
+    html_url: 'https://github.com/acme/app/issues/1',
+    repository_url: 'https://api.github.com/repos/acme/app',
+    labels: [],
+    issue_dependencies_summary: {
+      blocked_by: 0,
+      total_blocked_by: 0,
+      blocking: 0,
+      total_blocking: 0,
+    },
+  }
+
   it('renders one row per drawn edge, both ends named', async () => {
     const graph = await buildGraph(
       {
@@ -438,6 +458,56 @@ describe('the dependencies as text', () => {
     expect(html).toContain(DIRECTION_LEGEND)
     expect(html).toContain('<th scope="col">Blocker</th>')
     expect(html).toContain('<th scope="col">Blocks</th>')
+  })
+
+  it('renders containment in its own table, which claims no ordering', async () => {
+    const graph = await buildGraph(
+      {
+        issues: [
+          { ...ISSUE, number: 5, title: 'The parent' },
+          {
+            ...ISSUE,
+            number: 6,
+            title: 'A sub-issue',
+            parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
+          },
+        ],
+        blockers: new Map(),
+        complete: true,
+        unresolved: [],
+        rateLimited: false,
+        rateLimitReset: null,
+        requestCount: 1,
+        rateLimit: null,
+        includedClosed: true,
+      },
+      { owner: 'acme', repo: 'app' },
+    )
+
+    const rows = containmentRows(graph)
+    const html = renderToStaticMarkup(createElement(ContainmentTable, { rows }))
+
+    // Every hierarchy edge the canvas draws, reachable without tracing it.
+    expect(rows).toHaveLength(
+      graph.edges.filter((edge) => edge.kind === 'hierarchy').length,
+    )
+    expect(html).toContain('<span class="deps__ref">#5</span> <span class="deps__title">')
+    expect(html).toContain('<span class="deps__ref">#6</span> <span class="deps__title">')
+
+    // Containment, in containment's own words. Nothing here says one issue comes before another,
+    // and the dependency table's own legend never appears on it.
+    expect(html).toContain(CONTAINMENT_LEGEND)
+    expect(html).toContain('<th scope="col">Parent</th>')
+    expect(html).toContain('<th scope="col">Contains</th>')
+    expect(html).not.toContain('Blocker')
+    expect(html).not.toContain(DIRECTION_LEGEND)
+  })
+
+  it('names both kinds on the control that opens the list, and drops an absent one', () => {
+    expect(relationshipSummary(3, 2)).toBe('3 dependencies and 2 sub-issues')
+    expect(relationshipSummary(1, 1)).toBe('1 dependency and 1 sub-issue')
+    expect(relationshipSummary(4, 0)).toBe('4 dependencies')
+    expect(relationshipSummary(0, 1)).toBe('1 sub-issue')
   })
 })
 

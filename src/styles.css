@@ -1058,6 +1058,11 @@ code {
   text-align: left;
 }
 
+/* The second table needs air above it, or its caption reads as a last row of the first. */
+.deps__table + .deps__table {
+  margin-top: 14px;
+}
+
 .deps__caption {
   caption-side: top;
   padding: 0 6px 6px;

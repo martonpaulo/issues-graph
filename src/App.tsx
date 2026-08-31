@@ -24,9 +24,11 @@ import {
 
 import {
   adjacencyOf,
+  containmentRows,
   dependencyRows,
   describeNode,
   issueRef,
+  type ContainmentRow,
   type DependencyRow,
 } from './dependencies'
 import {
@@ -600,12 +602,68 @@ export function DependencyTable({ rows }: { rows: DependencyRow[] }) {
 }
 
 /**
- * The dependencies as a table.
+ * Every drawn hierarchy edge as a row: the parent, whether it is finished, and what it holds.
  *
- * The arrows carry the whole point of this page and they carry it as geometry, which leaves anyone
- * not reading the drawing with cards and no order between them. This is the same edge list the
+ * Its own table rather than extra rows or a kind column on the dependency table, because that
+ * table's caption claims every row is an ordering and containment is not one. Two tables each say
+ * something true of every row they hold, and the reader who needs this is precisely the one who
+ * cannot see that the drawn line has no arrowhead.
+ */
+export function ContainmentTable({ rows }: { rows: ContainmentRow[] }) {
+  return (
+    <table className="deps__table">
+      <caption className="deps__caption">
+        {rows.length} sub-issue{rows.length === 1 ? '' : 's'} · {CONTAINMENT_LEGEND}
+      </caption>
+      <thead>
+        <tr>
+          <th scope="col">Parent</th>
+          <th scope="col">State</th>
+          <th scope="col">Contains</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.id}>
+            <td>
+              <span className="deps__ref">{issueRef(row.parent)}</span>{' '}
+              <span className="deps__title">{row.parent.title}</span>
+            </td>
+            <td className="deps__state">{blockerStateText(row.parent)}</td>
+            <td>
+              <span className="deps__ref">{issueRef(row.child)}</span>{' '}
+              <span className="deps__title">{row.child.title}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/**
+ * `3 dependencies and 2 sub-issues`, `1 dependency`, `2 sub-issues`: what the panel holds, named
+ * on the button that opens it so a reader knows before opening whether the graph has either kind.
+ */
+export function relationshipSummary(dependencies: number, containments: number): string {
+  const parts: string[] = []
+  if (dependencies > 0) parts.push(`${dependencies} dependenc${dependencies === 1 ? 'y' : 'ies'}`)
+  if (containments > 0) parts.push(`${containments} sub-issue${containments === 1 ? '' : 's'}`)
+  return parts.join(' and ')
+}
+
+/**
+ * The drawn edges as tables.
+ *
+ * The lines carry the whole point of this page and they carry it as geometry, which leaves anyone
+ * not reading the drawing with cards and no relation between them. This is the same edge list the
  * canvas draws, read row by row instead of traced: one row per drawn edge, so the two surfaces
- * cannot disagree about which issue blocks which.
+ * cannot disagree about which issue blocks which or which issue contains which.
+ *
+ * Two tables, not one. The dependency table's caption claims that every row is an ordering, and
+ * that claim is what makes the table worth traversing; a containment row inside it would make the
+ * claim conditional for a reader who has no arrowhead to check it against. Either table is
+ * rendered only when the graph actually drew that kind of edge.
  *
  * Mounted only while open, because on a large backlog it is a row per edge and nobody pays for it
  * until they ask.
@@ -613,8 +671,11 @@ export function DependencyTable({ rows }: { rows: DependencyRow[] }) {
 function DependencyList({ graph }: { graph: IssueGraph }) {
   const [open, setOpen] = useState(false)
   const rows = useMemo(() => dependencyRows(graph), [graph])
+  const containment = useMemo(() => containmentRows(graph), [graph])
 
-  if (rows.length === 0) return null
+  if (rows.length === 0 && containment.length === 0) return null
+
+  const summary = relationshipSummary(rows.length, containment.length)
 
   return (
     <span className="picker">
@@ -622,8 +683,8 @@ function DependencyList({ graph }: { graph: IssueGraph }) {
         className="iconbutton"
         type="button"
         aria-expanded={open}
-        aria-label={`List the ${rows.length} dependencies as text`}
-        data-tip="List the dependencies"
+        aria-label={`List the ${summary} as text`}
+        data-tip="List the relationships"
         onClick={() => setOpen((value) => !value)}
       >
         <Icon name="list" />
@@ -632,19 +693,20 @@ function DependencyList({ graph }: { graph: IssueGraph }) {
       {open && (
         <div className="picker__panel deps">
           <div className="picker__head">
-            <span>Dependencies</span>
+            <span>Relationships</span>
             <button
               className="iconbutton"
               type="button"
-              aria-label="Close the dependency list"
-              data-tip="Close the dependency list"
+              aria-label="Close the relationship list"
+              data-tip="Close the relationship list"
               onClick={() => setOpen(false)}
             >
               <Icon name="close" size={12} />
             </button>
           </div>
           <div className="deps__scroll">
-            <DependencyTable rows={rows} />
+            {rows.length > 0 && <DependencyTable rows={rows} />}
+            {containment.length > 0 && <ContainmentTable rows={containment} />}
           </div>
         </div>
       )}
@@ -871,6 +933,12 @@ function useCanvasShortcuts({
  * written down, and anyone reading it for the first time benefits from the same line.
  */
 export const DIRECTION_LEGEND = 'Arrow: blocker \u2192 dependent'
+
+/**
+ * Containment has no arrow to explain, so its legend names the direction the columns read in
+ * instead. Deliberately not phrased as an ordering: a parent does not come before its sub-issues.
+ */
+export const CONTAINMENT_LEGEND = 'Parent contains sub-issue'
 
 type TopLeftBarProps = {
   slug: string
