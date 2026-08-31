@@ -96,6 +96,26 @@ export function slugOf(target: RepoTarget): string {
   return `${target.owner}/${target.repo}`
 }
 
+/**
+ * The one spelling an identity is keyed by.
+ *
+ * GitHub's `owner` and `repo` path parameters are not case-sensitive, so `Acme/App` and `acme/app`
+ * address the same repository and its payloads answer in one canonical casing that the route need
+ * not match. Two repositories differing only in case cannot both exist, so folding case merges
+ * spellings of one repository and never two different ones. Names are ASCII — `parseRoute` rejects
+ * anything else — so `toLowerCase` has no locale-dependent behavior here.
+ *
+ * https://docs.github.com/en/rest/issues/issue-dependencies
+ */
+export function canonicalSlug(slug: string): string {
+  return slug.toLowerCase()
+}
+
+/** The canonical identity of a route target: a storage key, never a label. */
+export function canonicalSlugOf(target: RepoTarget): string {
+  return canonicalSlug(slugOf(target))
+}
+
 /** The product's name for what the page shows, and the title of the index route. */
 export const TITLE = 'Issue dependencies'
 

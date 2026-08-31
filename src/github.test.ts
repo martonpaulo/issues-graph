@@ -376,8 +376,35 @@ describe('paginated blockers', () => {
     if (!result.ok) return
     expect(result.data.complete).toBe(false)
     expect(result.data.blockers.has(1)).toBe(false)
-    expect(result.data.unresolved).toEqual([{ number: 1, reason: 'GitHub answered 500.' }])
+    expect(result.data.unresolved).toEqual([{ number: 1, reason: 'GitHub returned error 500' }])
     expect(result.data.requestCount).toBe(3)
+  })
+
+  it('keeps one reason per issue when the dependency requests fail for different causes', async () => {
+    // Three issues, three unrelated causes. The reader has to be able to tell which is which:
+    // a 404 is theirs to explain, a network error is worth retrying, and a 500 is GitHub's.
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      const href = String(url)
+      if (!href.includes('/dependencies/blocked_by')) {
+        return json([issue(1, 1), issue(2, 1), issue(3, 1)])
+      }
+      if (href.includes('/issues/1/')) throw new TypeError('Failed to fetch')
+      if (href.includes('/issues/2/')) return json({ message: 'Not Found' }, { status: 404 })
+      return json({ message: 'Server Error' }, { status: 500 })
+    })
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.complete).toBe(false)
+    expect(result.data.unresolved).toEqual([
+      { number: 1, reason: 'Failed to fetch' },
+      { number: 2, reason: 'dependencies were not found' },
+      { number: 3, reason: 'GitHub returned error 500' },
+    ])
   })
 
   it('stops on a rate limit met on a later page', async () => {

@@ -1,7 +1,7 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
 import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
 import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
-import type { RepoTarget } from './route'
+import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
  * Turns GitHub's payloads into a laid-out graph. Pure: no network, no React, no DOM. Every
@@ -189,6 +189,17 @@ export interface IssueGraph {
   nodes: GraphNode[]
   edges: GraphEdge[]
   groups: GraphGroup[]
+  /**
+   * The repository this drawing is of, canonically, and the repository every node ID is qualified
+   * with. It is not always the address the reader is on: a rename redirect serves one repository
+   * under an older name, and a trusted read then answers with the current one.
+   *
+   * Anything that has to survive leaving this browser is bound to this rather than to the address.
+   * A shared link built from the address would carry issues the recipient reads as somebody else's
+   * — the recipient does not trust the payload to name its own repository, and rightly — so the
+   * link would draw every card as external and join no edges at all.
+   */
+  identity: string
   /** False when any dependency could not be read. The canvas must say so rather than imply whole. */
   complete: boolean
   unresolved: UnresolvedDependency[]
@@ -203,8 +214,13 @@ export function repoOf(repositoryUrl: string): string {
   return match ? match[1] : 'unknown/unknown'
 }
 
+/**
+ * The graph's identity for one issue. The repository half is canonicalized, so a card reached
+ * through the route and the same card reached as somebody's blocker are one node however the two
+ * payloads spell the repository.
+ */
 export function nodeId(repo: string, number: number): string {
-  return `${repo}#${number}`
+  return `${canonicalSlug(repo)}#${number}`
 }
 
 export function isOpen(issue: IssuePayload): boolean {
@@ -226,11 +242,12 @@ export function deriveState(issue: IssuePayload): IssueState {
   return (issue.issue_dependencies_summary?.blocked_by ?? 0) > 0 ? 'blocked' : 'ready'
 }
 
-function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
+function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
   const repo = repoOf(issue.repository_url)
-  const external = repo !== `${target.owner}/${target.repo}`
+  const external = canonicalSlug(repo) !== canonicalSlug(targetSlug)
   const [owner, name] = repo.split('/')
-  const repoLabel = external ? (owner === target.owner ? name : repo) : ''
+  const sameOwner = canonicalSlug(owner) === canonicalSlug(targetSlug.split('/')[0])
+  const repoLabel = external ? (sameOwner ? name : repo) : ''
   const state = external ? null : deriveState(issue)
   const labels = external ? [] : cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
@@ -509,6 +526,39 @@ export interface BuildOptions {
    * backlog reads as what is left to do rather than as what has already happened.
    */
   showClosed?: boolean
+  /**
+   * Lets the payloads name the repository being drawn, rather than the address the reader is on.
+   *
+   * True only for data this browser read from GitHub, or its own saved copy of such a read. A
+   * shared link's payload is a hand-writable string: `readSnapshot` binds the link to the
+   * repository in its path, and trusting the issues inside it to name the repository would hand
+   * that binding straight back to whoever wrote the link, letting somebody else's issues be drawn
+   * as local under an address that names a repository they have nothing to do with. Off by
+   * default, so a caller that has not thought about provenance gets the address it is on.
+   */
+  trustedIdentity?: boolean
+}
+
+/**
+ * Which repository the drawing is of.
+ *
+ * Every issue in a trusted `data.issues` came from the repository GitHub resolved the request to,
+ * so its `repository_url` carries GitHub's own spelling of that repository. The route's spelling
+ * can differ — owner and repository path parameters are not case-sensitive, and a renamed
+ * repository is still served under its old name through a redirect — and deriving node IDs from
+ * the route is how the same issue ended up as two identities, one of them wrongly external, with
+ * every edge between them lost.
+ *
+ * Untrusted data never gets that authority, and neither does an empty read, where there is nothing
+ * to join anyway: both fall back to the address, which is bound to the repository elsewhere.
+ * Identity is only ever compared canonically, so the fallback still joins every casing of the
+ * address to the payloads' own spelling of the same name.
+ *
+ * https://docs.github.com/en/rest/issues/issue-dependencies
+ */
+function resolvedTarget(data: RepositoryGraphData, target: RepoTarget, trusted: boolean): string {
+  const first = trusted ? data.issues[0] : undefined
+  return first ? repoOf(first.repository_url) : slugOf(target)
 }
 
 export async function buildGraph(
@@ -517,11 +567,12 @@ export async function buildGraph(
   options: BuildOptions = {},
 ): Promise<IssueGraph> {
   const showClosed = options.showClosed === true
+  const targetSlug = resolvedTarget(data, target, options.trustedIdentity === true)
   const nodes = new Map<string, GraphNode>()
   // The list is of open issues; this guards the invariant rather than expecting to drop anything.
   for (const issue of data.issues) {
     if (!isOpen(issue)) continue
-    const node = toNode(issue, target)
+    const node = toNode(issue, targetSlug)
     nodes.set(node.id, node)
   }
 
@@ -529,14 +580,14 @@ export async function buildGraph(
   const seen = new Set<string>()
 
   for (const [number, blockers] of data.blockers) {
-    const targetId = nodeId(`${target.owner}/${target.repo}`, number)
+    const targetId = nodeId(targetSlug, number)
     if (!nodes.has(targetId)) continue
 
     for (const blocker of blockers) {
       if (!showClosed && !isOpen(blocker)) continue
 
       // A blocker in another repository is not in the issue list, so it joins the graph here.
-      const blockerNode = toNode(blocker, target)
+      const blockerNode = toNode(blocker, targetSlug)
       if (!nodes.has(blockerNode.id)) nodes.set(blockerNode.id, blockerNode)
 
       const id = `${blockerNode.id}->${targetId}`
@@ -552,6 +603,7 @@ export async function buildGraph(
     nodes: laid.nodes,
     edges: edges.map((edge) => ({ ...edge, points: laid.routes.get(edge.id) })),
     groups: laid.groups,
+    identity: canonicalSlug(targetSlug),
     complete: data.complete,
     unresolved: data.unresolved,
     rateLimited: data.rateLimited,

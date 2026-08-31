@@ -568,3 +568,174 @@ describe('buildGraph edge cases not present in the captured data', () => {
     expect(graph.unresolved).toHaveLength(1)
   })
 })
+
+/**
+ * GitHub resolves `owner` and `repo` case-insensitively and serves a renamed repository through a
+ * redirect, so the spelling in the address is not necessarily the spelling in the payloads. The
+ * graph's identity comes from the payloads, and these cases are what that has to buy.
+ *
+ * https://docs.github.com/en/rest/issues/issue-dependencies
+ */
+describe('repository identity is canonical, not what the address happened to spell', () => {
+  function blockedPair() {
+    const blocked = issue({
+      number: 5,
+      issue_dependencies_summary: {
+        blocked_by: 1,
+        total_blocked_by: 1,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    })
+    const blocker = issue({ number: 2, title: 'Lands first' })
+    return dataFrom([blocked, blocker], { 5: [blocker] })
+  }
+
+  it('draws the same graph from a mixed-case route as from the canonical one', async () => {
+    // Both payloads say `acme/app`; only the address disagrees.
+    const mixed = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+    const exact = await buildGraph(blockedPair(), { owner: 'acme', repo: 'app' })
+
+    expect(mixed.nodes.map((node) => node.id).sort()).toEqual(
+      exact.nodes.map((node) => node.id).sort(),
+    )
+    expect(mixed.edges).toMatchObject([
+      { id: 'acme/app#2->acme/app#5', source: 'acme/app#2', target: 'acme/app#5' },
+    ])
+    expect(mixed.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('keeps local issues local when the address spells the repository differently', async () => {
+    const graph = await buildGraph(blockedPair(), { owner: 'ACME', repo: 'APP' })
+
+    for (const node of graph.nodes) {
+      expect(node.external).toBe(false)
+      expect(node.repoLabel).toBe('')
+      // A local card still carries workflow state; an external one has none.
+      expect(node.state).not.toBeNull()
+    }
+  })
+
+  it('joins the graph when a rename redirected a trusted read to another name', async () => {
+    // GitHub answers `acme/old-app` under its current name, so the payloads and the address share
+    // no spelling at all. A read this browser just made may say which repository it is of.
+    const graph = await buildGraph(
+      blockedPair(),
+      { owner: 'acme', repo: 'old-app' },
+      { trustedIdentity: true },
+    )
+
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('reports the identity it drew, so what leaves this browser is bound to it', async () => {
+    // A trusted read through an old alias answers with the current repository, and that is what
+    // the cards belong to. A shared link or a hidden-card key built from the address instead would
+    // name a repository none of these nodes are qualified with.
+    const redirected = await buildGraph(
+      blockedPair(),
+      { owner: 'acme', repo: 'old-app' },
+      { trustedIdentity: true },
+    )
+    expect(redirected.identity).toBe('acme/app')
+    expect(redirected.nodes.every((node) => node.id.startsWith('acme/app#'))).toBe(true)
+
+    // Untrusted data does not get to name it, so the identity is the address, canonically.
+    const untrusted = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+    expect(untrusted.identity).toBe('acme/app')
+  })
+
+  it('does not let untrusted data name the repository being drawn', async () => {
+    // The shape of a crafted shared link: its path and its own slug field say `acme/app`, which is
+    // all `readSnapshot` checks, while the issues inside it come from somewhere else entirely.
+    // Those issues must not be drawn as this repository's own.
+    const crafted = dataFrom(
+      [
+        issue({
+          number: 5,
+          repository_url: 'https://api.github.com/repos/evil/repo',
+          html_url: 'https://github.com/evil/repo/issues/5',
+        }),
+      ],
+      {},
+    )
+
+    const graph = await buildGraph(crafted, { owner: 'acme', repo: 'app' })
+
+    expect(graph.nodes).toHaveLength(1)
+    expect(graph.nodes[0]).toMatchObject({
+      id: 'evil/repo#5',
+      external: true,
+      repoLabel: 'evil/repo',
+      // An external card carries no local workflow state and no label chips.
+      state: null,
+      labels: [],
+    })
+  })
+
+  it('still folds casing without trusting the data to name the repository', async () => {
+    // The default path: the address owns the identity, and canonical comparison is what makes
+    // `Acme/App` and the payloads' `acme/app` one repository rather than two.
+    const graph = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('still qualifies a cross-repository blocker by its own repository', async () => {
+    const blocked = issue({
+      number: 5,
+      issue_dependencies_summary: {
+        blocked_by: 2,
+        total_blocked_by: 2,
+        blocking: 0,
+        total_blocking: 0,
+      },
+    })
+    const sibling = issue({
+      number: 7,
+      repository_url: 'https://api.github.com/repos/acme/other',
+      html_url: 'https://github.com/acme/other/issues/7',
+    })
+    const foreign = issue({
+      number: 30,
+      repository_url: 'https://api.github.com/repos/other/lib',
+      html_url: 'https://github.com/other/lib/issues/30',
+    })
+
+    const graph = await buildGraph(dataFrom([blocked], { 5: [sibling, foreign] }), {
+      owner: 'Acme',
+      repo: 'App',
+    })
+
+    const byNumber = new Map(graph.nodes.map((node) => [node.number, node]))
+    expect(byNumber.get(7)).toMatchObject({ id: 'acme/other#7', external: true, repoLabel: 'other' })
+    expect(byNumber.get(30)).toMatchObject({
+      id: 'other/lib#30',
+      external: true,
+      repoLabel: 'other/lib',
+    })
+    expect(graph.edges.map((edge) => edge.id).sort()).toEqual([
+      'acme/other#7->acme/app#5',
+      'other/lib#30->acme/app#5',
+    ])
+  })
+
+  it('draws the captured repositories whole from a mixed-case address', async () => {
+    const aw = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+      owner: 'MartonPaulo',
+      repo: 'Agent-Workflows',
+    })
+    expect(aw.nodes).toHaveLength(NODES_AW)
+    expect(aw.edges).toHaveLength(EDGES_AW)
+
+    const tabelo = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), {
+      owner: 'MARTONPAULO',
+      repo: 'Tabelo',
+    })
+    expect(tabelo.nodes).toHaveLength(NODES_TABELO)
+    expect(tabelo.edges).toHaveLength(EDGES_TABELO)
+    expect(tabelo.nodes.filter((node) => node.external)).toHaveLength(0)
+  })
+})

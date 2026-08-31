@@ -29,6 +29,7 @@ import {
   readRateLimit,
   UNAUTHENTICATED_HOURLY_LIMIT,
   type LoadFailure,
+  type UnresolvedDependency,
   type RateLimitStatus,
 } from './github'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
@@ -36,7 +37,14 @@ import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
-import { parseRoute, pathForTarget, slugOf, titleForRoute, type RepoTarget } from './route'
+import {
+  canonicalSlugOf,
+  parseRoute,
+  pathForTarget,
+  slugOf,
+  titleForRoute,
+  type RepoTarget,
+} from './route'
 import { asBoolean, asStringArray, readStored, writeStored } from './storage'
 import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
 import { rememberTarget } from './suggestions'
@@ -416,10 +424,48 @@ export function failureText(
     case 'network':
       return { title: 'GitHub could not be reached', body: failure.message }
     case 'unexpected':
-      return { title: `GitHub answered ${failure.status}`, body: failure.message }
+      // The title already carries the status, so the body must add recovery guidance rather than
+      // repeat `failure.message`, which used to render as "GitHub answered 500. GitHub answered 500."
+      return {
+        title: failure.message,
+        body: 'Nothing about the request needs changing; GitHub failed to answer it. Try again.',
+      }
     case 'cancelled':
       return { title: 'Load cancelled', body: 'No dependency requests were spent.' }
   }
+}
+
+/**
+ * What is missing from an incomplete graph, and why — one issue at a time.
+ *
+ * The loader records a separate reason per unresolved issue, and reporting only the first one told
+ * the reader that a rate limit caused a 404. Identical reasons are grouped, because "#3, #7 — rate
+ * limit reached" is the same fact twice; different reasons are never merged.
+ */
+export function describeUnresolved(unresolved: readonly UnresolvedDependency[]): string {
+  if (unresolved.length === 0) return 'Some blocker data is missing, and GitHub did not say why.'
+
+  // First appearance orders the groups, so the sentence follows the order the issues were read in.
+  const groups = new Map<string, number[]>()
+  for (const entry of unresolved) {
+    const reason = withoutTrailingPeriod(entry.reason) || 'the request failed'
+    const numbers = groups.get(reason)
+    if (numbers) numbers.push(entry.number)
+    else groups.set(reason, [entry.number])
+  }
+
+  const parts = [...groups.entries()].map(
+    ([reason, numbers]) => `${numbers.map((number) => `#${number}`).join(', ')} — ${reason}`,
+  )
+  return `Some blocker data is missing: ${parts.join('; ')}.`
+}
+
+/**
+ * Reasons arrive punctuated inconsistently: some are fragments the loader wrote, others are a
+ * failure message that ends in a period. The sentence above supplies its own.
+ */
+function withoutTrailingPeriod(reason: string): string {
+  return reason.trim().replace(/\.$/, '')
 }
 
 /* Canvas ------------------------------------------------------------------ */
@@ -821,12 +867,11 @@ function GraphStatus({
         <div className="info__row info__row--muted">{describeSavedCopy(savedCopy)}</div>
       )}
       {!graph.complete && (
+        /* One live region holding one complete sentence, so the whole gap is announced once
+           rather than a fragment at a time. */
         <div className="info__warn" role="status">
-          Could not read the blockers of{' '}
-          {graph.unresolved.map((entry) => `#${entry.number}`).join(', ')} —{' '}
-          {graph.rateLimited
-            ? `the budget ran out, it refills ${describeUntil(graph.rateLimitReset)}`
-            : (graph.unresolved[0]?.reason ?? 'the request failed')}
+          {describeUnresolved(graph.unresolved)}
+          {graph.rateLimited && ` The budget ran out; it refills ${describeUntil(graph.rateLimitReset)}.`}
         </div>
       )}
     </Panel>
@@ -887,6 +932,7 @@ function Canvas({
   onAskAgain,
 }: {
   graph: IssueGraph
+  /** The repository as the reader spelled it, for the bar, the link and the accessible name. */
   slug: string
   savedCopy: SavedCopyProvenance | null
   snapshot: SnapshotView
@@ -896,24 +942,29 @@ function Canvas({
   const { fitView } = useReactFlow()
   const openExternal = useOpenExternal()
 
+  // What is stored and what is sent are keyed by the repository the cards actually belong to, not
+  // by the address they were reached through. The two differ after a rename, and the hidden cards
+  // are recorded as node IDs qualified with the former.
+  const identity = graph.identity
+
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState<ShareOutcome | null>(null)
   const [hidden, setHidden] = useState<ReadonlySet<string>>(
-    () => new Set(readStored(hiddenKey(slug), asStringArray, [])),
+    () => new Set(readStored(hiddenKey(identity), asStringArray, [])),
   )
 
   // Hiding is a reading aid, and it is worth keeping across a reload precisely because a reload
   // costs requests. Nothing here is ever written back to GitHub.
   useEffect(() => {
-    writeStored(hiddenKey(slug), [...hidden])
-  }, [slug, hidden])
+    writeStored(hiddenKey(identity), [...hidden])
+  }, [identity, hidden])
 
   const share = useCallback(() => {
     setSharing(true)
     setShared(null)
-    void buildSnapshotUrl(slug, snapshot, window.location.origin, BASE)
+    void buildSnapshotUrl(identity, snapshot, window.location.origin, BASE)
       .then(async (link): Promise<ShareOutcome> => {
         if (link.kind !== 'ready') return link
         try {
@@ -930,7 +981,7 @@ function Canvas({
         setShared(outcome)
         setSharing(false)
       })
-  }, [slug, snapshot])
+  }, [identity, snapshot])
 
   const selectIssue = useCallback((id: string, additive: boolean) => {
     setSelected((current) => nextIssueSelection(current, id, additive))
@@ -1259,9 +1310,16 @@ function GraphLoad({
   onOpen: (target: RepoTarget) => void
 }) {
   const { token } = useTokenState()
+  // Two spellings of one repository, and they are not interchangeable.
+  //
+  // `identity` keys everything stored or matched — the saved copy, the hidden cards, the
+  // repository a shared link claims to hold — because keying those on what the reader typed forks
+  // one repository's state across its spellings. `slug` is what the reader typed, and it is what
+  // the page says back to them: the bar, the repository link, the prefilled input, the copy.
+  const identity = canonicalSlugOf(target)
   const slug = slugOf(target)
   // Read once per mount: the gate has to describe a copy that does not change under it.
-  const [cached] = useState<CachedGraph | null>(() => readCache(slug))
+  const [cached] = useState<CachedGraph | null>(() => readCache(identity))
   // Read once per mount, for the same reason as the saved copy: neither may change under the page
   // it produced. A snapshot in the fragment opens straight into the drawing, skipping the gate —
   // there is nothing to weigh, because drawing it costs nothing.
@@ -1319,7 +1377,7 @@ function GraphLoad({
       window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
     }
 
-    void readSnapshot(fragment, slug)
+    void readSnapshot(fragment, identity)
       .then(async (read) => {
         if (cancelled) return
         if (read.kind !== 'snapshot') {
@@ -1327,6 +1385,8 @@ function GraphLoad({
           return
         }
 
+        // Somebody else's link, so its payloads do not get to say which repository this is:
+        // `readSnapshot` bound it to the one in the path, and that binding is the whole guarantee.
         const graph = await buildGraph(read.view.data, target, {
           showClosed: read.view.showClosed,
         })
@@ -1352,7 +1412,7 @@ function GraphLoad({
     return () => {
       cancelled = true
     }
-  }, [sharedLink, fragment, slug, target])
+  }, [sharedLink, fragment, identity, target])
 
   /**
    * A load already in flight carries the token it started with: `LoadOptions` is built once, so
@@ -1424,9 +1484,13 @@ function GraphLoad({
           if (controller.signal.aborted) return
           if (result.ok) {
             rememberTarget(target)
-            writeCache(slug, result.data)
+            writeCache(identity, result.data)
             setPhase({ kind: 'drawing' })
-            const graph = await buildGraph(result.data, target, { showClosed: includeClosed })
+            // Read from GitHub just now, so the payloads may name the repository they came from.
+            const graph = await buildGraph(result.data, target, {
+              showClosed: includeClosed,
+              trustedIdentity: true,
+            })
             if (!controller.signal.aborted) {
               setPhase({
                 kind: 'ready',
@@ -1456,7 +1520,7 @@ function GraphLoad({
           })
         })
     },
-    [target, slug, token, onReload],
+    [target, identity, token, onReload],
   )
 
   const drawSavedCopy = useCallback(
@@ -1465,7 +1529,8 @@ function GraphLoad({
       if (decision.kind !== 'open') return
 
       setPhase({ kind: 'drawing' })
-      void buildGraph(copy.data, target, { showClosed }).then((graph) =>
+      // This browser's own copy of a read it made from GitHub, under this repository's key.
+      void buildGraph(copy.data, target, { showClosed, trustedIdentity: true }).then((graph) =>
         setPhase({
           kind: 'ready',
           graph,
@@ -1483,7 +1548,7 @@ function GraphLoad({
     return (
       <ReactFlowProvider>
         <Canvas
-          key={`${slug}:${showClosed}`}
+          key={`${identity}:${showClosed}`}
           graph={phase.graph}
           slug={slug}
           savedCopy={phase.savedCopy}
@@ -1621,7 +1686,8 @@ function GraphLoad({
 
       {phase.kind === 'failed' && (
         <>
-          <p className="notice notice--error">
+          {/* One region carrying the whole message, so it is announced once and in full. */}
+          <p className="notice notice--error" role="status">
             <strong>{failureText(target, phase.failure, token !== '').title}.</strong>{' '}
             {failureText(target, phase.failure, token !== '').body}
           </p>

@@ -11,6 +11,7 @@ import {
   decideSavedCopyOpen,
   describeSavedCopy,
   describeShare,
+  describeUnresolved,
   failureText,
   graphBounds,
   nextIssueSelection,
@@ -259,6 +260,7 @@ describe('graphBounds', () => {
       nodes: [],
       edges: [],
       groups: [],
+      identity: 'acme/app',
       complete: true,
       unresolved: [],
       rateLimited: false,
@@ -299,6 +301,72 @@ describe('what the reader is told about the budget', () => {
     const text = failureText(target, { kind: 'bad-credentials' }, true)
     expect(text.title).toContain('token')
     expect(text.body).toContain('remove it')
+  })
+
+  it('reports an unexpected status once, rather than as its own body', () => {
+    const text = failureText(
+      target,
+      { kind: 'unexpected', status: 500, message: 'GitHub returned error 500' },
+      false,
+    )
+
+    expect(text.title).toBe('GitHub returned error 500')
+    expect(text.body).not.toBe(text.title)
+    expect(text.body).not.toContain('500')
+    expect(text.body).toContain('Try again')
+  })
+
+  it('keeps every top-level failure’s guidance distinct', () => {
+    const bodies = [
+      failureText(target, { kind: 'bad-credentials' }, true),
+      failureText(target, { kind: 'rate-limited', reset: null }, false),
+      failureText(target, { kind: 'unexpected', status: 500, message: 'GitHub returned error 500' }, false),
+      failureText(target, { kind: 'not-found' }, false),
+      failureText(target, { kind: 'network', message: 'Failed to fetch' }, false),
+    ].map((text) => `${text.title}. ${text.body}`)
+
+    expect(new Set(bodies).size).toBe(bodies.length)
+  })
+})
+
+/**
+ * The loader records why each issue's blockers could not be read. Showing the first reason for all
+ * of them told the reader that a rate limit caused a 404.
+ */
+describe('describeUnresolved', () => {
+  it('keeps one reason per issue when the causes differ', () => {
+    const text = describeUnresolved([
+      { number: 1, reason: 'Failed to fetch' },
+      { number: 2, reason: 'dependencies were not found' },
+      { number: 3, reason: 'GitHub returned error 500' },
+    ])
+
+    expect(text).toBe(
+      'Some blocker data is missing: #1 — Failed to fetch; ' +
+        '#2 — dependencies were not found; #3 — GitHub returned error 500.',
+    )
+  })
+
+  it('groups issues that failed for the same reason', () => {
+    const text = describeUnresolved([
+      { number: 3, reason: 'rate limit reached' },
+      { number: 9, reason: 'GitHub returned error 500' },
+      { number: 7, reason: 'rate limit reached' },
+    ])
+
+    expect(text).toBe(
+      'Some blocker data is missing: #3, #7 — rate limit reached; #9 — GitHub returned error 500.',
+    )
+  })
+
+  it('ends the sentence once, whatever punctuation the reason arrived with', () => {
+    const text = describeUnresolved([{ number: 4, reason: 'The request could not be sent.' }])
+
+    expect(text).toBe('Some blocker data is missing: #4 — The request could not be sent.')
+  })
+
+  it('says so plainly when the loader recorded no reason at all', () => {
+    expect(describeUnresolved([])).toBe('Some blocker data is missing, and GitHub did not say why.')
   })
 })
 
