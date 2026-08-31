@@ -59,6 +59,20 @@ Nothing is registered under this repository's owner, and no token is ever commit
 who can run scripts in your browser on this origin can read what `localStorage` holds, so use a
 token scoped to public reads and revoke it when you are done.
 
+## Saved copies
+
+Reading a repository saves its graph in your browser, so opening it again costs no GitHub
+requests. The page always says how old a saved copy is and what it covers, and **Fetch now** reads
+the repository live instead.
+
+Six repositories are kept, most recently used first, and no more than about a megabyte between
+them. Whichever falls off the end loses its saved graph and its dimmed cards together; nothing
+else in the browser is touched, and nothing is lost that reading GitHub again cannot rebuild.
+
+**Clear saved data**, on the screen that offers the saved copy, removes everything held for that
+one repository straight away. Other repositories and your token are left alone; the token has its
+own **Remove**.
+
 ## Sharing a graph
 
 The link icon on the graph copies a URL that draws exactly what is on screen. Whoever opens it
