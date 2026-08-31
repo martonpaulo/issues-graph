@@ -17,15 +17,21 @@ import { fileURLToPath } from 'node:url'
 
 const FIXTURES = fileURLToPath(new URL('../src/__fixtures__/', import.meta.url))
 
-const api = (path) => JSON.parse(execFileSync('gh', ['api', path], { maxBuffer: 64 * 1024 * 1024 }))
+/** Mirrors the client: every page, 100 at a time. */
+const paginate = (path) =>
+  JSON.parse(
+    execFileSync('gh', ['api', '--paginate', '--slurp', path], { maxBuffer: 64 * 1024 * 1024 }),
+  ).flat()
 
 /** Mirrors the client: paginated, open issues only. */
-const listIssues = (slug) =>
-  JSON.parse(
-    execFileSync('gh', ['api', '--paginate', '--slurp', `repos/${slug}/issues?per_page=100&state=open`], {
-      maxBuffer: 64 * 1024 * 1024,
-    }),
-  ).flat()
+const listIssues = (slug) => paginate(`repos/${slug}/issues?per_page=100&state=open`)
+
+/**
+ * Mirrors the client again: `blocked_by` defaults to 30 per page, so a fixture captured from one
+ * unpaginated request would record the truncation the client was fixed to stop making.
+ */
+const listBlockedBy = (slug, number) =>
+  paginate(`repos/${slug}/issues/${number}/dependencies/blocked_by?per_page=100`)
 
 /** Exactly the fields `github.ts` reads. Anything else is noise in a fixture. */
 const project = (issue) => ({
@@ -46,9 +52,7 @@ for (const slug of process.argv.slice(2)) {
   const blockedBy = {}
   for (const issue of raw) {
     if ((issue.issue_dependencies_summary?.total_blocked_by ?? 0) > 0) {
-      blockedBy[issue.number] = api(
-        `repos/${slug}/issues/${issue.number}/dependencies/blocked_by`,
-      ).map(project)
+      blockedBy[issue.number] = listBlockedBy(slug, issue.number).map(project)
     }
   }
 
