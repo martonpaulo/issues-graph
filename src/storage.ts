@@ -20,3 +20,11 @@ export function writeStored(key: string, value: unknown): void {
     // A preference that cannot be remembered is not a reason to interrupt anything.
   }
 }
+
+export function clearStored(key: string): void {
+  try {
+    window.localStorage.removeItem(key)
+  } catch {
+    // Same reasoning as writeStored: storage being unavailable is not an error to surface.
+  }
+}

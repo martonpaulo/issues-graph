@@ -4,9 +4,12 @@ import type { RepoTarget } from './route'
 /**
  * The only module that talks to GitHub.
  *
- * Everything here runs unauthenticated from the browser, which is possible because the REST issue
+ * Everything here works unauthenticated from the browser, which is possible because the REST issue
  * dependency endpoints are readable without a token while the GraphQL API is not. That choice is
  * what lets the viewer be a static page with no backend and no per-repository artifact.
+ *
+ * A viewer may supply their own token to raise their rate limit; it arrives through `LoadOptions`
+ * and this module never learns where it is kept. Requests without one are unchanged.
  *
  * https://docs.github.com/en/rest/issues/issue-dependencies
  */
@@ -20,6 +23,14 @@ const API_ROOT = 'https://api.github.com'
  * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
  */
 export const UNAUTHENTICATED_HOURLY_LIMIT = 60
+
+/**
+ * The same budget for a request carrying a token, which belongs to the viewer rather than to an
+ * IP address. Quoted on the same terms as the unauthenticated figure: only when GitHub's own
+ * numbers could not be read.
+ * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
+ */
+export const AUTHENTICATED_HOURLY_LIMIT = 5000
 
 /**
  * How many dependency requests are in flight at once.
@@ -64,6 +75,7 @@ export interface IssuePayload {
 export type LoadFailure =
   | { kind: 'not-found' }
   | { kind: 'rate-limited'; reset: Date | null }
+  | { kind: 'bad-credentials' }
   | { kind: 'network'; message: string }
   | { kind: 'unexpected'; status: number; message: string }
   | { kind: 'cancelled' }
@@ -100,6 +112,12 @@ export interface LoadProgress {
 
 export interface LoadOptions {
   fetchImpl?: typeof fetch
+  /**
+   * The viewer's own GitHub token. Present means every request this call makes is authenticated
+   * and draws on their 5000/hour budget; absent means the request is exactly what it was before
+   * tokens existed.
+   */
+  token?: string
   signal?: AbortSignal
   onProgress?: (progress: LoadProgress) => void
   /**
@@ -116,6 +134,18 @@ export interface LoadOptions {
    * with a real number in front of them rather than a guess made before anything was listed.
    */
   confirmDependencies?: (cost: number) => boolean | Promise<boolean>
+}
+
+/**
+ * The one place a request's headers are built, so a new request site cannot be added that quietly
+ * forgets to authenticate.
+ * https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api
+ */
+function headersFor(options: LoadOptions): HeadersInit {
+  const token = options.token?.trim()
+  return token
+    ? { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}` }
+    : { Accept: 'application/vnd.github+json' }
 }
 
 function parseReset(raw: string | null): Date | null {
@@ -142,7 +172,7 @@ export async function readRateLimit(options: LoadOptions = {}): Promise<RateLimi
   try {
     const response = await doFetch(`${API_ROOT}/rate_limit`, {
       signal: options.signal,
-      headers: { Accept: 'application/vnd.github+json' },
+      headers: headersFor(options),
     })
     if (!response.ok) return null
     const body = (await response.json()) as {
@@ -201,7 +231,7 @@ async function request(url: string, options: LoadOptions, count: RequestCounter)
   try {
     response = await doFetch(url, {
       signal: options.signal,
-      headers: { Accept: 'application/vnd.github+json' },
+      headers: headersFor(options),
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error
@@ -220,6 +250,9 @@ async function request(url: string, options: LoadOptions, count: RequestCounter)
       reset: parseReset(response.headers.get('x-ratelimit-reset')),
     })
   }
+  // A token GitHub refuses is the viewer's to fix, and saying so is the only way they can. It has
+  // to be separated from the generic failure below, which tells them nothing actionable.
+  if (response.status === 401) throw new RequestFailure({ kind: 'bad-credentials' })
   if (response.status === 404) throw new RequestFailure({ kind: 'not-found' })
   if (!response.ok) {
     throw new RequestFailure({
@@ -353,6 +386,8 @@ export async function loadRepositoryGraph(
             failures[index] = { number: issue.number, reason: 'rate limit reached' }
           } else if (error.failure.kind === 'network') {
             failures[index] = { number: issue.number, reason: error.failure.message }
+          } else if (error.failure.kind === 'bad-credentials') {
+            failures[index] = { number: issue.number, reason: 'the token was rejected' }
           } else if (error.failure.kind === 'not-found') {
             failures[index] = { number: issue.number, reason: 'dependencies were not found' }
           } else if (error.failure.kind === 'unexpected') {
@@ -417,7 +452,7 @@ export async function searchRepositories(
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
       signal: options.signal,
-      headers: { Accept: 'application/vnd.github+json' },
+      headers: headersFor(options),
     })
     if (!response.ok) return []
     const body = (await response.json()) as { items?: { full_name?: string }[] }

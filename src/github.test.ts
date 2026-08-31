@@ -462,3 +462,117 @@ describe('captured payload shape', () => {
     expect('state_reason' in payload).toBe(true)
   })
 })
+
+/**
+ * The token is the viewer's own, so the contract worth pinning is narrow: every request carries it
+ * when it is set, no request mentions it when it is not, and a token GitHub rejects is reported as
+ * a token problem rather than as an unexplained HTTP status.
+ */
+describe('the viewer’s token', () => {
+  function headersOf(call: unknown): Record<string, string> {
+    const init = call as { headers?: Record<string, string> }
+    return init.headers ?? {}
+  }
+
+  it('sends no Authorization header when no token is set', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      if (String(url).includes('/dependencies/blocked_by')) return json([issue(1)])
+      return json([issue(2, 1)])
+    })
+
+    await loadRepositoryGraph(TARGET, { fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(seen).toHaveLength(2)
+    for (const headers of seen) {
+      expect(headers).not.toHaveProperty('Authorization')
+      expect(headers.Accept).toBe('application/vnd.github+json')
+    }
+  })
+
+  it('sends the token on the issue list and on every dependency request', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      if (String(url).includes('/dependencies/blocked_by')) return json([issue(1)])
+      return json([issue(2, 1), issue(3, 1)])
+    })
+
+    await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'github_pat_example',
+    })
+
+    expect(seen).toHaveLength(3)
+    for (const headers of seen) {
+      expect(headers.Authorization).toBe('Bearer github_pat_example')
+    }
+  })
+
+  it('sends the token on the rate-limit pre-flight and on repository search', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      if (String(url).includes('/rate_limit')) {
+        return json({ resources: { core: { limit: 5000, remaining: 4999, reset: 1750000000 } } })
+      }
+      return json({ items: [{ full_name: 'acme/app' }] })
+    })
+
+    await readRateLimit({ fetchImpl: fetchImpl as unknown as typeof fetch, token: 'tok' })
+    await searchRepositories('acme/ap', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'tok',
+    })
+
+    expect(seen.map((headers) => headers.Authorization)).toEqual(['Bearer tok', 'Bearer tok'])
+  })
+
+  it('ignores a token that is only whitespace, rather than sending an empty credential', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      return json([issue(1)])
+    })
+
+    await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: '   ',
+    })
+
+    expect(seen[0]).not.toHaveProperty('Authorization')
+  })
+
+  it('reports a rejected token as its own failure, not as an unexpected status', async () => {
+    const fetchImpl = vi.fn(async () => json({ message: 'Bad credentials' }, { status: 401 }))
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'stale',
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.kind).toBe('bad-credentials')
+  })
+
+  it('names the rejected token when it is a dependency request that is refused', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('/dependencies/blocked_by')) {
+        return json({ message: 'Bad credentials' }, { status: 401 })
+      }
+      return json([issue(2, 1)])
+    })
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'stale',
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.complete).toBe(false)
+    expect(result.data.unresolved).toEqual([{ number: 2, reason: 'the token was rejected' }])
+  })
+})
