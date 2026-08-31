@@ -225,6 +225,45 @@ function enforce(entries: RetentionEntry[]): { kept: RetentionEntry[]; evicted: 
 }
 
 /**
+ * Persists the list, freeing the space its evictions occupy only if that is the one thing
+ * standing between the write and landing.
+ *
+ * The index goes first and nothing is destroyed until it has taken. Evicting ahead of that would
+ * spend another repository's data on a write that then failed, and the stored index would go on
+ * naming data that no longer existed — uncorrectable, because a valid index is exactly when the
+ * keys are never re-read.
+ *
+ * That rule alone deadlocks the case it matters most for. A browser that predates this index has
+ * no index key to overwrite, so the first write needs new space, and the space is held by exactly
+ * the unindexed caches the write is trying to bring under a budget: nothing can be freed until
+ * the index exists, and the index cannot be written until something is freed. The reader stays
+ * stuck at a full quota forever, which is the condition this whole module was written to end.
+ *
+ * The way out is that the two situations are not the same. Once the index key exists, `save`
+ * overwrites it with a list no longer than before, so quota is not what is refusing the write and
+ * the guarantee above costs nothing. With no index key at all, `retained()` derives the list from
+ * the keys themselves — so dropping one is immediately reflected in what the next read returns,
+ * and a refused write leaves nothing inconsistent behind to be wrong about. Only in that second
+ * case is space freed to make room, one repository at a time, stopping the moment the write
+ * lands.
+ */
+function saveWithinQuota(
+  kept: RetentionEntry[],
+  evicted: RetentionEntry[],
+): StorageWriteResult {
+  let saved = save(kept)
+  if (saved.ok || saved.reason !== 'quota' || hasStored(INDEX_KEY)) return saved
+
+  for (const entry of evicted) {
+    dropKeys(entry.slug)
+    saved = save(kept)
+    if (saved.ok) return saved
+  }
+
+  return saved
+}
+
+/**
  * Moves one repository to the front of the list, letting the caller say what else changed about
  * it, and applies both budgets to the result.
  */
@@ -238,12 +277,7 @@ function promote(
   const rest = entries.filter((entry) => canonicalSlug(entry.slug) !== identity)
   const { kept, evicted } = enforce([next(existing), ...rest])
 
-  // The index goes first, and nothing is destroyed until it has taken. Evicting before knowing
-  // that would spend another repository's data on a write that then failed — and because the
-  // stored index still listed the victim, it would go on claiming data that no longer existed,
-  // uncorrectable because a valid index is exactly when the keys are never re-read. A refused
-  // write now leaves every repository holding what it held.
-  const saved = save(kept)
+  const saved = saveWithinQuota(kept, evicted)
   if (!saved.ok) return saved
 
   for (const entry of evicted) dropKeys(entry.slug)
@@ -393,16 +427,21 @@ export function evictLeastRecent(keep: string): boolean {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     if (canonicalSlug(entries[index].slug) === identity) continue
     // Recorded first, then removed, for the same reason as `promote`: a refused index write must
-    // not have cost anybody their saved graph.
+    // not have cost anybody their saved graph. `saveWithinQuota` carries the one exception, for
+    // the browser whose index does not exist yet.
     //
     // Only a recorded eviction counts. The caller retries its own write while this keeps saying
     // yes, and an index that did not take the removal reads back unchanged: the same entry is
     // chosen again and the loop never ends. Reporting the failed write is what makes the retry
     // terminate — on a page where the alternative is a synchronous spin with the tab frozen.
-    const saved = save([...entries.slice(0, index), ...entries.slice(index + 1)])
+    const victim = entries[index]
+    const saved = saveWithinQuota(
+      [...entries.slice(0, index), ...entries.slice(index + 1)],
+      [victim],
+    )
     if (!saved.ok) return false
 
-    dropKeys(entries[index].slug)
+    dropKeys(victim.slug)
     return true
   }
 

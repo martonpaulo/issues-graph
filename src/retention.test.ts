@@ -208,6 +208,96 @@ describe('saveDimmed', () => {
   })
 })
 
+/**
+ * A storage with a real byte budget, which is what the deadlock case needs: the point is not that
+ * writes are refused, but that they stop being refused once something is freed.
+ */
+function installQuotaStorage(limit: number): Map<string, string> {
+  const entries = new Map<string, string>()
+  const used = (): number =>
+    [...entries].reduce((total, [key, value]) => total + key.length + value.length, 0)
+
+  const storage = {
+    getItem: (key: string) => entries.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      const existing = entries.get(key)
+      const after =
+        used() - (existing === undefined ? 0 : key.length + existing.length) + key.length + value.length
+      if (after > limit) throw new DOMException('exceeded', 'QuotaExceededError')
+      entries.set(key, value)
+    },
+    removeItem: (key: string) => void entries.delete(key),
+    key: (index: number) => [...entries.keys()][index] ?? null,
+    get length() {
+      return entries.size
+    },
+  }
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { localStorage: storage } })
+  return entries
+}
+
+describe('a browser already at its quota before the index existed', () => {
+  /* The case the migration is for, and the one the destroy-after-recording rule deadlocked. There
+     is no index key to overwrite, so the first write needs new space; the space is held by the
+     very caches the write is trying to bring under a budget. Nothing can be freed until the index
+     exists, and the index cannot be written until something is freed. */
+
+  const ORPHANS = 12
+  const PAYLOAD = 300
+
+  function fillWithUnindexedCaches(limit: number): Map<string, string> {
+    const filled = installQuotaStorage(limit)
+    for (let index = 1; index <= ORPHANS; index += 1) {
+      // Seeded through the backing map, as an older build would have left them.
+      filled.set(cacheKey(`old/r${index}`), `"${'x'.repeat(PAYLOAD)}"`)
+    }
+    return filled
+  }
+
+  it('frees enough of them to write its first index', () => {
+    store = fillWithUnindexedCaches(ORPHANS * (PAYLOAD + 40))
+
+    rememberRepository('new/opened')
+
+    expect(store.has('issue-graph:retention')).toBe(true)
+    expect(slugs()[0]).toBe('new/opened')
+    expect(retained().length).toBeLessThanOrEqual(MAX_ENTRIES)
+  })
+
+  it('leaves the index naming only repositories whose data is really there', () => {
+    store = fillWithUnindexedCaches(ORPHANS * (PAYLOAD + 40))
+
+    rememberRepository('new/opened')
+
+    for (const entry of retained()) {
+      const identity = canonicalSlug(entry.slug)
+      const held =
+        store.has(cacheKey(identity)) ||
+        store.has(dimmedKey(identity)) ||
+        identity === 'new/opened'
+      expect(held, `${entry.slug} is named by the index but holds nothing`).toBe(true)
+    }
+  })
+
+  it('frees no more than it has to', () => {
+    store = fillWithUnindexedCaches(ORPHANS * (PAYLOAD + 40))
+
+    rememberRepository('new/opened')
+
+    // The budgets evict down to MAX_ENTRIES regardless; what matters is that the escape stopped
+    // as soon as the write landed rather than emptying the store to be sure.
+    const remaining = [...store.keys()].filter((key) => key.startsWith('issue-graph:cache:'))
+    expect(remaining.length).toBe(MAX_ENTRIES - 1)
+  })
+
+  it('still saves a graph on a browser that had filled up', () => {
+    store = fillWithUnindexedCaches(ORPHANS * (PAYLOAD + 40))
+
+    expect(rememberRepository('new/opened')).toBeUndefined()
+    expect(store.has('issue-graph:retention')).toBe(true)
+  })
+})
+
 describe('a refused index write destroys nothing', () => {
   /* Deciding what to evict and destroying it were one step, inside a `save(enforce(...))`
      expression, so the keys went before the write that was meant to authorise them. A refused
