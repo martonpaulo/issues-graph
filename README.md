@@ -8,10 +8,30 @@ read.
 https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>
 ```
 
-It is a static page. There is no backend, no token, and no generated graph file in the repository
-being rendered — every read goes straight to the public GitHub REST API from the browser, and the
-`blocked by` / `blocking` relationships GitHub already tracks are the only source of truth for the
-edges.
+It is a static page. There is no backend, no credential of its own, and no generated graph file in
+the repository being rendered — every read goes straight to the public GitHub REST API from the
+browser, and the `blocked by` / `blocking` relationships GitHub already tracks are the only source
+of truth for the edges.
+
+## Rate limit
+
+Unauthenticated GitHub requests share 60 per hour per IP address, and reading a repository costs
+one request per 100 issues plus one per issue that has blockers. The page tells you what a read
+will cost before it spends anything.
+
+If that is not enough, open **GitHub token** on the start screen and paste your own
+[fine-grained personal access token](https://github.com/settings/personal-access-tokens); read
+access to public repositories is all it needs. The limit becomes 5000 per hour.
+
+The token is yours, not this page's:
+
+- it is kept in your browser's `localStorage`, on your device only;
+- it is sent only to `api.github.com`, in the `Authorization` header, never in a URL;
+- **Remove** deletes it, and the page goes back to reading unauthenticated.
+
+Nothing is registered under this repository's owner, and no token is ever committed here. Anyone
+who can run scripts in your browser on this origin can read what `localStorage` holds, so use a
+token scoped to public reads and revoke it when you are done.
 
 ## Related repositories
 
