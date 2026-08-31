@@ -12,7 +12,13 @@ import {
   issueRef,
 } from './dependencies'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { buildGraph, nodeId, type IssueGraph } from './graph'
+import {
+  buildGraph,
+  nodeId,
+  type GraphEdge,
+  type GraphNode,
+  type IssueGraph,
+} from './graph'
 
 const ARBARO = { owner: 'martonpaulo', repo: 'arbaro' }
 
@@ -237,140 +243,174 @@ describe('a sub-issue hierarchy, as GitHub actually returned one', () => {
 })
 
 /**
- * Topologies no captured read contains: a parent in another repository, a closed parent, and the
- * inverted edge. Built from the synthetic payload helper this file and `graph.test.ts` already use
- * for exactly that purpose — a capture cannot be made to hold a case GitHub has not produced.
+ * The topologies a captured read cannot hold, built at the seam this module actually has.
+ *
+ * `dependencies.ts` takes an `IssueGraph` and returns words. It never sees a GitHub payload, so a
+ * payload is the wrong thing to write here: constructing one would assert what the API returns,
+ * which is the assumption captured fixtures exist to catch, and it would assert it in a test that
+ * does not even exercise the code that reads payloads. Building the `IssueGraph` directly states
+ * the input this contract is defined over — the same thing `GraphView.test.ts` does when it needs a
+ * graph the geometry does not care about — and it reaches shapes `buildGraph` cannot currently
+ * produce from any repository, which is exactly where an acceptance criterion is still owed proof.
+ *
+ * The captured `tabelo` read above proves the whole path from a real API response; these prove the
+ * corners it does not contain. Neither substitutes for the other.
  */
-describe('a sub-issue hierarchy', () => {
-  /**
-   * `graph.edges` carries containment as well as ordering. Containment says which issue holds
-   * another, never which comes first, and the canvas draws it without an arrowhead to say so.
-   * A reader who cannot see the missing arrowhead is exactly the reader this model exists for,
-   * so counting one as a blocker would mislead precisely the person it is meant to inform.
-   */
-  async function withParent() {
-    return buildGraph(
-      dataFrom(
-        [
-          issue({ number: 5, title: 'The parent' }),
-          issue({
-            number: 6,
-            title: 'A sub-issue',
-            parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
-          }),
-          issue({ number: 7, title: 'A real blocker' }),
-        ],
-        { 6: [issue({ number: 7 })] },
-      ),
-      { owner: 'acme', repo: 'app' },
-    )
+describe('a sub-issue hierarchy, at the IssueGraph seam', () => {
+  function node(over: Partial<GraphNode> & Pick<GraphNode, 'id' | 'number' | 'repo'>): GraphNode {
+    return {
+      title: `Issue ${over.number}`,
+      url: `https://github.com/${over.repo}/issues/${over.number}`,
+      state: null,
+      open: true,
+      subIssues: null,
+      external: false,
+      repoLabel: over.repo,
+      labels: [],
+      allLabels: [],
+      titleLines: 1,
+      height: 100,
+      position: { x: 0, y: 0 },
+      ...over,
+    }
   }
 
-  it('draws the hierarchy edge, so the rest of this is a real case', async () => {
-    const graph = await withParent()
-    expect(graph.edges.filter((edge) => edge.kind === 'hierarchy')).toHaveLength(1)
-    expect(graph.edges.filter((edge) => edge.kind === 'dependency')).toHaveLength(1)
+  /** Only `nodes` and `edges` reach this module; the rest of the graph is carried, not read. */
+  function graphOf(nodes: GraphNode[], edges: GraphEdge[]): IssueGraph {
+    return {
+      nodes,
+      edges,
+      groups: [],
+      identity: 'acme/app',
+      complete: true,
+      unresolved: [],
+      rateLimited: false,
+      rateLimitReset: null,
+      requestCount: 0,
+    }
+  }
+
+  const local = node({ id: 'acme/app#5', number: 5, repo: 'acme/app' })
+  const child = node({ id: 'acme/app#6', number: 6, repo: 'acme/app' })
+  const foreign = node({
+    id: 'other/lib#9',
+    number: 9,
+    repo: 'other/lib',
+    external: true,
   })
 
-  it('never reads containment as an ordering', async () => {
-    const graph = await withParent()
-    const adjacency = adjacencyOf(graph)
+  function hierarchy(parent: GraphNode, kid: GraphNode, over: Partial<GraphEdge> = {}): GraphEdge {
+    return {
+      id: `${parent.id}=>${kid.id}`,
+      kind: 'hierarchy',
+      source: parent.id,
+      target: kid.id,
+      ...over,
+    }
+  }
 
-    // The parent contains #6; it does not block it, and #6 does not wait on it.
-    expect(adjacency.get('acme/app#5')?.blocks).toEqual([])
-    expect(adjacency.get('acme/app#6')?.blockedBy.map((node) => node.id)).toEqual(['acme/app#7'])
+  it('keeps a sub-issue whose parent is elsewhere qualified on both cards', () => {
+    const graph = graphOf([child, foreign], [hierarchy(foreign, child)])
 
-    // The containment is said in clauses of its own, after both ordering clauses.
-    expect(describe_(graph, 'acme/app#5')).toBe(
-      'Issue #5. Blocked by nothing. Blocks nothing. Contains #6.',
-    )
-    // The child waits on its real blocker and on nothing else, and is part of its parent.
     expect(describe_(graph, 'acme/app#6')).toBe(
-      'Issue #6. Blocked by #7. Blocks nothing. Part of #5.',
-    )
-    // An issue in no breakdown says nothing about containment rather than "Part of nothing".
-    expect(describe_(graph, 'acme/app#7')).toBe('Issue #7. Blocked by nothing. Blocks #6.')
-  })
-
-  it('keeps containment out of the table of orderings and in its own', async () => {
-    const graph = await withParent()
-
-    expect(dependencyRows(graph).map((row) => `${row.blocker.id}->${row.dependent.id}`)).toEqual([
-      'acme/app#7->acme/app#6',
-    ])
-    expect(containmentRows(graph).map((row) => `${row.parent.id}->${row.child.id}`)).toEqual([
-      'acme/app#5->acme/app#6',
-    ])
-  })
-
-  it('reaches every drawn hierarchy edge, once', async () => {
-    const graph = await withParent()
-
-    expect(containmentRows(graph).map((row) => row.id).sort()).toEqual(
-      graph.edges.filter((edge) => edge.kind === 'hierarchy').map((edge) => edge.id).sort(),
-    )
-  })
-
-  it('names a parent by the repository it lives in when that is not the local one', async () => {
-    // A sub-issue whose parent was pulled in as a blocker from another repository: the parent is
-    // an external node, so both surfaces have to qualify it or the number means nothing.
-    const graph = await buildGraph(
-      dataFrom(
-        [
-          issue({
-            number: 6,
-            title: 'A sub-issue',
-            parent_issue_url: 'https://api.github.com/repos/other/lib/issues/9',
-          }),
-        ],
-        {
-          6: [
-            issue({
-              number: 9,
-              title: 'The parent',
-              repository_url: 'https://api.github.com/repos/other/lib',
-              html_url: 'https://github.com/other/lib/issues/9',
-            }),
-          ],
-        },
-      ),
-      { owner: 'acme', repo: 'app' },
-    )
-
-    // The same pair carries a real dependency too, so the two relations are said side by side and
-    // neither borrows the other's words.
-    expect(describe_(graph, 'acme/app#6')).toBe(
-      'Issue #6. Blocked by other/lib#9. Blocks nothing. Part of other/lib#9.',
+      'Issue #6. Blocked by nothing. Blocks nothing. Part of other/lib#9.',
     )
     expect(describe_(graph, 'other/lib#9')).toBe(
-      'Issue other/lib#9. Blocked by nothing. Blocks #6. Contains #6.',
+      'Issue other/lib#9. Blocked by nothing. Blocks nothing. Contains #6.',
     )
     expect(containmentRows(graph).map((row) => `${issueRef(row.parent)}->${issueRef(row.child)}`))
       .toEqual(['other/lib#9->#6'])
   })
 
-  it('reads a parent blocked by its own sub-issue the same way round as any other', async () => {
-    // The contradiction #130 settled for the drawing: a parent split into sub-issues and then
-    // blocked by one of them. The canvas hands that hierarchy edge to the layout reversed and marks
-    // it `inverted`, but `source` is still the parent, so the words must not follow the drawing's
-    // inversion — the child is what blocks, the parent is what contains.
-    const graph = await buildGraph(
-      dataFrom(
-        [
-          issue({ number: 5, title: 'The parent' }),
-          issue({
-            number: 6,
-            title: 'A sub-issue',
-            parent_issue_url: 'https://api.github.com/repos/acme/app/issues/5',
-          }),
-        ],
-        { 5: [issue({ number: 6 })] },
-      ),
-      { owner: 'acme', repo: 'app' },
+  it('keeps a parent whose sub-issue is elsewhere qualified on both cards', () => {
+    // The other direction the acceptance criterion names, and the one no fixture can carry:
+    // `buildGraph` reads containment off the target repository's own issue list, so a child from
+    // another repository never reaches it. The words still have to be right if one ever does, and
+    // this module is where that is decided.
+    const graph = graphOf([local, foreign], [hierarchy(local, foreign)])
+
+    expect(describe_(graph, 'acme/app#5')).toBe(
+      'Issue #5. Blocked by nothing. Blocks nothing. Contains other/lib#9.',
+    )
+    expect(describe_(graph, 'other/lib#9')).toBe(
+      'Issue other/lib#9. Blocked by nothing. Blocks nothing. Part of #5.',
+    )
+    expect(containmentRows(graph).map((row) => `${issueRef(row.parent)}->${issueRef(row.child)}`))
+      .toEqual(['#5->other/lib#9'])
+  })
+
+  it('never lets containment reach an ordering, in either direction', () => {
+    const blocker = node({ id: 'acme/app#7', number: 7, repo: 'acme/app' })
+    const graph = graphOf(
+      [local, child, blocker],
+      [
+        hierarchy(local, child),
+        { id: 'acme/app#7->acme/app#6', kind: 'dependency', source: blocker.id, target: child.id },
+      ],
+    )
+    const adjacency = adjacencyOf(graph)
+
+    // The parent contains #6 and neither blocks it nor waits on it.
+    expect(adjacency.get('acme/app#5')?.blockedBy).toEqual([])
+    expect(adjacency.get('acme/app#5')?.blocks).toEqual([])
+    expect(adjacency.get('acme/app#5')?.children.map((n) => n.id)).toEqual(['acme/app#6'])
+    // And the real blocker is nobody's parent.
+    expect(adjacency.get('acme/app#7')?.children).toEqual([])
+    expect(adjacency.get('acme/app#6')?.parents.map((n) => n.id)).toEqual(['acme/app#5'])
+
+    expect(describe_(graph, 'acme/app#5')).toBe(
+      'Issue #5. Blocked by nothing. Blocks nothing. Contains #6.',
+    )
+    expect(describe_(graph, 'acme/app#6')).toBe(
+      'Issue #6. Blocked by #7. Blocks nothing. Part of #5.',
+    )
+    // An issue in no breakdown says nothing about containment rather than "Part of nothing".
+    expect(describe_(graph, 'acme/app#7')).toBe('Issue #7. Blocked by nothing. Blocks #6.')
+
+    // The two tables partition the edges: neither holds one of the other's.
+    expect(dependencyRows(graph).map((row) => row.id)).toEqual(['acme/app#7->acme/app#6'])
+    expect(containmentRows(graph).map((row) => row.id)).toEqual(['acme/app#5=>acme/app#6'])
+  })
+
+  it('reports a closed parent that the drawing chose to include', () => {
+    // Whether a closed parent is drawn at all is `buildGraph`'s decision and is proved in
+    // `graph.test.ts`; this module only ever sees the edges that survived it. What it owes is the
+    // state column, so a parent that is no longer live is not read as one that is.
+    const finished = node({
+      id: 'other/lib#9',
+      number: 9,
+      repo: 'other/lib',
+      external: true,
+      open: false,
+    })
+    const graph = graphOf([child, finished], [hierarchy(finished, child)])
+
+    expect(describe_(graph, 'acme/app#6')).toContain('Part of other/lib#9.')
+    expect(containmentRows(graph).map((row) => row.parent.open)).toEqual([false])
+  })
+
+  it('says nothing at all when the graph drew no containment', () => {
+    const graph = graphOf(
+      [local, child],
+      [{ id: 'acme/app#5->acme/app#6', kind: 'dependency', source: local.id, target: child.id }],
     )
 
-    const hierarchy = graph.edges.filter((edge) => edge.kind === 'hierarchy')
-    expect(hierarchy.map((edge) => edge.inverted)).toEqual([true])
+    expect(containmentRows(graph)).toEqual([])
+    expect(describe_(graph, 'acme/app#5')).toBe('Issue #5. Blocked by nothing. Blocks #6.')
+    expect(describe_(graph, 'acme/app#6')).toBe('Issue #6. Blocked by #5. Blocks nothing.')
+  })
+
+  it('reads an inverted hierarchy edge the way it is stored, not the way it is drawn', () => {
+    // #130 hands a hierarchy edge that contradicts a dependency edge to the layout reversed and
+    // marks it `inverted`. Only the drawing is reversed: `source` is still the parent, and the
+    // words must not follow the picture.
+    const graph = graphOf(
+      [local, child],
+      [
+        hierarchy(local, child, { inverted: true }),
+        { id: 'acme/app#6->acme/app#5', kind: 'dependency', source: child.id, target: local.id },
+      ],
+    )
 
     expect(describe_(graph, 'acme/app#5')).toBe(
       'Issue #5. Blocked by #6. Blocks nothing. Contains #6.',
@@ -378,51 +418,6 @@ describe('a sub-issue hierarchy', () => {
     expect(describe_(graph, 'acme/app#6')).toBe(
       'Issue #6. Blocked by nothing. Blocks #5. Part of #5.',
     )
-    expect(containmentRows(graph).map((row) => `${row.parent.id}->${row.child.id}`)).toEqual([
-      'acme/app#5->acme/app#6',
-    ])
-  })
-
-  it('follows the closed-blocker toggle, exactly as the drawing does', async () => {
-    async function withClosedParent(showClosed: boolean) {
-      return buildGraph(
-        dataFrom(
-          [
-            issue({
-              number: 6,
-              title: 'A sub-issue',
-              parent_issue_url: 'https://api.github.com/repos/other/lib/issues/9',
-            }),
-          ],
-          {
-            6: [
-              issue({
-                number: 9,
-                title: 'The finished parent',
-                state: 'closed',
-                state_reason: 'completed',
-                repository_url: 'https://api.github.com/repos/other/lib',
-                html_url: 'https://github.com/other/lib/issues/9',
-              }),
-            ],
-          },
-        ),
-        { owner: 'acme', repo: 'app' },
-        { showClosed },
-      )
-    }
-
-    // Default view: the closed parent is not drawn, so it is not announced either.
-    const hidden = await withClosedParent(false)
-    expect(hidden.edges.filter((edge) => edge.kind === 'hierarchy')).toHaveLength(0)
-    expect(containmentRows(hidden)).toEqual([])
-    expect(describe_(hidden, 'acme/app#6')).toBe('Issue #6. Blocked by nothing. Blocks nothing.')
-
-    // Asked for: the edge is drawn, so the text carries it, and the table reports the state.
-    const shown = await withClosedParent(true)
-    expect(shown.edges.filter((edge) => edge.kind === 'hierarchy')).toHaveLength(1)
-    expect(describe_(shown, 'acme/app#6')).toContain('Part of other/lib#9.')
-    expect(containmentRows(shown).map((row) => row.parent.open)).toEqual([false])
   })
 })
 
