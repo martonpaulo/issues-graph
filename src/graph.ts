@@ -1,6 +1,6 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
 import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
-import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
+import { cardLabels, hasNamespace, type CardChip } from './labels'
 import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
@@ -52,6 +52,28 @@ const CHIP_ROW_WIDTH = 210
 const CHIP_ROW_SLACK = 1
 
 /**
+ * What one emoji costs.
+ *
+ * `CHIP_FALLBACK_CHAR_WIDTH` is the widest advance captured off Inter, which is the right guess
+ * for a glyph Inter draws but the capture did not record — an accented latin letter, a CJK
+ * ideograph the browser resolves to a face of about the same size. An emoji is not that: Inter has
+ * no emoji glyphs at all, so the browser falls back to the system emoji face, which draws roughly
+ * square and therefore wider than any Inter advance. Labels lead with one often enough on public
+ * repositories to matter, and under-reserving is the direction that pushes chips out of the card.
+ * A cluster spelled with several code points over-reserves, which only leaves slack.
+ */
+const CHIP_EMOJI_CHAR_WIDTH = 13
+
+/** Symbol and pictographic blocks the shipped Inter face does not cover. */
+function isEmoji(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
+    (codePoint >= 0x2b00 && codePoint <= 0x2bff) ||
+    codePoint >= 0x1f000
+  )
+}
+
+/**
  * How wide the browser will draw one chip.
  *
  * Summed from the advances captured off the shipped Inter face rather than from an average
@@ -64,7 +86,12 @@ const CHIP_ROW_SLACK = 1
 function chipWidth(text: string): number {
   let width = CHIP_PADDING
   for (const character of text) {
-    width += CHIP_CHAR_WIDTHS[character] ?? CHIP_FALLBACK_CHAR_WIDTH
+    const captured = CHIP_CHAR_WIDTHS[character]
+    if (captured !== undefined) {
+      width += captured
+      continue
+    }
+    width += isEmoji(character.codePointAt(0)!) ? CHIP_EMOJI_CHAR_WIDTH : CHIP_FALLBACK_CHAR_WIDTH
   }
   return width
 }
@@ -168,7 +195,7 @@ export interface GraphNode {
    * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
    */
   repoLabel: string
-  /** The slots the card shows, filled or not. External cards show none. */
+  /** The chips the card draws, canonical slots first. External cards draw none. */
   labels: CardChip[]
   /** Every label on the issue, which is what the highlight picker offers. */
   allLabels: string[]
@@ -341,7 +368,7 @@ function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
   const state = external ? null : deriveState(issue)
   const labels = external ? [] : cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
-  const rows = chipRows(labels.map(chipText))
+  const rows = chipRows(labels.map((chip) => chip.text))
   return {
     id: nodeId(repo, issue.number),
     number: issue.number,

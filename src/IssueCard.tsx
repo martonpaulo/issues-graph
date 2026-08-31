@@ -4,7 +4,6 @@ import { useId, useRef } from 'react'
 import { issueRef } from './dependencies'
 import type { GraphNode, IssueState } from './graph'
 import { Icon } from './icons'
-import { chipText } from './labels'
 
 export interface IssueCardData extends Record<string, unknown> {
   node: GraphNode
@@ -125,12 +124,15 @@ function CardBody({
       </span>
 
       <span className="card__labels">
+        {/* An empty slot is keyed by its namespace and a real label by its own name, which a
+            repository cannot repeat on one issue. Keying on the text alone would collide where a
+            repository has a bare `effort` label and the card also draws an outlined `effort`. */}
         {node.labels.map((chip) => (
           <span
-            key={chip.namespace}
-            className={`chip${chip.value === null ? ' chip--empty' : ''}`}
+            key={`${chip.namespace ?? ''}:${chip.text}`}
+            className={`chip${chip.empty ? ' chip--empty' : ''}`}
           >
-            {chipText(chip)}
+            {chip.text}
           </span>
         ))}
       </span>

@@ -5,7 +5,6 @@ import awIssues from './__fixtures__/agent-workflows.issues.json'
 import tabeloBlockedBy from './__fixtures__/tabelo.blocked-by.json'
 import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import type { IssuePayload, RepositoryGraphData } from './github'
-import { chipText } from './labels'
 import {
   buildGraph,
   cardHeight,
@@ -136,6 +135,26 @@ describe('chipRows and cardHeight', () => {
     expect(chipRows(['type: 改善改善改善改善改善改善改善改善改善改善改善改善'])).toBe(1)
   })
 
+  it('reserves more for an emoji than for a glyph Inter itself draws', () => {
+    // Inter carries no emoji, so the browser falls back to a face that draws roughly square —
+    // wider than any advance captured off Inter, and wider than the accented latin the same
+    // fallback is the right guess for. Measured against a narrow row so that difference is the
+    // only thing deciding the wrap.
+    expect(chipRows(['\u{1F41B}', '\u{1F41B}'], 52)).toBe(2)
+    expect(chipRows(['é', 'é'], 52)).toBe(1)
+    // A label leading with one still costs a public repository's card only the row it is on.
+    expect(chipRows(['\u{1F41B} bug'])).toBe(1)
+  })
+
+  it('keeps an arbitrary repository\'s labels inside the card', () => {
+    // A 50-character label is the longest GitHub allows; the chip is clamped to the row it wraps
+    // inside, in `styles.css` as well as here, so it costs one row and never more.
+    expect(chipRows(['a'.repeat(50)])).toBe(1)
+    expect(chipRows(['a'.repeat(50), 'b'.repeat(50), 'c'.repeat(50)])).toBe(3)
+    expect(chipRows(['bug', 'good first issue', 'help wanted'])).toBe(1)
+    expect(chipRows(['C++ / stdlib', 'needs: triage'])).toBe(1)
+  })
+
   it('grows one line at a time and only spends chip rows it has chips for', () => {
     const bare = cardHeight(1, 0)
     expect(cardHeight(2, 0) - bare).toBe(cardHeight(3, 0) - cardHeight(2, 0))
@@ -250,6 +269,48 @@ describe('deriveState', () => {
   })
 })
 
+describe('a card built from a repository this viewer knows nothing about', () => {
+  const arbitrary = [
+    { name: 'bug', color: 'd73a4a' },
+    { name: 'good first issue', color: '7057ff' },
+    { name: 'help wanted', color: '008672' },
+    { name: '\u{1F41B} needs repro', color: '000000' },
+  ]
+
+  it('sizes itself for the chips it actually draws', async () => {
+    const graph = await buildGraph(dataFrom([issue({ labels: arbitrary })], {}), {
+      owner: 'acme',
+      repo: 'app',
+    })
+    const [node] = graph.nodes
+    const texts = node.labels.map((chip) => chip.text)
+
+    expect(texts).toEqual(['bug', 'good first issue', 'help wanted'])
+    expect(node.height).toBe(cardHeight(node.titleLines, chipRows(texts)))
+    expect(node.height).toBeLessThanOrEqual(cardHeight(MAX_TITLE_LINES, 3))
+  })
+
+  it('still reads state from GitHub\'s own facts when no label means anything here', () => {
+    // Every taxonomy-derived state is a no-op without its label; what is left is open or closed,
+    // whether a blocker is outstanding, and whether anybody is on it.
+    const labels = arbitrary
+    expect(deriveState(issue({ labels, assignees: [{ login: 'octocat' }] }))).toBe('ready')
+    expect(deriveState(issue({ labels, assignees: [] }))).toBe('unassigned')
+    expect(
+      deriveState(
+        issue({
+          labels,
+          assignees: [],
+          issue_dependencies_summary: { blocked_by: 1, total_blocked_by: 1, blocking: 0, total_blocking: 0 },
+        }),
+      ),
+    ).toBe('blocked')
+    expect(deriveState(issue({ labels, state: 'closed', state_reason: 'completed' }))).toBe(
+      'completed',
+    )
+  })
+})
+
 describe('dependencyCounts', () => {
   it('counts ordering only, so a parent neither waits nor holds anything up', async () => {
     const graph = await buildGraph(dataFrom(tabeloIssues, tabeloBlockedBy), TABELO)
@@ -304,7 +365,7 @@ describe('buildGraph against captured GitHub data', () => {
 
     expect(issue12.title).toBe('Repair loop after a real CI failure')
     expect(issue12.titleLines).toBe(1)
-    expect(chipRows(issue12.labels.map(chipText))).toBe(1)
+    expect(chipRows(issue12.labels.map((chip) => chip.text))).toBe(1)
     expect(issue12.height).toBe(cardHeight(1, 1))
 
     expect(issue13.title).toBe('Repair loop after changes_requested')

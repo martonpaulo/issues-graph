@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { GraphNode } from './graph'
 import { IssueCard, type IssueCardData } from './IssueCard'
+import { cardLabels } from './labels'
 
 function issueNode(overrides: Partial<GraphNode>): GraphNode {
   return {
@@ -68,6 +69,11 @@ function describedIds(html: string): string[] {
  */
 function buttonContents(html: string): string[] {
   return [...html.matchAll(/<button[^>]*>([\s\S]*?)<\/button>/g)].map((match) => match[1])
+}
+
+/** The chips a card drew, in document order, with their markup stripped. */
+function chips(html: string): string[] {
+  return [...html.matchAll(/<span class="chip[^"]*">([\s\S]*?)<\/span>/g)].map((match) => match[1])
 }
 
 function accessibleNames(html: string): string[] {
@@ -138,6 +144,55 @@ describe('IssueCard', () => {
     }
     // "delivered", not "in review": the reader is asking what to pick up, and this one is written.
     expect(words['in-review']).not.toBe(words.ready)
+  })
+
+  /** The chips a repository keeping the `namespace: value` convention produces. */
+  it('draws the three canonical slots, marking the one the issue has no label for', () => {
+    const html = renderCard(
+      issueNode({
+        labels: cardLabels([
+          { name: 'type: bug', color: 'd73a4a' },
+          { name: 'priority: P1', color: 'b60205' },
+          { name: 'area: grid', color: 'c5def5' },
+        ]),
+      }),
+    )
+
+    expect(chips(html)).toEqual(['type: bug', 'priority: P1', 'effort'])
+    // The gap is drawn as a gap, so the missing estimate reads as missing rather than as absent.
+    expect(html).toContain('<span class="chip chip--empty">effort</span>')
+    expect(html).toContain('<span class="chip">type: bug</span>')
+  })
+
+  /**
+   * The regression this card was rebuilt for: a repository with its own naming scheme used to get
+   * three dashed slots and none of the labels its issues actually carry.
+   */
+  it("draws an arbitrary repository's own labels instead of gaps for a taxonomy it has not got", () => {
+    const html = renderCard(
+      issueNode({
+        labels: cardLabels([
+          { name: 'bug', color: 'd73a4a' },
+          { name: 'good first issue', color: '7057ff' },
+          { name: '🐛 needs repro', color: '000000' },
+        ]),
+      }),
+    )
+
+    expect(chips(html)).toEqual(['bug', 'good first issue', '🐛 needs repro'])
+    expect(html).not.toContain('chip--empty')
+  })
+
+  it('escapes a label rather than letting its text reach the markup', () => {
+    const html = renderCard(
+      issueNode({ labels: cardLabels([{ name: '<script>x</script>', color: '000000' }]) }),
+    )
+    expect(html).not.toContain('<script>')
+    expect(html).toContain('&lt;script&gt;')
+  })
+
+  it('draws no chips at all for a card carrying no labels', () => {
+    expect(chips(renderCard(issueNode({})))).toEqual([])
   })
 
   it('shows a parent its own progress in words, and shows nothing on an issue with no children', () => {
