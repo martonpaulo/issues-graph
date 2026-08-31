@@ -462,3 +462,175 @@ describe('captured payload shape', () => {
     expect('state_reason' in payload).toBe(true)
   })
 })
+
+/**
+ * The token is the viewer's own, so the contract worth pinning is narrow: every request carries it
+ * when it is set, no request mentions it when it is not, and a token GitHub rejects is reported as
+ * a token problem rather than as an unexplained HTTP status.
+ */
+describe('the viewer’s token', () => {
+  function headersOf(call: unknown): Record<string, string> {
+    const init = call as { headers?: Record<string, string> }
+    return init.headers ?? {}
+  }
+
+  it('sends no Authorization header when no token is set', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      if (String(url).includes('/dependencies/blocked_by')) return json([issue(1)])
+      return json([issue(2, 1)])
+    })
+
+    await loadRepositoryGraph(TARGET, { fetchImpl: fetchImpl as unknown as typeof fetch })
+
+    expect(seen).toHaveLength(2)
+    for (const headers of seen) {
+      expect(headers).not.toHaveProperty('Authorization')
+      expect(headers.Accept).toBe('application/vnd.github+json')
+    }
+  })
+
+  it('sends the token on the issue list and on every dependency request', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      if (String(url).includes('/dependencies/blocked_by')) return json([issue(1)])
+      return json([issue(2, 1), issue(3, 1)])
+    })
+
+    await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'github_pat_example',
+    })
+
+    expect(seen).toHaveLength(3)
+    for (const headers of seen) {
+      expect(headers.Authorization).toBe('Bearer github_pat_example')
+    }
+  })
+
+  it('sends the token on the rate-limit pre-flight and on repository search', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      if (String(url).includes('/rate_limit')) {
+        return json({ resources: { core: { limit: 5000, remaining: 4999, reset: 1750000000 } } })
+      }
+      return json({ items: [{ full_name: 'acme/app' }] })
+    })
+
+    await readRateLimit({ fetchImpl: fetchImpl as unknown as typeof fetch, token: 'tok' })
+    await searchRepositories('acme/ap', {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'tok',
+    })
+
+    expect(seen.map((headers) => headers.Authorization)).toEqual(['Bearer tok', 'Bearer tok'])
+  })
+
+  it('ignores a token that is only whitespace, rather than sending an empty credential', async () => {
+    const seen: Record<string, string>[] = []
+    const fetchImpl = vi.fn(async (_url: string | URL | Request, init?: RequestInit) => {
+      seen.push(headersOf(init))
+      return json([issue(1)])
+    })
+
+    await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: '   ',
+    })
+
+    expect(seen[0]).not.toHaveProperty('Authorization')
+  })
+
+  it('reports a rejected token as its own failure, not as an unexpected status', async () => {
+    const fetchImpl = vi.fn(async () => json({ message: 'Bad credentials' }, { status: 401 }))
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'stale',
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.kind).toBe('bad-credentials')
+  })
+
+  it('names the rejected token when it is a dependency request that is refused', async () => {
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes('/dependencies/blocked_by')) {
+        return json({ message: 'Bad credentials' }, { status: 401 })
+      }
+      return json([issue(2, 1)])
+    })
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'stale',
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.data.complete).toBe(false)
+    expect(result.data.unresolved).toEqual([{ number: 2, reason: 'the token was rejected' }])
+  })
+})
+
+/**
+ * Stopping a load is what makes a token change safe: the requests still queued would otherwise
+ * carry the credential the viewer has just replaced or removed.
+ */
+describe('abandoning a load in flight', () => {
+  it('sends no further requests once the signal is aborted mid-dependency-phase', async () => {
+    const controller = new AbortController()
+    const seen: { url: string; token: string | undefined }[] = []
+
+    const fetchImpl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      if (controller.signal.aborted) {
+        throw new DOMException('The operation was aborted.', 'AbortError')
+      }
+      const headers = (init as { headers?: Record<string, string> }).headers ?? {}
+      seen.push({ url: String(url), token: headers.Authorization })
+
+      if (String(url).includes('/dependencies/blocked_by')) {
+        // The viewer removes the token while the dependency phase is running.
+        controller.abort()
+        return json([issue(1)])
+      }
+      return json([issue(2, 1), issue(3, 1), issue(4, 1)])
+    })
+
+    await expect(
+      loadRepositoryGraph(TARGET, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        signal: controller.signal,
+        token: 'removed-token',
+      }),
+    ).rejects.toThrow(DOMException)
+
+    // The listing and the one dependency request that was already out, and nothing after them.
+    const dependencyCalls = seen.filter((call) => call.url.includes('/dependencies/blocked_by'))
+    expect(dependencyCalls).toHaveLength(1)
+    expect(seen.every((call) => call.token === 'Bearer removed-token')).toBe(true)
+  })
+
+  it('spends nothing when the dependency phase is declined', async () => {
+    const seen: string[] = []
+    const fetchImpl = vi.fn(async (url: string | URL | Request) => {
+      seen.push(String(url))
+      return json([issue(2, 1)])
+    })
+
+    const result = await loadRepositoryGraph(TARGET, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      token: 'tok',
+      confirmDependencies: () => false,
+    })
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.failure.kind).toBe('cancelled')
+    expect(seen.filter((url) => url.includes('/dependencies/blocked_by'))).toHaveLength(0)
+  })
+})

@@ -5,11 +5,15 @@ import { describe, expect, it } from 'vitest'
 import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
+  abortOnTokenChange,
   App,
+  budgetParts,
   decideSavedCopyOpen,
   describeSavedCopy,
+  failureText,
   graphBounds,
   nextIssueSelection,
+  stopsForTokenChange,
 } from './App'
 import { readCache, writeCache } from './cache'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -208,5 +212,110 @@ describe('graphBounds', () => {
       requestCount: 0,
     })
     expect(Number.isFinite(bounds.width)).toBe(false)
+  })
+})
+
+/**
+ * The two places a rate-limit figure reaches the reader. Both have to follow whether a token is
+ * set, because quoting 60 to a viewer who supplied one understates what they can spend.
+ */
+describe('what the reader is told about the budget', () => {
+  const target = { owner: 'acme', repo: 'app' }
+
+  it('quotes the unauthenticated ceiling when GitHub’s numbers are unavailable', () => {
+    expect(budgetParts(null, false).main).toBe('60/hour')
+    expect(budgetParts(null, true).main).toBe('5000/hour')
+  })
+
+  it('prefers GitHub’s own numbers over either ceiling', () => {
+    const status = { limit: 5000, remaining: 4987, reset: null }
+    expect(budgetParts(status, true).main).toBe('4987/5000 left')
+    expect(budgetParts(status, false).main).toBe('4987/5000 left')
+  })
+
+  it('offers a token when the limit is hit without one, and does not when it is hit with one', () => {
+    const failure = { kind: 'rate-limited', reset: null } as const
+
+    expect(failureText(target, failure, false).body).toContain('Adding a token')
+    expect(failureText(target, failure, true).body).not.toContain('Adding a token')
+    expect(failureText(target, failure, true).body).not.toContain('Unauthenticated')
+  })
+
+  it('says a rejected token is the thing to fix', () => {
+    const text = failureText(target, { kind: 'bad-credentials' }, true)
+    expect(text.title).toContain('token')
+    expect(text.body).toContain('remove it')
+  })
+})
+
+/**
+ * A load carries the token it started with, so changing one mid-flight has to stop the other.
+ * Anything that is not in flight is left alone: nothing of its is still in the air.
+ */
+describe('what a token change interrupts', () => {
+  it('stops a read that is under way', () => {
+    expect(stopsForTokenChange('listing')).toBe(true)
+    expect(stopsForTokenChange('confirm')).toBe(true)
+    expect(stopsForTokenChange('resolving')).toBe(true)
+    expect(stopsForTokenChange('drawing')).toBe(true)
+  })
+
+  it('leaves a gate, a drawn graph, and a reported failure alone', () => {
+    expect(stopsForTokenChange('gate')).toBe(false)
+    expect(stopsForTokenChange('ready')).toBe(false)
+    expect(stopsForTokenChange('failed')).toBe(false)
+  })
+})
+
+/**
+ * The abort is what actually stops requests carrying a credential the viewer has replaced, so it
+ * is worth proving on its own: the component's effect is one call to this.
+ */
+describe('stopping a load whose token is gone', () => {
+  function active(): { current: AbortController | null } {
+    return { current: new AbortController() }
+  }
+
+  it('aborts what is in flight and remembers the token that replaced it', () => {
+    const carried = { current: 'old' }
+    const controller = active()
+
+    expect(abortOnTokenChange(carried, 'new', controller)).toBe(true)
+    expect(controller.current?.signal.aborted).toBe(true)
+    expect(carried.current).toBe('new')
+  })
+
+  it('aborts when the token is removed, which is the case that leaks a credential', () => {
+    const carried = { current: 'a-token' }
+    const controller = active()
+
+    expect(abortOnTokenChange(carried, '', controller)).toBe(true)
+    expect(controller.current?.signal.aborted).toBe(true)
+  })
+
+  it('leaves an unchanged token alone, so an unrelated render cannot stop a load', () => {
+    const carried = { current: 'same' }
+    const controller = active()
+
+    expect(abortOnTokenChange(carried, 'same', controller)).toBe(false)
+    expect(controller.current?.signal.aborted).toBe(false)
+  })
+
+  it('aborts once, not on every call after the change', () => {
+    const carried = { current: 'old' }
+    const first = active()
+    abortOnTokenChange(carried, 'new', first)
+
+    const second = active()
+    expect(abortOnTokenChange(carried, 'new', second)).toBe(false)
+    expect(second.current?.signal.aborted).toBe(false)
+  })
+
+  it('does not fail when nothing is in flight', () => {
+    const carried = { current: 'old' }
+    const nothing = { current: null }
+
+    expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
+    expect(carried.current).toBe('new')
   })
 })

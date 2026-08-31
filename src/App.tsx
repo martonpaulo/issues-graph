@@ -13,6 +13,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -23,6 +24,7 @@ import {
 import { readCache, writeCache, type CachedGraph } from './cache'
 import { buildGraph, NODE_WIDTH, type IssueGraph } from './graph'
 import {
+  AUTHENTICATED_HOURLY_LIMIT,
   loadRepositoryGraph,
   readRateLimit,
   UNAUTHENTICATED_HOURLY_LIMIT,
@@ -37,6 +39,7 @@ import { RepoInput } from './RepoInput'
 import { parseRoute, pathForTarget, slugOf, titleForRoute, type RepoTarget } from './route'
 import { readStored, writeStored } from './storage'
 import { rememberTarget } from './suggestions'
+import { readToken, writeToken } from './token'
 import { describeAge, describeUntil } from './time'
 
 const BASE = import.meta.env.BASE_URL
@@ -104,10 +107,17 @@ export function describeSavedCopy(
 /**
  * The budget as a headline and a footnote. The count is what a decision turns on; when it refills
  * only matters once it has run out, so it is written smaller and underneath.
+ *
+ * The quoted ceiling follows whether a token is set, because claiming 60 to a viewer who supplied
+ * one would understate what they can spend by a factor of eighty.
  */
-function budgetParts(status: RateLimitStatus | null): { main: string; sub: string } {
+export function budgetParts(
+  status: RateLimitStatus | null,
+  authenticated = false,
+): { main: string; sub: string } {
   if (!status) {
-    return { main: `${UNAUTHENTICATED_HOURLY_LIMIT}/hour`, sub: 'current use unknown' }
+    const ceiling = authenticated ? AUTHENTICATED_HOURLY_LIMIT : UNAUTHENTICATED_HOURLY_LIMIT
+    return { main: `${ceiling}/hour`, sub: 'current use unknown' }
   }
   return {
     main: `${status.remaining}/${status.limit} left`,
@@ -138,6 +148,22 @@ interface PendingLink {
 }
 
 const OpenExternalContext = createContext<(url: string, label: string) => void>(() => {})
+
+/* The viewer's token ------------------------------------------------------
+   Shared the same way, because the shell, the repository field and the load
+   all need it and none of them owns it. */
+
+interface TokenState {
+  token: string
+  /** Stores and applies the value; blank removes it. Takes effect on the next request. */
+  setToken: (value: string) => void
+}
+
+const TokenContext = createContext<TokenState>({ token: '', setToken: () => {} })
+
+function useTokenState(): TokenState {
+  return useContext(TokenContext)
+}
 
 export function useOpenExternal(): (url: string, label: string) => void {
   return useContext(OpenExternalContext)
@@ -196,6 +222,86 @@ function ExternalConfirm({ pending, onClose }: { pending: PendingLink; onClose: 
   )
 }
 
+/**
+ * Where a viewer supplies their own GitHub token.
+ *
+ * Closed by default: the page works without one, so this is an answer to a limit somebody has hit
+ * rather than a step on the way in. The value is theirs — it stays in their browser, goes only to
+ * api.github.com, and is never shown in plain text.
+ */
+function TokenField() {
+  const { token, setToken } = useTokenState()
+  const [draft, setDraft] = useState(token)
+  const [said, setSaid] = useState<string | null>(null)
+  const fieldId = useId()
+
+  return (
+    <details className="token">
+      <summary className="token__summary">
+        GitHub token · {token ? 'set' : `raises the limit from ${UNAUTHENTICATED_HOURLY_LIMIT} to ${AUTHENTICATED_HOURLY_LIMIT} an hour`}
+      </summary>
+      <div className="token__body">
+        <p className="token__note">
+          A fine-grained token with read access to public repositories is enough. It is kept in this
+          browser only, sent only to api.github.com, and never leaves with anything else.
+        </p>
+        <div className="token__row">
+          <label className="token__label" htmlFor={fieldId}>
+            Token
+          </label>
+          <input
+            className="token__input"
+            id={fieldId}
+            type="password"
+            value={draft}
+            placeholder={token ? '••••••••' : 'github_pat_…'}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(event) => {
+              setDraft(event.target.value)
+              setSaid(null)
+            }}
+          />
+        </div>
+        <div className="stage__actions">
+          <button
+            className="button button--primary"
+            type="button"
+            disabled={draft.trim() === token}
+            onClick={() => {
+              const stored = draft.trim()
+              setToken(stored)
+              // The field shows what was actually stored, which is the trimmed value.
+              setDraft(stored)
+              setSaid(stored ? 'Token saved. Requests from now on use it.' : 'Token removed.')
+            }}
+          >
+            Save
+          </button>
+          {token && (
+            <button
+              className="button"
+              type="button"
+              onClick={() => {
+                setToken('')
+                setDraft('')
+                setSaid('Token removed. Requests are unauthenticated again.')
+              }}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+        {said && (
+          <p className="token__said" role="status">
+            {said}
+          </p>
+        )}
+      </div>
+    </details>
+  )
+}
+
 /* Shared shell -------------------------------------------------------------
    One page for choosing a repository and for everything that has to be said
    before its graph can be drawn. The heading and the input never move; only the
@@ -213,6 +319,8 @@ function Start({
   message?: string
   children?: React.ReactNode
 }) {
+  const { token } = useTokenState()
+
   return (
     <div className="centre">
       <div className="start">
@@ -225,7 +333,9 @@ function Start({
 
         {message && <p className="notice notice--error">{message}</p>}
 
-        <RepoInput initial={initial} onOpen={onOpen} />
+        <RepoInput initial={initial} onOpen={onOpen} token={token} />
+
+        <TokenField />
 
         {children ? (
           <section className="stage">
@@ -246,7 +356,11 @@ function Start({
   )
 }
 
-function failureText(target: RepoTarget, failure: LoadFailure): { title: string; body: string } {
+export function failureText(
+  target: RepoTarget,
+  failure: LoadFailure,
+  authenticated = false,
+): { title: string; body: string } {
   const slug = slugOf(target)
   switch (failure.kind) {
     case 'not-found':
@@ -257,7 +371,14 @@ function failureText(target: RepoTarget, failure: LoadFailure): { title: string;
     case 'rate-limited':
       return {
         title: 'GitHub rate limit reached',
-        body: `Unauthenticated requests share ${UNAUTHENTICATED_HOURLY_LIMIT} per hour per IP address. It refills ${describeUntil(failure.reset)}. Showing nothing rather than a misleading part of the graph.`,
+        body: authenticated
+          ? `A token gets ${AUTHENTICATED_HOURLY_LIMIT} requests per hour, and this one has spent them. It refills ${describeUntil(failure.reset)}. Showing nothing rather than a misleading part of the graph.`
+          : `Unauthenticated requests share ${UNAUTHENTICATED_HOURLY_LIMIT} per hour per IP address. It refills ${describeUntil(failure.reset)}. Adding a token raises that to ${AUTHENTICATED_HOURLY_LIMIT}. Showing nothing rather than a misleading part of the graph.`,
+      }
+    case 'bad-credentials':
+      return {
+        title: 'GitHub rejected the token',
+        body: 'It may be expired, revoked, or mistyped. Correct it under "GitHub token" above, or remove it to read without one.',
       }
     case 'network':
       return { title: 'GitHub could not be reached', body: failure.message }
@@ -945,6 +1066,37 @@ function GraphView({
   )
 }
 
+/**
+ * Whether a token change has to stop what the page is doing.
+ *
+ * A load in progress carries the token it started with, so it must be stopped. A gate has sent
+ * nothing, and a drawn graph or a reported failure is finished: none of them is holding a request
+ * that could still leave with the wrong credential, and discarding a graph somebody is reading
+ * would be a worse answer than leaving it.
+ */
+export function stopsForTokenChange(kind: Phase['kind']): boolean {
+  return kind === 'listing' || kind === 'confirm' || kind === 'resolving' || kind === 'drawing'
+}
+
+/**
+ * Aborts whatever is in flight when the token it was started with is no longer the current one,
+ * and records the token the next load will carry.
+ *
+ * The comparison lives in a ref rather than in state because the render-phase block below
+ * synchronizes its own copy before any effect commits: an effect comparing against that state
+ * would always find the two already equal and would never abort. Returns whether it aborted.
+ */
+export function abortOnTokenChange(
+  carried: { current: string },
+  token: string,
+  active: { current: AbortController | null },
+): boolean {
+  if (carried.current === token) return false
+  carried.current = token
+  active.current?.abort()
+  return true
+}
+
 function GraphLoad({
   target,
   note,
@@ -960,6 +1112,7 @@ function GraphLoad({
   onReload: (why?: string | null) => void
   onOpen: (target: RepoTarget) => void
 }) {
+  const { token } = useTokenState()
   const slug = slugOf(target)
   // Read once per mount: the gate has to describe a copy that does not change under it.
   const [cached] = useState<CachedGraph | null>(() => readCache(slug))
@@ -970,35 +1123,81 @@ function GraphLoad({
   // can always open with real numbers instead of an assumption about what is left.
   useEffect(() => {
     const controller = new AbortController()
-    void readRateLimit({ signal: controller.signal }).then((status) => {
+    void readRateLimit({ signal: controller.signal, token }).then((status) => {
       if (controller.signal.aborted) return
       setPhase((current) =>
         current.kind === 'gate' ? { ...current, status, checking: false } : current,
       )
     })
     return () => controller.abort()
-  }, [target])
+    // Saving or removing a token changes the budget, so the gate has to read it again.
+  }, [target, token])
 
   useEffect(() => () => abort.current?.abort(), [])
+
+  /**
+   * A load already in flight carries the token it started with: `LoadOptions` is built once, so
+   * every request still queued would keep sending a credential the viewer has just replaced or
+   * removed, and the budget on screen would describe an authentication state the load no longer
+   * has. Stopping it is the only reading of "takes effect on the next request" that is true.
+   */
+  const carriedToken = useRef(token)
+  const [shownToken, setShownToken] = useState(token)
+  const [stopped, setStopped] = useState<string | null>(null)
+
+  // What the page shows next. The abort itself is the effect below, because stopping a request is
+  // a side effect and this block has to stay a pure state adjustment.
+  if (shownToken !== token) {
+    setShownToken(token)
+    if (stopsForTokenChange(phase.kind)) {
+      setPhase({ kind: 'gate', status: null, checking: true })
+      setStopped(
+        token
+          ? 'The read was stopped when the token changed. Nothing further was sent without it.'
+          : 'The read was stopped when the token was removed. Nothing further was sent with it.',
+      )
+    }
+  }
+
+  // Aborting is what actually stops the requests. Keyed on the token alone, and comparing against
+  // a ref, so the state adjustment above cannot hide the change from it.
+  useEffect(() => {
+    abortOnTokenChange(carriedToken, token, abort)
+  }, [token])
 
   const start = useCallback(
     (includeClosed: boolean) => {
       abort.current?.abort()
       const controller = new AbortController()
       abort.current = controller
+      carriedToken.current = token
+      setStopped(null)
       setPhase({ kind: 'listing' })
 
       loadRepositoryGraph(target, {
         signal: controller.signal,
+        token,
         includeClosed,
         onProgress: ({ done, total }) => {
           if (!controller.signal.aborted) setPhase({ kind: 'resolving', done, total })
         },
         confirmDependencies: async (cost) => {
-          const status = await readRateLimit({ signal: controller.signal })
+          const status = await readRateLimit({ signal: controller.signal, token })
           if (controller.signal.aborted) return false
           return new Promise<boolean>((resolve) => {
-            setPhase({ kind: 'confirm', cost, status, decide: resolve })
+            // Nothing has been sent yet, so an abort here answers the question with "no" rather
+            // than leaving the load awaiting a decision the interface can no longer offer.
+            const onAbort = () => resolve(false)
+            controller.signal.addEventListener('abort', onAbort, { once: true })
+            setPhase({
+              kind: 'confirm',
+              cost,
+              status,
+              decide: (ok) => {
+                controller.signal.removeEventListener('abort', onAbort)
+                resolve(ok)
+              },
+            })
           })
         },
       })
@@ -1027,7 +1226,7 @@ function GraphLoad({
           })
         })
     },
-    [target, slug, onReload],
+    [target, slug, token, onReload],
   )
 
   const drawSavedCopy = useCallback(
@@ -1065,11 +1264,16 @@ function GraphLoad({
       {phase.kind === 'gate' && (
         <>
           {note && <p className="notice">{note}</p>}
+          {stopped && (
+            <p className="notice" role="status">
+              {stopped}
+            </p>
+          )}
           <dl className="facts">
             <Fact
               label="Budget"
-              value={phase.checking ? '…' : budgetParts(phase.status).main}
-              note={phase.checking ? undefined : budgetParts(phase.status).sub}
+              value={phase.checking ? '…' : budgetParts(phase.status, token !== '').main}
+              note={phase.checking ? undefined : budgetParts(phase.status, token !== '').sub}
             />
             {cached && (
               <Fact
@@ -1128,10 +1332,10 @@ function GraphLoad({
           <dl className="facts">
             <Fact
               label="Budget"
-              value={budgetParts(phase.status).main}
+              value={budgetParts(phase.status, token !== '').main}
               note={
                 phase.status === null
-                  ? budgetParts(phase.status).sub
+                  ? budgetParts(phase.status, token !== '').sub
                   : `${Math.max(0, phase.status.remaining - phase.cost)} left after this`
               }
             />
@@ -1175,8 +1379,8 @@ function GraphLoad({
       {phase.kind === 'failed' && (
         <>
           <p className="notice notice--error">
-            <strong>{failureText(target, phase.failure).title}.</strong>{' '}
-            {failureText(target, phase.failure).body}
+            <strong>{failureText(target, phase.failure, token !== '').title}.</strong>{' '}
+            {failureText(target, phase.failure, token !== '').body}
           </p>
           <div className="stage__actions">
             <button
@@ -1213,6 +1417,12 @@ function GraphLoad({
 export function App() {
   const [pathname, setPathname] = useState(() => window.location.pathname)
   const [pending, setPending] = useState<PendingLink | null>(null)
+  const [token, setStoredToken] = useState(() => readToken())
+
+  // writeToken returns what was actually stored, so the state and the store cannot disagree about
+  // a trimmed or blanked value.
+  const setToken = useCallback((value: string) => setStoredToken(writeToken(value)), [])
+  const tokenState = useMemo(() => ({ token, setToken }), [token, setToken])
 
   useEffect(() => {
     const onPopState = () => setPathname(window.location.pathname)
@@ -1240,13 +1450,15 @@ export function App() {
   const openExternal = useCallback((url: string, label: string) => setPending({ url, label }), [])
 
   return (
-    <OpenExternalContext.Provider value={openExternal}>
-      {route.kind === 'graph' ? (
-        <GraphView key={slugOf(route.target)} target={route.target} onOpen={openTarget} />
-      ) : (
-        <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
-      )}
-      {pending && <ExternalConfirm pending={pending} onClose={() => setPending(null)} />}
-    </OpenExternalContext.Provider>
+    <TokenContext.Provider value={tokenState}>
+      <OpenExternalContext.Provider value={openExternal}>
+        {route.kind === 'graph' ? (
+          <GraphView key={slugOf(route.target)} target={route.target} onOpen={openTarget} />
+        ) : (
+          <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
+        )}
+        {pending && <ExternalConfirm pending={pending} onClose={() => setPending(null)} />}
+      </OpenExternalContext.Provider>
+    </TokenContext.Provider>
   )
 }

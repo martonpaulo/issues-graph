@@ -1023,3 +1023,84 @@ code {
   gap: 8px;
   margin-top: 18px;
 }
+
+/* The viewer's token ------------------------------------------------------
+   Folded away by default: the page reads GitHub without one, so this is the
+   answer to a limit somebody hit rather than a step on the way in. */
+
+.token {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.token__summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 4px 0;
+}
+
+.token__summary::-webkit-details-marker {
+  display: none;
+}
+
+.token__summary::before {
+  content: '›';
+  display: inline-block;
+  width: 12px;
+  transition: transform 0.15s ease;
+}
+
+.token[open] .token__summary::before {
+  transform: rotate(90deg);
+}
+
+.token__summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.token__body {
+  padding: 4px 0 0 12px;
+}
+
+.token__note {
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.token__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.token__label {
+  flex: none;
+  color: var(--text);
+}
+
+.token__input {
+  flex: 1;
+  min-width: 0;
+  /* The one place text is typed is the one place it can be selected. */
+  user-select: text;
+  -webkit-user-select: text;
+  font: inherit;
+  padding: 7px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.token__input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.token__said {
+  margin: 8px 0 0;
+  color: var(--text);
+}
