@@ -11,7 +11,7 @@
  * whole point of sending one rather than sending `/dependencies/owner/repo`.
  */
 
-import { fromStored, toStored, type StoredGraph } from './cache'
+import { fromStored, isStoredGraph, toStored, type StoredGraph } from './cache'
 import type { RepositoryGraphData } from './github'
 
 /** The fragment key. Short because every character of it is charged to the length budget. */
@@ -140,72 +140,14 @@ export async function buildSnapshotUrl(
    an omitted `complete` reaches GraphStatus as `undefined`, which is falsy, so
    it renders the incomplete-graph warning and calls `.map` on an `unresolved`
    that is not there. A damaged link has to be caught here, where there is still
-   a message to show and a live read to fall back to. */
+   a message to show and a live read to fall back to.
+
+   The graph itself is checked by `isStoredGraph`, which lives with the module
+   that owns the shape. A link and a saved copy carry the same payload under the
+   same threat, so they are validated by the same function. */
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
-}
-
-function isLabel(value: unknown): boolean {
-  return isRecord(value) && typeof value.name === 'string' && typeof value.color === 'string'
-}
-
-/** Every field `buildGraph` and the cards read off an issue, and nothing more. */
-function isIssue(value: unknown): boolean {
-  if (!isRecord(value)) return false
-  if (!Number.isInteger(value.number)) return false
-  if (typeof value.title !== 'string') return false
-  if (typeof value.state !== 'string') return false
-  if (value.state_reason !== null && typeof value.state_reason !== 'string') return false
-  if (typeof value.html_url !== 'string') return false
-  if (typeof value.repository_url !== 'string') return false
-  if (!Array.isArray(value.labels) || !value.labels.every(isLabel)) return false
-
-  const summary = value.issue_dependencies_summary
-  if (summary !== undefined && !isRecord(summary)) return false
-  return true
-}
-
-function isBlockerEntry(value: unknown): boolean {
-  return (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    Number.isInteger(value[0]) &&
-    Array.isArray(value[1]) &&
-    value[1].every(isIssue)
-  )
-}
-
-function isUnresolved(value: unknown): boolean {
-  return isRecord(value) && Number.isInteger(value.number) && typeof value.reason === 'string'
-}
-
-/**
- * Whether a number is a timestamp `Date` can actually represent.
- *
- * Finiteness is not enough: the ECMAScript time range is ±8.64e15 ms, so `1e20` is a perfectly
- * finite number that yields an Invalid Date. Asking the constructed date settles the whole
- * question at once — out of range, `NaN` and `Infinity` all fail the same way — and an Invalid
- * Date reaching the banner renders as `NaN days ago` rather than as anything a reader would
- * recognize as a broken link.
- * https://tc39.es/ecma262/#sec-time-values-and-time-range
- */
-function isTimestamp(value: unknown): boolean {
-  return typeof value === 'number' && !Number.isNaN(new Date(value).getTime())
-}
-
-/** Whether the stored graph is whole enough to draw. */
-function isStoredGraph(value: unknown): value is StoredGraph {
-  if (!isRecord(value)) return false
-  if (value.version !== 1) return false
-  if (!isTimestamp(value.savedAt)) return false
-  if (!Array.isArray(value.issues) || !value.issues.every(isIssue)) return false
-  if (!Array.isArray(value.blockers) || !value.blockers.every(isBlockerEntry)) return false
-  if (typeof value.complete !== 'boolean') return false
-  if (!Array.isArray(value.unresolved) || !value.unresolved.every(isUnresolved)) return false
-  if (typeof value.includedClosed !== 'boolean') return false
-  if (typeof value.requestCount !== 'number' || !Number.isFinite(value.requestCount)) return false
-  return true
 }
 
 /**
