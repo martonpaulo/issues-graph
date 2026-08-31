@@ -28,5 +28,14 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    /**
+     * ELK lays out the captured backlogs for real, which is seconds of genuine work — the largest
+     * single test measures ~2s on its own. Vitest runs the files in parallel workers, so that test
+     * shares a machine with every other file and the 5s default leaves it no headroom: the suite
+     * failed on timeouts, not assertions, as soon as one more file was added. The figure is
+     * deliberately far above the real cost, because a timeout here is only ever meant to stop a
+     * hang, never to measure how loaded the machine is.
+     */
+    testTimeout: 30000,
   },
 })

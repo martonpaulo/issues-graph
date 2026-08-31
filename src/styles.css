@@ -433,9 +433,12 @@ code {
 }
 
 /* Group frame -------------------------------------------------------------
-   The two kinds mean opposite things, so they do not share a look: a chain is a
-   solid, filled block of work that has an order, and the independent set is an
-   open dashed area whose members are in no particular relation to each other. */
+   The three kinds mean different things, so they do not share a look: a chain is
+   a solid, filled block of work that has an order; a breakdown is filled too,
+   because its members are just as much one piece of work, but dashed like the
+   containment edges inside it, because nothing in it comes first; and the
+   independent set is an open dashed area with no fill at all, whose members are
+   in no particular relation to each other. */
 
 .group {
   width: 100%;
@@ -447,6 +450,14 @@ code {
 .group--chain {
   border: 1.5px solid #c4d0e4;
   background: color-mix(in srgb, #dce6f6 42%, transparent);
+}
+
+/* Dashed in the same stroke the hierarchy edges inside it are drawn with, so the frame and its
+   contents agree about which relation holds the set together. Filled, because a parent and its
+   sub-issues are one piece of work — that is what separates it from the independent set. */
+.group--breakdown {
+  border: 1.5px dashed var(--hierarchy-edge);
+  background: color-mix(in srgb, #e7ecf3 55%, transparent);
 }
 
 .group--free {
@@ -476,6 +487,10 @@ code {
 
 .group--chain .group__label {
   color: #4a6a9b;
+}
+
+.group--breakdown .group__label {
+  color: #5c6a7d;
 }
 
 .group__label:hover {
