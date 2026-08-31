@@ -86,3 +86,4 @@ There is none, deliberately. Nothing pins this repository, so there is no compat
 version number could describe: `main` is what is deployed. Git history is the record.
 [`AGENTS.md`](AGENTS.md) carries the full policy and [`docs/product.md`](docs/product.md) says what
 this is and what it will never do.
+
