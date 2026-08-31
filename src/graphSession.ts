@@ -342,7 +342,6 @@ export class GraphSession {
   /** Stops everything in flight and settles anything waiting on an answer. */
   close(): void {
     this.#closed = true
-    this.#run += 1
     this.#probe?.abort()
     this.#probe = null
     this.#cancelWork()
@@ -366,13 +365,21 @@ export class GraphSession {
 
   #beginWork(): AbortController {
     this.#cancelWork()
-    this.#run += 1
     const controller = new AbortController()
     this.#work = controller
     return controller
   }
 
+  /**
+   * Ends whatever is in flight, whether or not it is holding a signal.
+   *
+   * Advancing the run is the half that reaches a shared link: that path draws a payload already in
+   * the address bar, so it makes no request, holds no controller, and an abort has nothing to
+   * reach it by. Without this, a token change moved the page to the gate and the snapshot still
+   * landed afterwards, overwriting the gate with a graph the viewer had been taken away from.
+   */
   #cancelWork(): void {
+    this.#run += 1
     // Settled before the abort rather than by it, so the loader is released even when the
     // confirmation was never given a listener to hear.
     this.#settleConfirmation?.(false)

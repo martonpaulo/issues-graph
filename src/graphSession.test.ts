@@ -554,6 +554,46 @@ describe('a shared link in the fragment', () => {
     })
   })
 
+  /**
+   * The shared-link run holds no request, so an abort signal cannot reach it: only the run counter
+   * can. Without that, a token change moved the page to the gate and the snapshot still landed
+   * afterwards, overwriting the gate with a graph the viewer had already been taken away from.
+   */
+  it('drops a snapshot that arrives after a token change moved the page on', async () => {
+    const held = deferred<SnapshotRead>()
+    const harness = open({ readSnapshot: () => held.promise }, { fragment })
+    harness.session.begin()
+    expect(harness.session.getState().phase).toEqual({ kind: 'drawing' })
+
+    harness.session.setToken('ghp_new')
+    expect(harness.session.getState().phase.kind).toBe('gate')
+
+    held.resolve({ kind: 'snapshot', view })
+    await settle()
+
+    expect(harness.session.getState().phase.kind).toBe('gate')
+  })
+
+  it('drops a shared-link layout that finishes after a token change', async () => {
+    const held = deferred<IssueGraph>()
+    const harness = open(
+      {
+        readSnapshot: async (): Promise<SnapshotRead> => ({ kind: 'snapshot', view }),
+        buildGraph: () => held.promise,
+      },
+      { fragment },
+    )
+    harness.session.begin()
+    await settle()
+    expect(harness.session.getState().phase).toEqual({ kind: 'drawing' })
+
+    harness.session.setToken('ghp_new')
+    held.resolve(graph)
+    await settle()
+
+    expect(harness.session.getState().phase.kind).toBe('gate')
+  })
+
   it('drops a snapshot that arrives after the session closed', async () => {
     const held = deferred<SnapshotRead>()
     const harness = open({ readSnapshot: () => held.promise }, { fragment })
