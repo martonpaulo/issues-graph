@@ -1,0 +1,47 @@
+# Validates every pull request before it can merge.
+#
+# The same checks the deploy workflow runs, moved ahead of the merge instead of after it. This is
+# what makes the orchestrated lane's CI states reachable: without a check run on the pull request
+# head, Agent Orchestrator reports CI as unknown, never drives its own CI-fixing loop, and
+# auto-merge stays disarmed because there is no required status check to gate it.
+name: Validate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
