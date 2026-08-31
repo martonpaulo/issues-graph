@@ -443,8 +443,8 @@ let ready: ElkEngine | null = null
 /**
  * A real worker where the platform has one, and the bundled engine where it does not.
  *
- * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for the
- * 25-node `agent-workflows` graph, 672 ms at 250 nodes — during which the page cannot paint or
+ * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for a
+ * 25-node graph, 672 ms at 250 nodes — during which the page cannot paint or
  * answer a click. The worker moves that off the main thread and makes the work stoppable, which is
  * the only way an ELK layout can be stopped.
  *
