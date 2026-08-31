@@ -442,9 +442,8 @@ let engine: Promise<ElkEngine> | null = null
  * answer a click. The worker moves that off the main thread and makes the work stoppable, which is
  * the only way an ELK layout can be stopped.
  *
- * Whether that cost is worth this file is the owner's call, not this comment's: #16 gates worker
- * adoption on a long-task budget the repository has not recorded. See
- * `docs/research/elk-layout-main-thread-cost.md` for the figures the decision rests on.
+ * The budget those figures were read against is the platform's own 50 ms, agreed under #16. See
+ * `docs/research/elk-layout-main-thread-cost.md` for the measurement and the decision.
  *
  * The fallback is not a nicety: the tests run this module under Node, where `Worker` does not
  * exist, and the layout they assert on is the same algorithm either way.

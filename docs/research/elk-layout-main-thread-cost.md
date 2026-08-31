@@ -39,11 +39,19 @@ as a loose block, and ELK is barely asked to do anything. The cost tracks edges,
 Everything else is a single uninterruptible task past the 50 ms threshold, growing faster than the
 graph does — 672 ms at 250 nodes, during which the page cannot paint or answer a click.
 
-**This measurement does not by itself decide anything.** #16 makes worker adoption conditional on an
-agreed long-task budget, and no budget is recorded anywhere in this repository. The numbers above
-are the evidence that decision needs; the decision itself is the owner's, and is outstanding. What
-follows records what the worker was measured to do, so the choice can be made against real figures
-rather than an estimate — not a conclusion that it should ship.
+### The budget these were read against
+
+#16 made worker adoption conditional on an agreed long-task budget, and none was recorded. Presented
+with the figures above, the owner delegated the choice
+([#16 comment](https://github.com/martonpaulo/issues-graph/issues/16#issuecomment-5480157211)), and
+the budget set is **the platform's own 50 ms**: the threshold at which a browser itself starts
+calling a task long. Adopting somebody else's definition rather than inventing a number is what
+keeps the gate checkable by anyone later, with `PerformanceObserver` and no argument about where the
+line is.
+
+Read against it, three of the four graphs exceed the budget and the worker was adopted. `tabelo` is
+the one that passes, and it is worth saying why it does not weaken the case: it passes because it is
+barely a graph, not because 46 issues are cheap.
 
 ## After: the same measurement with ELK in a worker
 
@@ -65,6 +73,6 @@ and falls back to `elk.bundled.js` where `Worker` does not exist, which is how t
 algorithm under Node. The build therefore emits both engines; the bundled one is a lazy chunk that no
 browser ever fetches.
 
-That containment is what makes the decision cheap either way: adopting the worker is one file and one
-branch in `createEngine`, and declining it removes the same file and branch without touching the
-retry, failure-typing or stale-result work, which is unconditional and independent of it.
+The containment is deliberate: the worker is one file plus one branch in `createEngine`, and it is
+independent of the retry, failure-typing and stale-result work in the same change. Reversing this
+decision later means deleting that file and that branch, and nothing else.
