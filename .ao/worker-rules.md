@@ -53,6 +53,10 @@ card for the record, then raise the same question through the tool.
   which choice is open and what is already established, then ask the owner and wait.
 - **Blocked on a missing phase** — post one comment naming the missing phase, no label change,
   then name it to the owner and wait.
+- **Already delivered** — the requirement is already met on the default branch, by another issue
+  or by work that landed since. Post the evidence naming the file and a rerunnable check, and close
+  the issue as completed. Never end idle with nothing pushed: that is indistinguishable from a run
+  that broke, and it leaves the issue open forever.
 - **Disproven** — the run holds reproducible evidence that the issue's premise is false. Post that
   evidence and close the issue as not planned. This is the one disposition that ends clean, and
   the gate is a command a human can rerun with its output, never an assertion. Anything short of
