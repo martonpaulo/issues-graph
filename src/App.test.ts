@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { ReactFlowProvider } from '@xyflow/react'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
@@ -15,6 +15,7 @@ import {
   budgetParts,
   canvasShortcut,
   CAPTURING_FOCUS,
+  createSettler,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -878,5 +879,73 @@ describe('what takes the canvas keys away from the canvas', () => {
      a shut picker is an ordinary button on the toolbar. */
   it('leaves the canvas its keys while the focus rests on a shut picker', () => {
     expect(selectors).not.toContain('.picker')
+  })
+})
+
+/* The picker's focus restoration is scheduled by the very close that ends the state it was
+   scheduled in, so what owns the wait decides whether it ever runs. Owning it alongside the open
+   state cancelled it on that transition and the reader was left on `<body>` anyway — the fault
+   these cover. */
+describe('the wait that outlives what scheduled it', () => {
+  it('runs the task once the turn is over', () => {
+    vi.useFakeTimers()
+    try {
+      const settler = createSettler()
+      let ran = 0
+      settler.after(() => (ran += 1))
+
+      expect(ran).toBe(0)
+      vi.runAllTimers()
+      expect(ran).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('is stopped by cancelling it and by nothing else', () => {
+    vi.useFakeTimers()
+    try {
+      const settler = createSettler()
+      let ran = 0
+      settler.after(() => (ran += 1))
+      settler.cancel()
+      vi.runAllTimers()
+
+      expect(ran).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps only the last call when a second press arrives before the first has settled', () => {
+    vi.useFakeTimers()
+    try {
+      const settler = createSettler()
+      const ran: string[] = []
+      settler.after(() => ran.push('first'))
+      settler.after(() => ran.push('second'))
+      vi.runAllTimers()
+
+      expect(ran).toEqual(['second'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels nothing after the task has already run, so a later wait still settles', () => {
+    vi.useFakeTimers()
+    try {
+      const settler = createSettler()
+      let ran = 0
+      settler.after(() => (ran += 1))
+      vi.runAllTimers()
+      settler.cancel()
+      settler.after(() => (ran += 1))
+      vi.runAllTimers()
+
+      expect(ran).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

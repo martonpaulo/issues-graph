@@ -266,6 +266,32 @@ export function restoresTriggerAfterOutsidePress(
   return focusWasInsidePanel && !focusLandedOnAControl
 }
 
+/**
+ * One deferred call that outlives whatever scheduled it, until it is cancelled outright.
+ *
+ * The popover below needs a call that runs *after* a press has finished being one, scheduled by
+ * the very close that ends the state the press was in. Owning that timer alongside the open state
+ * cancels it on the transition that scheduled it, which is the restoration silently never
+ * happening; owning it here means only `cancel` stops it, and only the hook unmounting calls that.
+ */
+export function createSettler() {
+  let pending: ReturnType<typeof setTimeout> | null = null
+  return {
+    /** Runs `task` once the current turn is over, replacing any call still waiting. */
+    after(task: () => void) {
+      if (pending !== null) clearTimeout(pending)
+      pending = setTimeout(() => {
+        pending = null
+        task()
+      })
+    },
+    cancel() {
+      if (pending !== null) clearTimeout(pending)
+      pending = null
+    },
+  }
+}
+
 /** The controls a reader can reach with Tab, in the order Tab reaches them. */
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
@@ -366,6 +392,9 @@ function useModalDialog<Initial extends HTMLElement>(onClose: () => void) {
 function usePopover(open: boolean, onClose: () => void) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
+  // One settler for the life of the picker, through `useState`'s lazy initializer so it is built
+  // once rather than on every render.
+  const [settling] = useState(createSettler)
 
   /**
    * Closing from a key: the reader is inside the panel, or on `<body>` because something already
@@ -395,7 +424,6 @@ function usePopover(open: boolean, onClose: () => void) {
       event.preventDefault()
       dismissEvent()
     }
-    let settling = 0
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as globalThis.Node | null
       if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
@@ -404,9 +432,11 @@ function usePopover(open: boolean, onClose: () => void) {
       closeEvent()
 
       // Where the focus ends up is the browser's answer rather than this handler's, so the rule is
-      // applied once the press has finished being one: `mousedown` focuses the pressed control
-      // after this listener has run, and the panel unmounts in between.
-      settling = window.setTimeout(() => {
+      // read once the press has finished being one: `mousedown` focuses the pressed control after
+      // this listener has run, and the panel unmounts in between. The wait is owned by the settler
+      // rather than by this effect, whose whole lifetime is `open === true` — the close above ends
+      // it, and a wait cancelled by the transition that scheduled it never reads anything.
+      settling.after(() => {
         const landed = document.activeElement !== null && document.activeElement !== document.body
         if (restoresTriggerAfterOutsidePress(wasInside, landed)) triggerRef.current?.focus()
       })
@@ -417,9 +447,11 @@ function usePopover(open: boolean, onClose: () => void) {
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pointerdown', onPointerDown)
-      window.clearTimeout(settling)
     }
-  }, [open, restoreTrigger])
+  }, [open, settling])
+
+  // The one cancellation. A picker that has gone has no trigger to give the focus back to.
+  useEffect(() => () => settling.cancel(), [settling])
 
   return { triggerRef, panelRef, dismiss }
 }
