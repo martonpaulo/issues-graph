@@ -22,7 +22,14 @@ import {
 } from 'react'
 
 import { readCache, writeCache, type CachedGraph } from './cache'
-import { buildGraph, NODE_WIDTH, type IssueGraph } from './graph'
+import {
+  buildGraph,
+  discardLayoutEngine,
+  drawFailure,
+  NODE_WIDTH,
+  type DrawFailure,
+  type IssueGraph,
+} from './graph'
 import {
   AUTHENTICATED_HOURLY_LIMIT,
   loadRepositoryGraph,
@@ -397,9 +404,17 @@ function Start({
   )
 }
 
+/**
+ * Everything that can leave the page with nothing to show.
+ *
+ * A read that failed and a drawing that failed are different causes with the same consequence, and
+ * the reader is owed one panel rather than two vocabularies for "it did not work, try again".
+ */
+export type ViewFailure = LoadFailure | DrawFailure
+
 export function failureText(
   target: RepoTarget,
-  failure: LoadFailure,
+  failure: ViewFailure,
   authenticated = false,
 ): { title: string; body: string } {
   const slug = slugOf(target)
@@ -432,6 +447,13 @@ export function failureText(
       }
     case 'cancelled':
       return { title: 'Load cancelled', body: 'No dependency requests were spent.' }
+    case 'draw':
+      // The issues were read; it is the drawing that failed, and saying so keeps the reader from
+      // concluding the repository or their token is at fault when neither is.
+      return {
+        title: 'The graph could not be drawn',
+        body: 'The issues were read, but the layout engine could not be loaded or could not finish. Try again.',
+      }
   }
 }
 
@@ -1213,7 +1235,7 @@ type Phase =
   | { kind: 'resolving'; done: number; total: number }
   /** The layout runs off the main path of the load, and on a large graph it is not instant. */
   | { kind: 'drawing' }
-  | { kind: 'failed'; failure: LoadFailure }
+  | { kind: 'failed'; failure: ViewFailure }
   | {
       kind: 'ready'
       graph: IssueGraph
@@ -1261,6 +1283,20 @@ function GraphView({
       onOpen={onOpen}
     />
   )
+}
+
+/**
+ * Whether a finished layout is still the one the page is waiting for.
+ *
+ * ELK cannot be cancelled, so a draw the reader has moved on from finishes anyway: it reloads, it
+ * opens the saved copy instead, it follows a shared link, it navigates away entirely. Without an
+ * identity, whichever of those settles last wins, and the graph on screen becomes whichever draw
+ * happened to be slowest rather than whichever the reader asked for. Each draw therefore takes a
+ * ticket before it awaits, and only the draw still holding the current ticket — on a component
+ * still mounted — may publish what it produced.
+ */
+export function acceptsDrawResult(current: number, ticket: number, mounted: boolean): boolean {
+  return mounted && current === ticket
 }
 
 /**
@@ -1330,6 +1366,16 @@ function GraphLoad({
   )
   const [linkProblem, setLinkProblem] = useState<string | null>(null)
   const abort = useRef<AbortController | null>(null)
+  // Every draw takes the next ticket; only the holder of the current one may publish. `mounted`
+  // makes navigating away the same case as being superseded, because for a running layout it is.
+  const draws = useRef(0)
+  const settled = useRef(0)
+  const mounted = useRef(true)
+  // The highest ticket whose layout has finished, one way or the other. Compared against the
+  // highest ticket issued, it says whether anything is still running when the page goes away.
+  const done = (ticket: number) => {
+    if (ticket > settled.current) settled.current = ticket
+  }
 
   // Reading the budget costs nothing — GitHub documents /rate_limit as not counted — so the gate
   // can always open with real numbers instead of an assumption about what is left.
@@ -1356,6 +1402,17 @@ function GraphLoad({
 
   useEffect(() => () => abort.current?.abort(), [])
 
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
+      // Leaving with a layout still running: nobody is waiting for it, so the worker carrying it
+      // is terminated rather than left to finish a graph that has nowhere to go. A page that
+      // settled its last draw keeps its engine, because the next repository will want it.
+      if (settled.current < draws.current) discardLayoutEngine()
+    }
+  }, [])
+
   /**
    * Draws the shared link, or explains why it cannot and falls back to the ordinary gate.
    *
@@ -1367,7 +1424,8 @@ function GraphLoad({
    */
   useEffect(() => {
     if (!sharedLink) return
-    let cancelled = false
+    const ticket = (draws.current += 1)
+    const current = () => acceptsDrawResult(draws.current, ticket, mounted.current)
 
     // A link that could not be read is not worth retrying on the next reload, and leaving it in
     // the address bar would describe a graph the page is not showing.
@@ -1379,7 +1437,7 @@ function GraphLoad({
 
     void readSnapshot(fragment, identity)
       .then(async (read) => {
-        if (cancelled) return
+        if (!current()) return
         if (read.kind !== 'snapshot') {
           giveUp(read.kind === 'invalid' ? read.reason : null)
           return
@@ -1387,10 +1445,15 @@ function GraphLoad({
 
         // Somebody else's link, so its payloads do not get to say which repository this is:
         // `readSnapshot` bound it to the one in the path, and that binding is the whole guarantee.
+        // A layout failure here is not an unreadable link — the link was read — so it reports the
+        // draw rather than sending the reader back to the gate blaming the link.
         const graph = await buildGraph(read.view.data, target, {
           showClosed: read.view.showClosed,
+        }).catch((error: unknown) => {
+          if (current()) setPhase({ kind: 'failed', failure: drawFailure(error) })
+          return null
         })
-        if (cancelled) return
+        if (!current() || !graph) return
         setPhase({
           kind: 'ready',
           graph,
@@ -1405,12 +1468,17 @@ function GraphLoad({
         })
       })
       .catch(() => {
-        if (cancelled) return
+        if (!current()) return
         giveUp('This shared link could not be read.')
       })
+      .finally(() => done(ticket))
 
     return () => {
-      cancelled = true
+      // Taking the ticket away is what retires this draw: the layout it started cannot be stopped,
+      // so the only thing left to control is whether its result is allowed to land. A draw that
+      // already finished, or one another draw has already superseded, is not retired again — that
+      // would leave a ticket outstanding that nothing is working on.
+      if (draws.current === ticket && settled.current < ticket) draws.current += 1
     }
   }, [sharedLink, fragment, identity, target])
 
@@ -1485,13 +1553,20 @@ function GraphLoad({
           if (result.ok) {
             rememberTarget(target)
             writeCache(identity, result.data)
+            const ticket = (draws.current += 1)
             setPhase({ kind: 'drawing' })
             // Read from GitHub just now, so the payloads may name the repository they came from.
             const graph = await buildGraph(result.data, target, {
               showClosed: includeClosed,
               trustedIdentity: true,
+            }).catch((error: unknown) => {
+              if (acceptsDrawResult(draws.current, ticket, mounted.current)) {
+                setPhase({ kind: 'failed', failure: drawFailure(error) })
+              }
+              return null
             })
-            if (!controller.signal.aborted) {
+            done(ticket)
+            if (graph && acceptsDrawResult(draws.current, ticket, mounted.current)) {
               setPhase({
                 kind: 'ready',
                 graph,
@@ -1528,16 +1603,26 @@ function GraphLoad({
       const decision = decideSavedCopyOpen(copy, showClosed)
       if (decision.kind !== 'open') return
 
+      const ticket = (draws.current += 1)
       setPhase({ kind: 'drawing' })
-      // This browser's own copy of a read it made from GitHub, under this repository's key.
-      void buildGraph(copy.data, target, { showClosed, trustedIdentity: true }).then((graph) =>
-        setPhase({
-          kind: 'ready',
-          graph,
-          savedCopy: decision.provenance,
-          snapshot: { data: copy.data, capturedAt: copy.savedAt, showClosed },
-        }),
-      )
+      // This browser's own copy of a read it made from GitHub, under this repository's key. It
+      // spends no budget, which is exactly why an unhandled rejection here used to leave the page
+      // on "Laying out the graph…" for good: there is no request to fail and nothing else watching.
+      void buildGraph(copy.data, target, { showClosed, trustedIdentity: true })
+        .then((graph) => {
+          if (!acceptsDrawResult(draws.current, ticket, mounted.current)) return
+          setPhase({
+            kind: 'ready',
+            graph,
+            savedCopy: decision.provenance,
+            snapshot: { data: copy.data, capturedAt: copy.savedAt, showClosed },
+          })
+        })
+        .catch((error: unknown) => {
+          if (!acceptsDrawResult(draws.current, ticket, mounted.current)) return
+          setPhase({ kind: 'failed', failure: drawFailure(error) })
+        })
+        .finally(() => done(ticket))
     },
     [target, showClosed],
   )

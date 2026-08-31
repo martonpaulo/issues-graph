@@ -6,6 +6,7 @@ import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
 import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
   abortOnTokenChange,
+  acceptsDrawResult,
   App,
   budgetParts,
   decideSavedCopyOpen,
@@ -316,6 +317,17 @@ describe('what the reader is told about the budget', () => {
     expect(text.body).toContain('Try again')
   })
 
+  it('separates a failed drawing from a failed read, which is not the reader’s repository', () => {
+    const text = failureText(target, { kind: 'draw', message: 'chunk load failed' }, false)
+
+    expect(text.title).toContain('drawn')
+    // Nothing about the repository or the token is at fault, and saying so would send the reader
+    // to correct something that is already correct.
+    expect(text.body).toContain('read')
+    expect(text.body).toContain('Try again')
+    expect(text.body).not.toContain('token')
+  })
+
   it('keeps every top-level failure’s guidance distinct', () => {
     const bodies = [
       failureText(target, { kind: 'bad-credentials' }, true),
@@ -323,6 +335,7 @@ describe('what the reader is told about the budget', () => {
       failureText(target, { kind: 'unexpected', status: 500, message: 'GitHub returned error 500' }, false),
       failureText(target, { kind: 'not-found' }, false),
       failureText(target, { kind: 'network', message: 'Failed to fetch' }, false),
+      failureText(target, { kind: 'draw', message: 'chunk load failed' }, false),
     ].map((text) => `${text.title}. ${text.body}`)
 
     expect(new Set(bodies).size).toBe(bodies.length)
@@ -374,6 +387,26 @@ describe('describeUnresolved', () => {
  * A load carries the token it started with, so changing one mid-flight has to stop the other.
  * Anything that is not in flight is left alone: nothing of its is still in the air.
  */
+/**
+ * ELK cannot be stopped once it is laying a graph out, so the only control left is whether the
+ * result may land. Every draw goes through this, which is why it is worth proving on its own.
+ */
+describe('which finished layout is allowed on screen', () => {
+  it('publishes the draw the page is still waiting for', () => {
+    expect(acceptsDrawResult(3, 3, true)).toBe(true)
+  })
+
+  it('discards a draw that a later one has superseded', () => {
+    // The reader reloaded, or opened the saved copy instead: ticket 2 finishing after ticket 3
+    // started would otherwise put the older graph on screen.
+    expect(acceptsDrawResult(3, 2, true)).toBe(false)
+  })
+
+  it('discards a draw that finishes after the page is gone', () => {
+    expect(acceptsDrawResult(1, 1, false)).toBe(false)
+  })
+})
+
 describe('what a token change interrupts', () => {
   it('stops a read that is under way', () => {
     expect(stopsForTokenChange('listing')).toBe(true)

@@ -28,5 +28,9 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
+    // Whichever test lays a graph out first pays for importing ELK — a megabyte of compiled Java —
+    // and on a loaded machine that alone approaches the 5s default, which then reports a slow
+    // import as a failed assertion.
+    testTimeout: 20_000,
   },
 })

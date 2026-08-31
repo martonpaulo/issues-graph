@@ -336,19 +336,91 @@ interface ElkEdge {
 
 interface ElkEngine {
   layout(graph: ElkNode): Promise<ElkNode>
+  /** Present only for the worker engine; the bundled one runs on the thread that called it. */
+  terminate?(): void
 }
 
 let engine: Promise<ElkEngine> | null = null
 
 /**
+ * A real worker where the platform has one, and the bundled engine where it does not.
+ *
+ * Measured in Chrome, one layout on the page's own thread is a single long task — 66–88 ms for the
+ * 25-node `agent-workflows` graph, 672 ms at 250 nodes — so a graph large enough to be worth
+ * drawing is also large enough to freeze the page while it is drawn. The worker moves that off the
+ * main thread and makes the work stoppable, which is the only way an ELK layout can be stopped.
+ *
+ * The fallback is not a nicety: the tests run this module under Node, where `Worker` does not
+ * exist, and the layout they assert on is the same algorithm either way.
+ */
+async function createEngine(): Promise<ElkEngine> {
+  if (typeof Worker !== 'undefined') {
+    const { workerEngine } = await import('./layoutWorker')
+    return workerEngine() as ElkEngine
+  }
+  const module = await import('elkjs/lib/elk.bundled.js')
+  return new (module.default as unknown as new () => ElkEngine)()
+}
+
+/**
  * ELK is a megabyte of compiled Java, so it is fetched only when a graph is actually drawn and
  * kept for the rest of the session.
+ *
+ * Only a *settled-successful* engine is worth keeping. Memoizing the Promise itself means a
+ * rejected chunk load — a deploy that moved the asset, a network blip, an offline moment — is kept
+ * with the same permanence as a working engine, and every later draw in the session re-awaits that
+ * one rejection however healthy the network has since become. Clearing the slot on rejection is
+ * what makes the retry the reader is already offered actually retry something.
  */
 async function elk(): Promise<ElkEngine> {
-  engine ??= import('elkjs/lib/elk.bundled.js').then(
-    (module) => new (module.default as unknown as new () => ElkEngine)(),
-  )
+  if (!engine) {
+    const attempt: Promise<ElkEngine> = createEngine()
+      .catch((error: unknown) => {
+        // Cleared only while this attempt is still the one on record, so a later attempt that has
+        // already replaced it — and may well have succeeded — is not discarded by an older failure.
+        if (engine === attempt) engine = null
+        throw error
+      })
+    engine = attempt
+  }
   return engine
+}
+
+/**
+ * A layout that could not be produced.
+ *
+ * `LoadFailure` says what went wrong reading GitHub, and layout is not a read: an engine that
+ * failed to load says nothing about the repository, so folding it into that union would make every
+ * exhaustive answer to a load result answer for a case a load cannot produce. The interface still
+ * wants one shape for "there is nothing to show and here is why", which is why this is a typed
+ * value rather than a bare thrown error.
+ */
+export interface DrawFailure {
+  kind: 'draw'
+  message: string
+}
+
+export function drawFailure(error: unknown): DrawFailure {
+  return { kind: 'draw', message: error instanceof Error ? error.message : 'The layout failed.' }
+}
+
+/**
+ * Stops a layout whose result nobody is waiting for any more.
+ *
+ * ELK offers no cancellation, so the running layout can only be discarded — but a worker can be
+ * terminated, and that is the difference between "the result is ignored" and "the work stops". The
+ * engine is dropped with it, so the next draw builds a fresh one.
+ *
+ * Call this only when no draw still wants an answer: one worker serves every layout, and
+ * terminating it takes the current one down too.
+ */
+export function discardLayoutEngine(): void {
+  const discarded = engine
+  engine = null
+  void discarded?.then((current) => current.terminate?.()).catch(() => {
+    // An engine that never loaded has nothing to terminate, and its rejection is already the
+    // caller's to report.
+  })
 }
 
 /** Weakly-connected components: edge direction does not matter for grouping. */
