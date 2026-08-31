@@ -12,6 +12,7 @@ import {
   failureText,
   graphBounds,
   nextIssueSelection,
+  stopsForTokenChange,
 } from './App'
 import { readCache, writeCache } from './cache'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -243,5 +244,24 @@ describe('what the reader is told about the budget', () => {
     const text = failureText(target, { kind: 'bad-credentials' }, true)
     expect(text.title).toContain('token')
     expect(text.body).toContain('remove it')
+  })
+})
+
+/**
+ * A load carries the token it started with, so changing one mid-flight has to stop the other.
+ * Anything that is not in flight is left alone: nothing of its is still in the air.
+ */
+describe('what a token change interrupts', () => {
+  it('stops a read that is under way', () => {
+    expect(stopsForTokenChange('listing')).toBe(true)
+    expect(stopsForTokenChange('confirm')).toBe(true)
+    expect(stopsForTokenChange('resolving')).toBe(true)
+    expect(stopsForTokenChange('drawing')).toBe(true)
+  })
+
+  it('leaves a gate, a drawn graph, and a reported failure alone', () => {
+    expect(stopsForTokenChange('gate')).toBe(false)
+    expect(stopsForTokenChange('ready')).toBe(false)
+    expect(stopsForTokenChange('failed')).toBe(false)
   })
 })

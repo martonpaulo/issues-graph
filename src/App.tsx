@@ -1066,6 +1066,18 @@ function GraphView({
   )
 }
 
+/**
+ * Whether a token change has to stop what the page is doing.
+ *
+ * A load in progress carries the token it started with, so it must be stopped. A gate has sent
+ * nothing, and a drawn graph or a reported failure is finished: none of them is holding a request
+ * that could still leave with the wrong credential, and discarding a graph somebody is reading
+ * would be a worse answer than leaving it.
+ */
+export function stopsForTokenChange(kind: Phase['kind']): boolean {
+  return kind === 'listing' || kind === 'confirm' || kind === 'resolving' || kind === 'drawing'
+}
+
 function GraphLoad({
   target,
   note,
@@ -1104,11 +1116,38 @@ function GraphLoad({
 
   useEffect(() => () => abort.current?.abort(), [])
 
+  /**
+   * A load already in flight carries the token it started with: `LoadOptions` is built once, so
+   * every request still queued would keep sending a credential the viewer has just replaced or
+   * removed, and the budget on screen would describe an authentication state the load no longer
+   * has. Stopping it is the only reading of "takes effect on the next request" that is true.
+   */
+  const [loadToken, setLoadToken] = useState(token)
+  const [stopped, setStopped] = useState<string | null>(null)
+
+  if (loadToken !== token) {
+    setLoadToken(token)
+    if (stopsForTokenChange(phase.kind)) {
+      setPhase({ kind: 'gate', status: null, checking: true })
+      setStopped(
+        token
+          ? 'The read was stopped when the token changed. Nothing further was sent without it.'
+          : 'The read was stopped when the token was removed. Nothing further was sent with it.',
+      )
+    }
+  }
+
+  // Aborting is what actually stops the requests; the state above only decides what is shown.
+  useEffect(() => {
+    if (loadToken !== token) abort.current?.abort()
+  }, [loadToken, token])
+
   const start = useCallback(
     (includeClosed: boolean) => {
       abort.current?.abort()
       const controller = new AbortController()
       abort.current = controller
+      setStopped(null)
       setPhase({ kind: 'listing' })
 
       loadRepositoryGraph(target, {
@@ -1122,7 +1161,19 @@ function GraphLoad({
           const status = await readRateLimit({ signal: controller.signal, token })
           if (controller.signal.aborted) return false
           return new Promise<boolean>((resolve) => {
-            setPhase({ kind: 'confirm', cost, status, decide: resolve })
+            // Nothing has been sent yet, so an abort here answers the question with "no" rather
+            // than leaving the load awaiting a decision the interface can no longer offer.
+            const onAbort = () => resolve(false)
+            controller.signal.addEventListener('abort', onAbort, { once: true })
+            setPhase({
+              kind: 'confirm',
+              cost,
+              status,
+              decide: (ok) => {
+                controller.signal.removeEventListener('abort', onAbort)
+                resolve(ok)
+              },
+            })
           })
         },
       })
@@ -1189,6 +1240,11 @@ function GraphLoad({
       {phase.kind === 'gate' && (
         <>
           {note && <p className="notice">{note}</p>}
+          {stopped && (
+            <p className="notice" role="status">
+              {stopped}
+            </p>
+          )}
           <dl className="facts">
             <Fact
               label="Budget"
