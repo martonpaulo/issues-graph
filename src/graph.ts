@@ -1,4 +1,5 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
+import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
 import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
 import type { RepoTarget } from './route'
 
@@ -37,15 +38,35 @@ const LABELS_GAP = 11
 /** One row of label chips, and the space between two rows. */
 const CHIP_ROW_HEIGHT = 17
 const CHIP_GAP = 4
-/**
- * Per-character width of chip text at 10px Inter, plus the chip's own padding and border. Measured
- * from the rendered cards: the real average is 4.2–4.5, and the extra is headroom, since a row too
- * many only leaves a gap while a row too few would push the chips out of the card.
- */
-const CHIP_CHAR_WIDTH = 4.6
+/** A chip's own horizontal padding and border. Mirrors `.chip` in styles.css. */
 const CHIP_PADDING = 12
 /** The width the chips wrap inside: the card minus its padding. */
 const CHIP_ROW_WIDTH = 210
+/**
+ * Held back from the row so a chip run that ends within a pixel of the edge is treated as wrapping.
+ * One real combination — `type: improvement`, `priority: P2` and an empty `effort` — measures
+ * 210.2px inside a 210px row, so the boundary is genuinely decided by fractions of a pixel; this
+ * also covers the system face the browser draws with while Inter is still loading.
+ */
+const CHIP_ROW_SLACK = 1
+
+/**
+ * How wide the browser will draw one chip.
+ *
+ * Summed from the advances captured off the shipped Inter face rather than from an average
+ * per-character width: Inter's advances run from 2.4px to 9.9px at 10px, and the cards that wrap
+ * differ from the cards that do not by a fraction of a row, which no single average separates.
+ * Kerning is not applied, which makes the sum marginally wider than the rendered text — 0.4px on
+ * the longest chip a card shows — and that is the safe direction: a row too many only leaves a gap
+ * while a row too few pushes the chips out of the card.
+ */
+function chipWidth(text: string): number {
+  let width = CHIP_PADDING
+  for (const character of text) {
+    width += CHIP_CHAR_WIDTHS[character] ?? CHIP_FALLBACK_CHAR_WIDTH
+  }
+  return width
+}
 
 function titleUnits(text: string): number {
   return [...text].reduce(
@@ -87,12 +108,13 @@ export function titleLineCount(title: string, perLine = TITLE_UNITS_PER_LINE): n
 export function chipRows(texts: string[], width = CHIP_ROW_WIDTH): number {
   if (texts.length === 0) return 0
 
+  const available = width - CHIP_ROW_SLACK
   let rows = 1
   let used = 0
   for (const text of texts) {
-    const chip = Math.min(width, text.length * CHIP_CHAR_WIDTH + CHIP_PADDING)
+    const chip = Math.min(available, chipWidth(text))
     const needed = used === 0 ? chip : used + CHIP_GAP + chip
-    if (used > 0 && needed > width) {
+    if (used > 0 && needed > available) {
       rows += 1
       used = chip
     } else {

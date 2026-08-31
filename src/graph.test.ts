@@ -99,6 +99,38 @@ describe('chipRows and cardHeight', () => {
     expect(chipRows(['a', 'b', 'c', 'd', 'e', 'f'])).toBe(1)
   })
 
+  /**
+   * The row counts asserted here were measured in a browser against `styles.css` and the shipped
+   * Inter face, not derived from the estimator. The first case is the regression: its chips run to
+   * 210.2px inside a 210px row, so the browser wraps them onto a second row, and a card sized for
+   * one row let the `effort` chip hang below its bottom edge.
+   */
+  it('agrees with the browser on the combinations that wrap by a fraction of a pixel', () => {
+    expect(chipRows(['type: improvement', 'priority: P2', 'effort'])).toBe(2)
+    expect(chipRows(['type: improvement', 'priority: P2', 'effort: S'])).toBe(2)
+    expect(chipRows(['type: documentation', 'priority: P2', 'effort'])).toBe(2)
+    // Just inside the row, and must not lose the slack the case above needs.
+    expect(chipRows(['type: refactor', 'priority: P3', 'effort: M'])).toBe(1)
+    expect(chipRows(['type: feature', 'priority: P1', 'effort: XS'])).toBe(1)
+    expect(chipRows(['type: bug', 'priority: P2', 'effort'])).toBe(1)
+    expect(chipRows(['type: improvement', 'priority', 'effort'])).toBe(1)
+  })
+
+  it('reserves a second row for the chips that overflow the first, so nothing hangs out', () => {
+    const overflowing = ['type: improvement', 'priority: P2', 'effort']
+    // A narrower row is what the failing card effectively had: the chips do not fit, so the height
+    // has to pay for the row they wrap onto.
+    expect(chipRows(overflowing, 209)).toBe(2)
+    expect(cardHeight(1, chipRows(overflowing))).toBeGreaterThan(cardHeight(1, 1))
+  })
+
+  it('over-reserves rather than under-reserves for text outside the captured latin subset', () => {
+    // No advance is captured for these, so each one costs the widest captured glyph. Guessing narrow
+    // here would be the same defect as the flat average this replaced.
+    expect(chipRows(['type: 改善', 'priority: P2', 'effort'])).toBe(1)
+    expect(chipRows(['type: 改善改善改善改善改善改善改善改善改善改善改善改善'])).toBe(1)
+  })
+
   it('grows one line at a time and only spends chip rows it has chips for', () => {
     const bare = cardHeight(1, 0)
     expect(cardHeight(2, 0) - bare).toBe(cardHeight(3, 0) - cardHeight(2, 0))
