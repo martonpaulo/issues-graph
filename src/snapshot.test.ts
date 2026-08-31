@@ -46,6 +46,55 @@ function fragmentOf(url: string): string {
   return url.slice(url.indexOf('#'))
 }
 
+/**
+ * Encodes an arbitrary object the way the module does, so a test can post a structurally
+ * malformed payload that is nonetheless perfectly well-formed base64 and DEFLATE. That is the
+ * shape a hand-written fragment actually takes, and the shape a shallow check waves through.
+ */
+async function fragmentFor(payload: unknown): Promise<string> {
+  const stream = new Blob([JSON.stringify(payload)])
+    .stream()
+    .pipeThrough(new CompressionStream('deflate-raw'))
+  const bytes = new Uint8Array(await new Response(stream).arrayBuffer())
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  const encoded = btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
+  return `#g=${encoded}`
+}
+
+/** One issue carrying every field the graph and the cards read off it. */
+function validIssue() {
+  return {
+    number: 12,
+    title: 'A blocked issue',
+    state: 'open',
+    state_reason: null,
+    html_url: 'https://github.com/a/b/issues/12',
+    repository_url: 'https://api.github.com/repos/a/b',
+    labels: [{ name: 'type: bug', color: '7B3FA0' }],
+  }
+}
+
+/** The smallest payload this module accepts, as the base for one-field corruptions. */
+function wholePayload(overrides: Record<string, unknown> = {}) {
+  return {
+    v: 1,
+    slug: 'a/b',
+    shown: false,
+    graph: {
+      version: 1,
+      savedAt: SAVED_AT.getTime(),
+      issues: [],
+      blockers: [],
+      complete: true,
+      unresolved: [],
+      includedClosed: false,
+      requestCount: 3,
+      ...overrides,
+    },
+  }
+}
+
 async function share(
   slug: string,
   data: RepositoryGraphData,
@@ -188,6 +237,72 @@ describe('readSnapshot', () => {
       kind: 'invalid',
       reason: 'This shared link holds martonpaulo/tabelo, not martonpaulo/issues-graph.',
     })
+  })
+
+  it('accepts the whole shape it defines', async () => {
+    // The control for the corruption cases below: without it, a validator that rejected
+    // everything would pass all of them.
+    const read = await readSnapshot(await fragmentFor(wholePayload()), 'a/b')
+    expect(read.kind).toBe('snapshot')
+  })
+
+  it.each([
+    ['complete', 'complete'],
+    ['unresolved', 'unresolved'],
+    ['includedClosed', 'includedClosed'],
+    ['savedAt', 'savedAt'],
+    ['requestCount', 'requestCount'],
+    ['issues', 'issues'],
+    ['blockers', 'blockers'],
+  ])(
+    'rejects a structurally valid payload missing graph.%s',
+    async (_name, field) => {
+      // Well-formed base64 and DEFLATE, parseable JSON, one field short. `complete` is the one
+      // that used to reach GraphStatus as undefined and crash it on unresolved.map.
+      const payload = wholePayload()
+      delete (payload.graph as Record<string, unknown>)[field]
+
+      const read = await readSnapshot(await fragmentFor(payload), 'a/b')
+      expect(read).toEqual({
+        kind: 'invalid',
+        reason: 'This shared link is damaged or incomplete.',
+      })
+    },
+  )
+
+  it('rejects a timestamp that would render as NaN rather than an age', async () => {
+    for (const savedAt of ['yesterday', Number.NaN, Number.POSITIVE_INFINITY, null]) {
+      const read = await readSnapshot(await fragmentFor(wholePayload({ savedAt })), 'a/b')
+      expect(read.kind, String(savedAt)).toBe('invalid')
+    }
+  })
+
+  it('rejects issues and blockers that are not the shape the cards read', async () => {
+    const cases: Record<string, unknown>[] = [
+      { issues: [{ number: 1 }] },
+      { issues: [{ ...validIssue(), labels: [{ name: 'type: bug' }] }] },
+      { issues: [{ ...validIssue(), number: 'twelve' }] },
+      { blockers: [[1]] },
+      { blockers: [['one', []]] },
+      { blockers: [[1, [{ number: 2 }]]] },
+      { unresolved: [{ number: 1 }] },
+    ]
+
+    for (const overrides of cases) {
+      const read = await readSnapshot(await fragmentFor(wholePayload(overrides)), 'a/b')
+      expect(read, JSON.stringify(overrides)).toEqual({
+        kind: 'invalid',
+        reason: 'This shared link is damaged or incomplete.',
+      })
+    }
+  })
+
+  it('rejects a drawing that claims closed blockers its read never covered', async () => {
+    const read = await readSnapshot(
+      await fragmentFor({ ...wholePayload(), shown: true }),
+      'a/b',
+    )
+    expect(read).toEqual({ kind: 'invalid', reason: 'This shared link contradicts itself.' })
   })
 
   it('rejects a payload from a format it does not know', async () => {

@@ -133,6 +133,72 @@ export async function buildSnapshotUrl(
   return { kind: 'ready', url }
 }
 
+/* Validating the payload -------------------------------------------------
+   A fragment is untrusted input that anybody can hand-write, and everything it
+   holds is fed straight into the layout and the cards. Checking only the two
+   fields the decoder happens to touch leaves the rest to fail later and worse:
+   an omitted `complete` reaches GraphStatus as `undefined`, which is falsy, so
+   it renders the incomplete-graph warning and calls `.map` on an `unresolved`
+   that is not there. A damaged link has to be caught here, where there is still
+   a message to show and a live read to fall back to. */
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isLabel(value: unknown): boolean {
+  return isRecord(value) && typeof value.name === 'string' && typeof value.color === 'string'
+}
+
+/** Every field `buildGraph` and the cards read off an issue, and nothing more. */
+function isIssue(value: unknown): boolean {
+  if (!isRecord(value)) return false
+  if (!Number.isInteger(value.number)) return false
+  if (typeof value.title !== 'string') return false
+  if (typeof value.state !== 'string') return false
+  if (value.state_reason !== null && typeof value.state_reason !== 'string') return false
+  if (typeof value.html_url !== 'string') return false
+  if (typeof value.repository_url !== 'string') return false
+  if (!Array.isArray(value.labels) || !value.labels.every(isLabel)) return false
+
+  const summary = value.issue_dependencies_summary
+  if (summary !== undefined && !isRecord(summary)) return false
+  return true
+}
+
+function isBlockerEntry(value: unknown): boolean {
+  return (
+    Array.isArray(value) &&
+    value.length === 2 &&
+    Number.isInteger(value[0]) &&
+    Array.isArray(value[1]) &&
+    value[1].every(isIssue)
+  )
+}
+
+function isUnresolved(value: unknown): boolean {
+  return isRecord(value) && Number.isInteger(value.number) && typeof value.reason === 'string'
+}
+
+/**
+ * Whether the stored graph is whole enough to draw.
+ *
+ * `savedAt` must be a finite number: `new Date(undefined)` is an Invalid Date, which renders as
+ * `NaN days ago` rather than failing anywhere a reader would recognize as a broken link.
+ */
+function isStoredGraph(value: unknown): value is StoredGraph {
+  if (!isRecord(value)) return false
+  if (value.version !== 1) return false
+  if (typeof value.savedAt !== 'number' || !Number.isFinite(value.savedAt)) return false
+  if (!Array.isArray(value.issues) || !value.issues.every(isIssue)) return false
+  if (!Array.isArray(value.blockers) || !value.blockers.every(isBlockerEntry)) return false
+  if (typeof value.complete !== 'boolean') return false
+  if (!Array.isArray(value.unresolved) || !value.unresolved.every(isUnresolved)) return false
+  if (typeof value.includedClosed !== 'boolean') return false
+  if (typeof value.requestCount !== 'number' || !Number.isFinite(value.requestCount)) return false
+  return true
+}
+
 /**
  * Whether a fragment claims to carry a snapshot at all.
  *
@@ -159,29 +225,31 @@ export async function readSnapshot(hash: string, slug: string): Promise<Snapshot
     return { kind: 'invalid', reason: 'This browser cannot read shared links.' }
   }
 
-  let payload: SnapshotPayload
+  // Deliberately `unknown`: this is a hand-writable string, and asserting SnapshotPayload here
+  // would let every field below be trusted on the strength of a cast.
+  let payload: unknown
   try {
-    payload = JSON.parse(await inflate(fromBase64Url(encoded))) as SnapshotPayload
+    payload = JSON.parse(await inflate(fromBase64Url(encoded)))
   } catch {
     return { kind: 'invalid', reason: 'This shared link is damaged or incomplete.' }
   }
 
-  if (
-    payload?.v !== 1 ||
-    !payload.graph ||
-    payload.graph.version !== 1 ||
-    typeof payload.shown !== 'boolean'
-  ) {
+  if (!isRecord(payload) || payload.v !== 1 || typeof payload.shown !== 'boolean') {
     return { kind: 'invalid', reason: 'This shared link was made by a different version.' }
   }
   if (payload.slug !== slug) {
     return {
       kind: 'invalid',
-      reason: `This shared link holds ${payload.slug}, not ${slug}.`,
+      reason: `This shared link holds ${String(payload.slug)}, not ${slug}.`,
     }
   }
-  if (!Array.isArray(payload.graph.issues) || !Array.isArray(payload.graph.blockers)) {
+  if (!isStoredGraph(payload.graph)) {
     return { kind: 'invalid', reason: 'This shared link is damaged or incomplete.' }
+  }
+  // A drawing that shows closed blockers cannot have come from a read that never fetched them.
+  // The pair is contradictory rather than merely malformed, so it is rejected on its own terms.
+  if (payload.shown && !payload.graph.includedClosed) {
+    return { kind: 'invalid', reason: 'This shared link contradicts itself.' }
   }
 
   return {
