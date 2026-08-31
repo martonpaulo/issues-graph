@@ -37,6 +37,20 @@ ao/<session-id>/<type>/<agent>/issue-<n>/<slug>
 `AO_SESSION_ID` carries the session id. This is not cosmetic: the missing prefix is silent, and the
 only symptom is an idle session with an unreviewed pull request.
 
+## Side findings become issues
+
+You are running unattended: nobody reads a *Proposed issue* card while you write it, so a card
+here preserves nothing. When the work uncovers a distinct, evidence-backed, implementable
+improvement outside this issue's scope that is not already tracked, **open it yourself** by
+invoking `issue-capture`. Do not ask first. Opening an issue is additive and reversible, and the
+owner started this lane knowing it files them.
+
+Name the issue you created, by number, in your final comment on the issue you were given.
+
+The bar is unchanged: no incidental observations, no speculation without evidence, nothing already
+tracked, and nothing you finished yourself. `issue-capture` stays the only writer, so the new
+issue is deduplicated and labelled like every other.
+
 ## Parking instead of asking
 
 When the run reaches something it cannot settle, park the issue: record the blocker on the issue,

@@ -260,6 +260,10 @@ issues for incidental observations, speculative ideas without enough evidence, a
 work, or changes completed within the current task. The card proposes backlog capture; it never
 authorizes creating or publishing the issue.
 
+This card assumes a reader. An unattended run has none, so it does not write the card: it invokes
+`issue-capture` and opens the issue directly, against the same bar. The unattended rules in
+`.ao/worker-rules.md` are authoritative for that lane.
+
 ```markdown
 ---
 
