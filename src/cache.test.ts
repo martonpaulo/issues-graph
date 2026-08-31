@@ -148,6 +148,59 @@ describe('readCache', () => {
     expect(readCache('martonpaulo/tabelo')).toBeNull()
   })
 
+  /* The dependency summary is nested two levels down and is the field the drawing depends on
+     most: `graph.ts` reads `blocked_by` to decide blocked or ready, and the quote reads
+     `total_blocked_by` to price the dependency phase. Both go through `?? 0`, which catches an
+     absent summary but not a present one holding the wrong type. */
+
+  it('ignores a copy whose summary count is a container rather than a number', () => {
+    corrupt((stored) => {
+      ;(stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary = {
+        blocked_by: [],
+        total_blocked_by: 0,
+        blocking: 0,
+        total_blocking: 0,
+      }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose summary lost one of its counts', () => {
+    corrupt((stored) => {
+      ;(stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary = {
+        blocked_by: 2,
+        blocking: 0,
+        total_blocking: 0,
+      }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  it('ignores a copy whose summary counts something a fraction or a negative number of times', () => {
+    corrupt((stored) => {
+      ;(stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary = {
+        blocked_by: -1,
+        total_blocked_by: 1.5,
+        blocking: 0,
+        total_blocking: 0,
+      }
+    })
+
+    expect(readCache('martonpaulo/tabelo')).toBeNull()
+  })
+
+  // GitHub omits the summary for an issue with no dependencies at all, so absent stays valid.
+  // Only a summary that is present has to be whole.
+  it('reads back an issue that carries no summary at all', () => {
+    corrupt((stored) => {
+      delete (stored.issues as Record<string, unknown>[])[0].issue_dependencies_summary
+    })
+
+    expect(readCache('martonpaulo/tabelo')?.data.issues[0].issue_dependencies_summary).toBeUndefined()
+  })
+
   it('ignores a copy whose blockers are no longer number-to-issues tuples', () => {
     corrupt((stored) => {
       stored.blockers = [['49', []]]

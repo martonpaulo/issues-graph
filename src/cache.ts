@@ -109,6 +109,31 @@ function isLabel(value: unknown): boolean {
   return isRecord(value) && typeof value.name === 'string' && typeof value.color === 'string'
 }
 
+/** A count GitHub reports: a whole number of blockers, never negative and never fractional. */
+function isCount(value: unknown): boolean {
+  return Number.isInteger(value) && (value as number) >= 0
+}
+
+/**
+ * The complete dependency summary, or nothing.
+ *
+ * Accepting any record here would be worse than accepting none: `graph.ts` derives the visible
+ * blocked-or-ready state from `blocked_by`, and the quote derives its cost from
+ * `total_blocked_by`, both through `?? 0`. That default catches an absent summary, which GitHub
+ * legitimately omits, but not a present one whose count is `[]` or `"5"` — the first is drawn as
+ * ready and the second compares as blocked, and neither falls back to a live read. So a summary
+ * that is present is checked in full, and `undefined` remains the only way to say there is none.
+ */
+function isDependencySummary(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isCount(value.blocked_by) &&
+    isCount(value.total_blocked_by) &&
+    isCount(value.blocking) &&
+    isCount(value.total_blocking)
+  )
+}
+
 /** Every field `buildGraph` and the cards read off an issue, and nothing more. */
 function isIssue(value: unknown): boolean {
   if (!isRecord(value)) return false
@@ -121,7 +146,7 @@ function isIssue(value: unknown): boolean {
   if (!Array.isArray(value.labels) || !value.labels.every(isLabel)) return false
 
   const summary = value.issue_dependencies_summary
-  if (summary !== undefined && !isRecord(summary)) return false
+  if (summary !== undefined && !isDependencySummary(summary)) return false
   return true
 }
 
