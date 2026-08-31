@@ -1,0 +1,1783 @@
+[
+ {
+  "number": 87,
+  "title": "Concurrency control for task dispatch (parallel execution limits)",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/87",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 86,
+  "title": "Re-evaluate local-first orchestration before building it custom",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/86",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: research",
+    "color": "BE3F8D"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 85,
+  "title": "Implement the resident process lifecycle",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/85",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P1",
+    "color": "C0341D"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 84,
+  "title": "Add the local lifecycle graph view",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/84",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 83,
+  "title": "Build the resident local lifecycle board",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/83",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: XL",
+    "color": "1D4A6B"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 82,
+  "title": "Derive lifecycle state from GitHub facts and local run history",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/82",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P1",
+    "color": "C0341D"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 6,
+   "total_blocking": 6
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 81,
+  "title": "Build the SQLite run store and migration boundary",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/81",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P1",
+    "color": "C0341D"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 7,
+   "total_blocking": 7
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 76,
+  "title": "Test primary local and optional cloud lifecycle handoffs",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/76",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "B53F9B"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: testing",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 4,
+   "total_blocked_by": 4,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/53"
+ },
+ {
+  "number": 75,
+  "title": "Local runner that writes only through the safe-output boundary",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/75",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: security",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 4,
+   "total_blocked_by": 4,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/53"
+ },
+ {
+  "number": 74,
+  "title": "Durable work claims and crash recovery across local and cloud",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/74",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/53"
+ },
+ {
+  "number": 73,
+  "title": "Define primary local and optional cloud execution surfaces",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/73",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/53"
+ },
+ {
+  "number": 72,
+  "title": "Codex adapter with both activation paths, each carrying its own constraints",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/72",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/50"
+ },
+ {
+  "number": 71,
+  "title": "Antigravity adapter covers plan, implement, review and repair",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/71",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/50"
+ },
+ {
+  "number": 70,
+  "title": "Claude adapter covers plan, implement, review and repair",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/70",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/50"
+ },
+ {
+  "number": 69,
+  "title": "Dispatch plan as a lifecycle role executing the issue-plan contract",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/69",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/50"
+ },
+ {
+  "number": 68,
+  "title": "Correct the provider registry against the observed authentication probe",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/68",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: bug",
+    "color": "7B3FA0"
+   },
+   {
+    "name": "effort: S",
+    "color": "A5CCE3"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/50"
+ },
+ {
+  "number": 64,
+  "title": "Refuse dispatch for terminal GitHub issues",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/64",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: S",
+    "color": "A5CCE3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 63,
+  "title": "Preflight an arbaro installation without dispatching an agent",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/63",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 2
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 62,
+  "title": "Explain why an issue did not dispatch",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/62",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 58,
+  "title": "Publish durable run handoffs as issue comments",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/58",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: S",
+    "color": "A5CCE3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 57,
+  "title": "Optimize agent context assembly, reuse, and token/quota efficiency",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/57",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 56,
+  "title": "Model local and cloud execution limits separately",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/56",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 55,
+  "title": "Model provider activation protocols separately from capabilities and transports",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/55",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 54,
+  "title": "Configure which lifecycle stages auto-dispatch agents",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/54",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 53,
+  "title": "Make local execution primary and cloud dispatch optional",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/53",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 4,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 51,
+  "title": "Define reviewer independence by execution context, not provider identity",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/51",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 50,
+  "title": "Every provider covers every role: plan, implement, review and repair",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/50",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 5,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 44,
+  "title": "Create a user-friendly README with installation steps",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/44",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: documentation",
+    "color": "C4407D"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 0,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": null
+ },
+ {
+  "number": 39,
+  "title": "Injected failure paths and the injection fixtures",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/39",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "B53F9B"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: testing",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 3,
+   "total_blocked_by": 4,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/18"
+ },
+ {
+  "number": 38,
+  "title": "End-to-end happy path and both repair paths",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/38",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "B53F9B"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: testing",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 3,
+   "total_blocked_by": 3,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/18"
+ },
+ {
+  "number": 37,
+  "title": "Fixture repository harness and quota gating",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/37",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "B53F9B"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: testing",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/arbaro/issues/18"
+ },
+ {
+  "number": 36,
+  "title": "Publish the optional agent-lifecycle.yml reusable workflow",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/36",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 4,
+   "total_blocked_by": 5,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 22,
+  "title": "Codex provider support, capability-gated",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/22",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 21,
+  "title": "Let the owner choose which agent reviews",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/21",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 20,
+  "title": "Let the owner choose which agent implements",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/20",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 19,
+  "title": "Structured output schemas for every agent role",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/19",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: S",
+    "color": "A5CCE3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 18,
+  "title": "Integration and acceptance tests against a disposable fixture repository",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/18",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "type: maintenance",
+    "color": "B53F9B"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: testing",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 3,
+   "total_blocked_by": 3,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 3,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 17,
+  "title": "Version the local tool and optional workflow contract",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/17",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: S",
+    "color": "A5CCE3"
+   },
+   {
+    "name": "type: maintenance",
+    "color": "B53F9B"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: release",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 16,
+  "title": "Observability: execution ledger, reconciler and idempotency",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/16",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P3",
+    "color": "F3D08A"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 14,
+  "title": "Apply claim-based concurrency, deduplication and supersession",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/14",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 13,
+  "title": "Repair loop after changes_requested",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/13",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 1,
+   "total_blocking": 1
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 12,
+  "title": "Repair loop after a real CI failure",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/12",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 2,
+   "total_blocked_by": 2,
+   "blocking": 2,
+   "total_blocking": 2
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 11,
+  "title": "CI result handling with a deterministic failure classifier",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/11",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 2,
+   "blocking": 2,
+   "total_blocking": 2
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 10,
+  "title": "Antigravity reviewer adapter",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/10",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 3,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 9,
+  "title": "Claude implementer adapter",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/9",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: providers",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 1,
+   "total_blocked_by": 6,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 8,
+  "title": "Separate autonomy and risk policy from effort",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/8",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: M",
+    "color": "6BA4C9"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: security",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 1,
+   "blocking": 0,
+   "total_blocking": 0
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ },
+ {
+  "number": 6,
+  "title": "Dependency-aware dispatch and readiness gates",
+  "state": "open",
+  "state_reason": null,
+  "html_url": "https://github.com/martonpaulo/arbaro/issues/6",
+  "repository_url": "https://api.github.com/repos/martonpaulo/arbaro",
+  "labels": [
+   {
+    "name": "effort: L",
+    "color": "3A75A3"
+   },
+   {
+    "name": "type: feature",
+    "color": "8A3FA8"
+   },
+   {
+    "name": "priority: P2",
+    "color": "E08A2E"
+   },
+   {
+    "name": "area: lifecycle",
+    "color": "D0D7DE"
+   }
+  ],
+  "issue_dependencies_summary": {
+   "blocked_by": 0,
+   "total_blocked_by": 2,
+   "blocking": 3,
+   "total_blocking": 3
+  },
+  "assignees": [],
+  "sub_issues_summary": {
+   "total": 0,
+   "completed": 0,
+   "percent_completed": 0
+  },
+  "parent_issue_url": "https://api.github.com/repos/martonpaulo/skill-deck/issues/20"
+ }
+]

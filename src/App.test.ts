@@ -5,8 +5,8 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
-import awIssues from './__fixtures__/agent-workflows.issues.json'
+import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
+import arbaroIssues from './__fixtures__/arbaro.issues.json'
 import {
   App,
   blockerStateText,
@@ -213,9 +213,9 @@ describe('graphBounds', () => {
   }
 
   it('encloses every card and every group frame of a captured graph', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), {
       owner: 'martonpaulo',
-      repo: 'agent-workflows',
+      repo: 'arbaro',
     })
     const bounds = graphBounds(graph)
 
@@ -238,9 +238,9 @@ describe('graphBounds', () => {
   })
 
   it('touches each edge of the box it reports', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), {
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), {
       owner: 'martonpaulo',
-      repo: 'agent-workflows',
+      repo: 'arbaro',
     })
     const bounds = graphBounds(graph)
     const boxes = [
@@ -397,9 +397,9 @@ describe('the dependencies as text', () => {
   it('renders one row per drawn edge, both ends named', async () => {
     const graph = await buildGraph(
       {
-        issues: awIssues as IssuePayload[],
+        issues: arbaroIssues as IssuePayload[],
         blockers: new Map(
-          Object.entries(awBlockedBy as Record<string, IssuePayload[]>).map(
+          Object.entries(arbaroBlockedBy as Record<string, IssuePayload[]>).map(
             ([number, list]) => [Number(number), list],
           ),
         ),
@@ -411,15 +411,17 @@ describe('the dependencies as text', () => {
         rateLimit: null,
         includedClosed: true,
       },
-      { owner: 'martonpaulo', repo: 'agent-workflows' },
+      { owner: 'martonpaulo', repo: 'arbaro' },
     )
 
     const rows = dependencyRows(graph)
     const html = renderToStaticMarkup(createElement(DependencyTable, { rows }))
 
-    // Every edge the canvas draws is reachable without tracing it.
-    expect(rows).toHaveLength(graph.edges.length)
-    for (const edge of graph.edges) {
+    // Every blocking edge the canvas draws is reachable without tracing it. Hierarchy edges are
+    // deliberately absent: containment is not a blocking relationship.
+    const drawn = graph.edges.filter((edge) => edge.kind === 'dependency')
+    expect(rows).toHaveLength(drawn.length)
+    for (const edge of drawn) {
       const blocker = graph.nodes.find((node) => node.id === edge.source)!
       const dependent = graph.nodes.find((node) => node.id === edge.target)!
       expect(

@@ -2,7 +2,7 @@
 /**
  * Refreshes the test fixtures from the live GitHub API.
  *
- *   node scripts/capture-fixtures.mjs martonpaulo/agent-workflows martonpaulo/tabelo
+ *   node scripts/capture-fixtures.mjs martonpaulo/arbaro martonpaulo/tabelo
  *
  * Full issue payloads run to hundreds of kilobytes per repository, so the issue lists are
  * projected down to the fields the client actually consumes. To keep that projection honest each
@@ -51,8 +51,8 @@ const project = (issue) => ({
 /**
  * GitHub follows a renamed repository silently, so `repos/<old>/issues` answers with the new
  * repository's issues and the capture would be written under a name that no longer exists — every
- * captured issue then reads as external to the target the tests name. Verified the hard way:
- * `martonpaulo/agent-workflows` is now `martonpaulo/arbaro`.
+ * captured issue then reads as external to the target the tests name. Verified the hard way,
+ * when a sibling repository was captured under the name it had already lost.
  */
 const assertNotRenamed = (slug) => {
   const actual = JSON.parse(execFileSync('gh', ['api', `repos/${slug}`])).full_name

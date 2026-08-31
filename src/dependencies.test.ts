@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import awBlockedBy from './__fixtures__/agent-workflows.blocked-by.json'
-import awIssues from './__fixtures__/agent-workflows.issues.json'
+import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
+import arbaroIssues from './__fixtures__/arbaro.issues.json'
 import { adjacencyOf, dependencyRows, describeNode, issueRef } from './dependencies'
 import type { IssuePayload, RepositoryGraphData } from './github'
 import { buildGraph, nodeId, type IssueGraph } from './graph'
 
-const AW = { owner: 'martonpaulo', repo: 'agent-workflows' }
+const ARBARO = { owner: 'martonpaulo', repo: 'arbaro' }
 
 function dataFrom(
   issues: unknown,
@@ -75,7 +75,7 @@ describe('issueRef', () => {
 
 describe('adjacencyOf', () => {
   it('reads both directions of every drawn edge and nothing else', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     const adjacency = adjacencyOf(graph)
 
     // Every node has an entry, so "nothing blocks this" is an answer rather than a gap.
@@ -98,20 +98,18 @@ describe('adjacencyOf', () => {
   })
 
   it('follows the drawn edges rather than GitHub’s own dependency counts', async () => {
-    // #1 is blocked only by closed issues, so the default view draws no blocker for it even
+    // #11 is blocked only by closed issues, so the default view draws no blocker for it even
     // though the payload still reports a total.
-    const target = (awIssues as IssuePayload[]).find((candidate) => candidate.number === 1)
+    const target = (arbaroIssues as IssuePayload[]).find((candidate) => candidate.number === 11)
     expect(target?.issue_dependencies_summary?.total_blocked_by).toBeGreaterThan(0)
 
-    const open = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
-    expect(describe_(open, nodeId('martonpaulo/agent-workflows', 1))).toContain(
-      'Blocked by nothing.',
-    )
+    const open = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
+    expect(describe_(open, nodeId('martonpaulo/arbaro', 11))).toContain('Blocked by nothing.')
 
-    const closed = await buildGraph(dataFrom(awIssues, awBlockedBy), AW, { showClosed: true })
-    expect(describe_(closed, nodeId('martonpaulo/agent-workflows', 1))).toContain(
-      'Blocked by #25 and #27.',
-    )
+    const closed = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO, {
+      showClosed: true,
+    })
+    expect(describe_(closed, nodeId('martonpaulo/arbaro', 11))).toContain('Blocked by #1 and #5.')
   })
 })
 
@@ -287,23 +285,34 @@ describe('a closed blocker in another repository', () => {
 
 describe('dependencyRows', () => {
   it('covers every drawn edge exactly once, in a stable order', async () => {
-    const graph = await buildGraph(dataFrom(awIssues, awBlockedBy), AW)
+    const graph = await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO)
     const rows = dependencyRows(graph)
 
-    expect(rows).toHaveLength(graph.edges.length)
+    // Hierarchy edges are deliberately not rows: containment is not a blocking relationship.
+    const drawn = graph.edges.filter((edge) => edge.kind === 'dependency')
+    expect(rows).toHaveLength(drawn.length)
     expect(rows.map((row) => `${row.blocker.id}->${row.dependent.id}`).sort()).toEqual(
-      graph.edges.map((edge) => edge.id).sort(),
+      drawn.map((edge) => edge.id).sort(),
     )
 
-    const order = rows.map((row) => [row.blocker.number, row.dependent.number] as const)
-    const sorted = [...order].sort((a, b) => a[0] - b[0] || a[1] - b[1])
+    // Rows sort by reference, which is repository before number: a blocker from elsewhere sorts
+    // by where it lives, not by a number that means nothing outside its own repository.
+    const ref = (node: { repo: string; number: number }) => [node.repo, node.number] as const
+    const order = rows.map((row) => [...ref(row.blocker), ...ref(row.dependent)] as const)
+    const sorted = [...order].sort(
+      (a, b) =>
+        String(a[0]).localeCompare(String(b[0])) ||
+        Number(a[1]) - Number(b[1]) ||
+        String(a[2]).localeCompare(String(b[2])) ||
+        Number(a[3]) - Number(b[3]),
+    )
     expect(order).toEqual(sorted)
   })
 
   it('grows with the edges the closed-blocker view adds', async () => {
-    const open = dependencyRows(await buildGraph(dataFrom(awIssues, awBlockedBy), AW))
+    const open = dependencyRows(await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO))
     const closed = dependencyRows(
-      await buildGraph(dataFrom(awIssues, awBlockedBy), AW, { showClosed: true }),
+      await buildGraph(dataFrom(arbaroIssues, arbaroBlockedBy), ARBARO, { showClosed: true }),
     )
 
     expect(closed.length).toBeGreaterThan(open.length)

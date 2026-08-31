@@ -15,7 +15,7 @@ https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>
 
 It is one of three repositories that divide this work. [`martonpaulo/skills`](https://github.com/martonpaulo/skills)
 holds the agent skills that create and verify the dependencies; GitHub holds them;
-[`martonpaulo/agent-workflows`](https://github.com/martonpaulo/agent-workflows) is the execution
+[`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro) is the execution
 engine that acts on issues. This repository only renders. It is the last step in that chain and the
 only one with no authority.
 
