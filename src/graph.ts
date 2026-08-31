@@ -1,6 +1,6 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
 import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
-import type { RepoTarget } from './route'
+import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
  * Turns GitHub's payloads into a laid-out graph. Pure: no network, no React, no DOM. Every
@@ -181,8 +181,13 @@ export function repoOf(repositoryUrl: string): string {
   return match ? match[1] : 'unknown/unknown'
 }
 
+/**
+ * The graph's identity for one issue. The repository half is canonicalized, so a card reached
+ * through the route and the same card reached as somebody's blocker are one node however the two
+ * payloads spell the repository.
+ */
 export function nodeId(repo: string, number: number): string {
-  return `${repo}#${number}`
+  return `${canonicalSlug(repo)}#${number}`
 }
 
 export function isOpen(issue: IssuePayload): boolean {
@@ -204,11 +209,12 @@ export function deriveState(issue: IssuePayload): IssueState {
   return (issue.issue_dependencies_summary?.blocked_by ?? 0) > 0 ? 'blocked' : 'ready'
 }
 
-function toNode(issue: IssuePayload, target: RepoTarget): GraphNode {
+function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
   const repo = repoOf(issue.repository_url)
-  const external = repo !== `${target.owner}/${target.repo}`
+  const external = canonicalSlug(repo) !== canonicalSlug(targetSlug)
   const [owner, name] = repo.split('/')
-  const repoLabel = external ? (owner === target.owner ? name : repo) : ''
+  const sameOwner = canonicalSlug(owner) === canonicalSlug(targetSlug.split('/')[0])
+  const repoLabel = external ? (sameOwner ? name : repo) : ''
   const state = external ? null : deriveState(issue)
   const labels = external ? [] : cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
@@ -489,17 +495,36 @@ export interface BuildOptions {
   showClosed?: boolean
 }
 
+/**
+ * Which repository the drawing is of, taken from the data rather than from the address.
+ *
+ * Every issue in `data.issues` came from the repository GitHub resolved the request to, so its
+ * `repository_url` carries GitHub's own spelling of that repository. The route's spelling can
+ * differ — owner and repository path parameters are not case-sensitive, and a renamed repository is
+ * still served under its old name through a redirect — and deriving node IDs from the route is how
+ * the same issue ended up as two identities, one of them wrongly external, with every edge between
+ * them lost. The route is kept only as the fallback for an empty read, where there is nothing to
+ * join anyway.
+ *
+ * https://docs.github.com/en/rest/issues/issue-dependencies
+ */
+function resolvedTarget(data: RepositoryGraphData, target: RepoTarget): string {
+  const first = data.issues[0]
+  return first ? repoOf(first.repository_url) : slugOf(target)
+}
+
 export async function buildGraph(
   data: RepositoryGraphData,
   target: RepoTarget,
   options: BuildOptions = {},
 ): Promise<IssueGraph> {
   const showClosed = options.showClosed === true
+  const targetSlug = resolvedTarget(data, target)
   const nodes = new Map<string, GraphNode>()
   // The list is of open issues; this guards the invariant rather than expecting to drop anything.
   for (const issue of data.issues) {
     if (!isOpen(issue)) continue
-    const node = toNode(issue, target)
+    const node = toNode(issue, targetSlug)
     nodes.set(node.id, node)
   }
 
@@ -507,14 +532,14 @@ export async function buildGraph(
   const seen = new Set<string>()
 
   for (const [number, blockers] of data.blockers) {
-    const targetId = nodeId(`${target.owner}/${target.repo}`, number)
+    const targetId = nodeId(targetSlug, number)
     if (!nodes.has(targetId)) continue
 
     for (const blocker of blockers) {
       if (!showClosed && !isOpen(blocker)) continue
 
       // A blocker in another repository is not in the issue list, so it joins the graph here.
-      const blockerNode = toNode(blocker, target)
+      const blockerNode = toNode(blocker, targetSlug)
       if (!nodes.has(blockerNode.id)) nodes.set(blockerNode.id, blockerNode)
 
       const id = `${blockerNode.id}->${targetId}`

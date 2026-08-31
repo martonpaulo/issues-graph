@@ -229,6 +229,15 @@ describe('readSnapshot', () => {
     expect(read.kind).toBe('invalid')
   })
 
+  it('opens a link whose slug differs from the page only in case', async () => {
+    // Owner and repository are not case-sensitive on GitHub, so the sender's address bar and the
+    // recipient's can spell one repository differently. That is not a different repository.
+    const link = await share('martonpaulo/tabelo', tabelo)
+    const read = await readSnapshot(fragmentOf(link.url), 'MartonPaulo/Tabelo')
+
+    expect(read.kind).toBe('snapshot')
+  })
+
   it('rejects a link whose payload names a different repository', async () => {
     const link = await share('martonpaulo/tabelo', tabelo)
     const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/issues-graph')

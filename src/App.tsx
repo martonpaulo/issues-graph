@@ -36,7 +36,14 @@ import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
-import { parseRoute, pathForTarget, slugOf, titleForRoute, type RepoTarget } from './route'
+import {
+  canonicalSlugOf,
+  parseRoute,
+  pathForTarget,
+  slugOf,
+  titleForRoute,
+  type RepoTarget,
+} from './route'
 import { readStored, writeStored } from './storage'
 import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
 import { rememberTarget } from './suggestions'
@@ -1259,7 +1266,10 @@ function GraphLoad({
   onOpen: (target: RepoTarget) => void
 }) {
   const { token } = useTokenState()
-  const slug = slugOf(target)
+  // The canonical spelling, because everything below is a key: the saved copy, the hidden cards,
+  // and the repository a shared link claims to hold. Keying those on what the reader typed forks
+  // one repository's state across its spellings. Displayed copy keeps `slugOf`.
+  const slug = canonicalSlugOf(target)
   // Read once per mount: the gate has to describe a copy that does not change under it.
   const [cached] = useState<CachedGraph | null>(() => readCache(slug))
   // Read once per mount, for the same reason as the saved copy: neither may change under the page
