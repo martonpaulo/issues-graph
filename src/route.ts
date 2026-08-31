@@ -69,6 +69,22 @@ export function slugOf(target: RepoTarget): string {
   return `${target.owner}/${target.repo}`
 }
 
+/** The product's name for what the page shows, and the title of the index route. */
+export const TITLE = 'Issue dependencies'
+
+/**
+ * The document title for a route. Repository identity leads, because that is the half that
+ * distinguishes one open tab from another.
+ *
+ * An invalid route reuses the index title rather than echoing the rejected path: `Start` already
+ * shows the reason in the page, and repeating hand-edited input in the tab switcher and browser
+ * history buys nothing. The value is assigned to `document.title`, which is character data and
+ * never parsed as markup, so no name here reaches an HTML sink.
+ */
+export function titleForRoute(route: Route): string {
+  return route.kind === 'graph' ? `${slugOf(route.target)} · ${TITLE}` : TITLE
+}
+
 /** Accepts `owner/repo`, or the same thing pasted as a github.com URL. */
 export function parseTargetInput(input: string): RepoTarget | null {
   const trimmed = input.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\/+$/, '')

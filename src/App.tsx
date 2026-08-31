@@ -34,7 +34,7 @@ import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
 import { IssueCard, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
-import { parseRoute, pathForTarget, slugOf, type RepoTarget } from './route'
+import { parseRoute, pathForTarget, slugOf, titleForRoute, type RepoTarget } from './route'
 import { readStored, writeStored } from './storage'
 import { rememberTarget } from './suggestions'
 import { describeAge, describeUntil } from './time'
@@ -1226,6 +1226,13 @@ export function App() {
   }, [])
 
   const route = useMemo(() => parseRoute(pathname, BASE), [pathname])
+
+  // `pathname` is updated by both `navigate` and the `popstate` listener above, so this one effect
+  // covers in-app navigation, Back and Forward without a second subscription.
+  useEffect(() => {
+    document.title = titleForRoute(route)
+  }, [route])
+
   const openTarget = useCallback(
     (target: RepoTarget) => navigate(pathForTarget(target, BASE)),
     [navigate],
