@@ -259,6 +259,7 @@ describe('graphBounds', () => {
       nodes: [],
       edges: [],
       groups: [],
+      identity: 'acme/app',
       complete: true,
       unresolved: [],
       rateLimited: false,

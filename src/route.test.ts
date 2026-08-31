@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canonicalSlug,
+  canonicalSlugOf,
   parseRoute,
   parseTargetInput,
   pathForTarget,
@@ -178,5 +180,25 @@ describe('titleForRoute', () => {
       'Issue dependencies',
       'acme/app · Issue dependencies',
     ])
+  })
+})
+
+describe('canonicalSlug', () => {
+  it('folds the spellings GitHub treats as one repository', () => {
+    const spellings = ['Acme/App', 'acme/app', 'ACME/APP', 'aCmE/aPp']
+    expect(new Set(spellings.map(canonicalSlug)).size).toBe(1)
+    expect(canonicalSlug('Acme/App')).toBe('acme/app')
+  })
+
+  it('keeps genuinely different repositories apart', () => {
+    expect(canonicalSlug('acme/app')).not.toBe(canonicalSlug('acme/app-two'))
+    expect(canonicalSlug('acme/app')).not.toBe(canonicalSlug('other/app'))
+    expect(canonicalSlug('acme/app_two')).not.toBe(canonicalSlug('acme/app-two'))
+  })
+
+  it('canonicalizes a target without changing what the route displays', () => {
+    const target = { owner: 'Acme', repo: 'App' }
+    expect(canonicalSlugOf(target)).toBe('acme/app')
+    expect(slugOf(target)).toBe('Acme/App')
   })
 })
