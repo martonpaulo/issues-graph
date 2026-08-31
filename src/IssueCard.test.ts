@@ -29,13 +29,14 @@ function issueNode(overrides: Partial<GraphNode>): GraphNode {
  * `IssueCard` draws `@xyflow/react` handles, which read the flow store, so the provider is what
  * makes a bare render possible at all.
  */
-function renderCard(node: GraphNode): string {
+function renderCard(node: GraphNode, description = 'Issue #30. Blocked by nothing. Blocks nothing.'): string {
   const data: IssueCardData = {
     node,
     selected: false,
     hidden: false,
     highlighted: false,
     faded: false,
+    description,
     onSelect: () => {},
     onToggleHidden: () => {},
     onOpen: () => {},
@@ -92,5 +93,17 @@ describe('IssueCard', () => {
         ),
       )[0],
     ).toBe('Open Other/Lib#30 on GitHub')
+  })
+
+  it('describes its blockers and dependents where colour and geometry cannot', () => {
+    const html = renderCard(
+      issueNode({}),
+      'Issue #30. Blocked by #23 and #24. Blocks #31.',
+    )
+
+    expect(html).toContain('aria-describedby="card-deps-owner-app-30"')
+    expect(html).toContain(
+      '<span class="sr-only" id="card-deps-owner-app-30">Issue #30. Blocked by #23 and #24. Blocks #31.</span>',
+    )
   })
 })

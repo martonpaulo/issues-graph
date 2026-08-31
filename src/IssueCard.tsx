@@ -1,6 +1,7 @@
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
 import { useRef } from 'react'
 
+import { issueRef } from './dependencies'
 import type { GraphNode, IssueState } from './graph'
 import { Icon } from './icons'
 import { chipText } from './labels'
@@ -13,6 +14,12 @@ export interface IssueCardData extends Record<string, unknown> {
   highlighted: boolean
   /** A highlight is on and this card is not part of it. */
   faded: boolean
+  /**
+   * The card's place in the dependency graph, said in words, e.g.
+   * `Issue #25. Blocked by #23 and #24. Blocks #31.` Derived from the drawn edges by
+   * `dependencies.ts`, and read to anyone who cannot trace the arrows.
+   */
+  description: string
   onSelect: (id: string, additive: boolean) => void
   onToggleHidden: (id: string) => void
   onOpen: (url: string, label: string) => void
@@ -27,7 +34,7 @@ export type IssueNode = Node<IssueCardData, 'issue'>
  * State is written on the card as words, not carried by colour alone, so the graph stays readable
  * for anyone who cannot separate the fills.
  */
-const STATE_TEXT: Record<IssueState, string> = {
+export const STATE_TEXT: Record<IssueState, string> = {
   ready: 'ready',
   blocked: 'blocked',
   attention: 'needs attention',
@@ -59,15 +66,20 @@ function cardClasses(data: IssueCardData): string {
 function CardBody({
   node,
   selected,
+  description,
   onSelect,
-}: Pick<IssueCardData, 'node' | 'selected' | 'onSelect'>) {
+}: Pick<IssueCardData, 'node' | 'selected' | 'description' | 'onSelect'>) {
   const pressedAt = useRef<{ x: number; y: number } | null>(null)
+  // The node id carries `/` and `#`, which are legal in an id but are selector syntax everywhere
+  // else, so the reference is spelled without them.
+  const descriptionId = `card-deps-${node.id.replace(/[^\w-]+/g, '-')}`
 
   return (
     <button
       type="button"
       className="card__body nodrag"
       aria-pressed={selected}
+      aria-describedby={descriptionId}
       onPointerDown={(event) => {
         pressedAt.current = { x: event.clientX, y: event.clientY }
       }}
@@ -99,6 +111,12 @@ function CardBody({
         style={{ WebkitLineClamp: node.titleLines, lineClamp: node.titleLines }}
       >
         {node.title}
+      </span>
+
+      {/* The arrows are geometry, and geometry is exactly what a screen reader cannot follow.
+          Hidden rather than drawn: the same fact is already on screen as an edge. */}
+      <span className="sr-only" id={descriptionId}>
+        {description}
       </span>
 
       <span className="card__labels">
@@ -149,14 +167,19 @@ function CardActions({
 }
 
 export function IssueCard({ data }: NodeProps<IssueNode>) {
-  const { node, selected, hidden, onSelect, onToggleHidden, onOpen } = data
-  const label = node.external ? `${node.repo}#${node.number}` : `#${node.number}`
+  const { node, selected, hidden, description, onSelect, onToggleHidden, onOpen } = data
+  const label = issueRef(node)
 
   return (
     <div className={cardClasses(data)}>
       <Handle type="target" position={Position.Top} className="card__handle" />
 
-      <CardBody node={node} selected={selected} onSelect={onSelect} />
+      <CardBody
+        node={node}
+        selected={selected}
+        description={description}
+        onSelect={onSelect}
+      />
 
       <CardActions
         node={node}

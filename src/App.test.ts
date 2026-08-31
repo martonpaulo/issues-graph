@@ -7,6 +7,8 @@ import awIssues from './__fixtures__/agent-workflows.issues.json'
 import {
   abortOnTokenChange,
   App,
+  DependencyTable,
+  DIRECTION_LEGEND,
   budgetParts,
   decideSavedCopyOpen,
   describeSavedCopy,
@@ -19,6 +21,7 @@ import {
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
+import { dependencyRows, issueRef } from './dependencies'
 import { buildGraph, NODE_WIDTH } from './graph'
 
 const narrowData: RepositoryGraphData = {
@@ -371,5 +374,52 @@ describe('stopping a load whose token is gone', () => {
 
     expect(abortOnTokenChange(carried, 'new', nothing)).toBe(true)
     expect(carried.current).toBe('new')
+  })
+})
+
+describe('the dependencies as text', () => {
+  it('renders one row per drawn edge, both ends named', async () => {
+    const graph = await buildGraph(
+      {
+        issues: awIssues as IssuePayload[],
+        blockers: new Map(
+          Object.entries(awBlockedBy as Record<string, IssuePayload[]>).map(
+            ([number, list]) => [Number(number), list],
+          ),
+        ),
+        complete: true,
+        unresolved: [],
+        rateLimited: false,
+        rateLimitReset: null,
+        requestCount: 1,
+        rateLimit: null,
+        includedClosed: true,
+      },
+      { owner: 'martonpaulo', repo: 'agent-workflows' },
+    )
+
+    const rows = dependencyRows(graph)
+    const html = renderToStaticMarkup(createElement(DependencyTable, { rows }))
+
+    // Every edge the canvas draws is reachable without tracing it.
+    expect(rows).toHaveLength(graph.edges.length)
+    for (const edge of graph.edges) {
+      const blocker = graph.nodes.find((node) => node.id === edge.source)!
+      const dependent = graph.nodes.find((node) => node.id === edge.target)!
+      expect(
+        html,
+        edge.id,
+      ).toContain(
+        `<span class="deps__ref">${issueRef(blocker)}</span> <span class="deps__title">`,
+      )
+      expect(html, edge.id).toContain(
+        `<span class="deps__ref">${issueRef(dependent)}</span> <span class="deps__title">`,
+      )
+    }
+
+    // The direction an arrowhead carries, written down.
+    expect(html).toContain(DIRECTION_LEGEND)
+    expect(html).toContain('<th scope="col">Blocker</th>')
+    expect(html).toContain('<th scope="col">Blocks</th>')
   })
 })
