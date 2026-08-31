@@ -63,6 +63,17 @@ export function workerEngine(): WorkerEngine {
 
   return {
     layout: (graph) => Promise.race([elk.layout(graph), death]),
-    terminate: () => elk.terminateWorker(),
+    terminate: () => {
+      // Terminating stops the thread and settles nothing. `elk-api` keeps the pending layout's
+      // resolver, and the death above only rejects on an `error` event, which `terminate()` does
+      // not fire — so without this the race stays pending for the life of the page, holding the
+      // graph it was handed and whatever the caller captured around it. One per abandoned draw,
+      // and a page that navigates repeatedly abandons one each time.
+      //
+      // Rejecting first means the race is already settled when the thread goes away, so a
+      // terminated engine reports a stopped layout rather than a silent one.
+      fail('The layout was stopped.')
+      elk.terminateWorker()
+    },
   }
 }
