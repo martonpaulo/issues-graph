@@ -27,10 +27,18 @@
   --bg: #f3f5f8;
   --surface: #ffffff;
   --text: #1f2a37;
-  --muted: #6b7684;
+  /* Every muted role is 11-13px, which WCAG counts as normal text and owes 4.5:1. This is the
+     lightest grey that clears it on all three surfaces it is drawn on — the canvas at 5.03:1,
+     a panel at 5.50:1, a soft accent fill at 4.79:1. */
+  --muted: #5f6a78;
   --line: #e3e8ee;
   --line-strong: #cfd7e1;
-  --accent: #4c6fff;
+  /* The accent carries white text on a filled button and is itself text on `--accent-soft`,
+     the tighter of the two at 4.61:1. `#4c6fff` cleared neither, so the whole scale moved one
+     step down the same hue rather than changing colour. */
+  --accent: #3a5cf0;
+  /* Only the primary button's hover, which is why it is the one step further down. */
+  --accent-strong: #2f52d8;
   --accent-soft: #eaefff;
   --dots: #d4dae2;
   --edge: #8c97a8;
@@ -127,8 +135,8 @@ code {
 }
 
 .button--primary:hover {
-  background: #3a5cf0;
-  border-color: #3a5cf0;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
   color: #ffffff;
 }
 
@@ -139,10 +147,14 @@ code {
   cursor: not-allowed;
 }
 
+/* Off, but still the primary control: the accent stays and drains to its palest weight, rather
+   than the button becoming a second disabled secondary. White on `--line-strong` was 1.45:1 —
+   WCAG exempts a disabled control, #22 does not — so the label is `--muted` on `--accent-soft`
+   at 4.79:1. */
 .button--primary:disabled {
-  color: #ffffff;
-  background: var(--line-strong);
-  border-color: var(--line-strong);
+  color: var(--muted);
+  background: var(--accent-soft);
+  border-color: var(--line);
 }
 
 .button--small {
@@ -690,12 +702,16 @@ code {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  opacity: 0.55;
+  /* Ellipsis is how this one gives way; the tint only has to stay quieter than the number, and
+     it cannot go below the alpha that keeps 4.5:1 against the darkest state fill. */
+  opacity: 0.7;
 }
 
 .card__number {
   flex: none;
-  opacity: 0.75;
+  /* Raised with the repository name beside it: once that one has to be legible, this has to stay
+     visibly ahead of it, or the row loses the order it was written in. */
+  opacity: 0.85;
 }
 
 /* A parent's sub-issue count. Shares the head row with the number and the state word, which is
@@ -710,7 +726,7 @@ code {
   font-size: 10px;
   line-height: 16px;
   letter-spacing: 0.03em;
-  opacity: 0.6;
+  opacity: 0.7;
   white-space: nowrap;
 }
 
@@ -719,7 +735,10 @@ code {
   font-size: 10px;
   line-height: 16px;
   letter-spacing: 0.03em;
-  opacity: 0.6;
+  /* The state word is the thing that makes a card readable without colour, so its composite over
+     every state fill is held at 4.5:1; 0.7 is the lowest alpha that does it on `--attention-fill`,
+     the darkest of them. */
+  opacity: 0.7;
   white-space: nowrap;
 }
 
@@ -759,7 +778,8 @@ code {
   background: none;
   border-color: color-mix(in srgb, currentColor 28%, transparent);
   border-style: dashed;
-  opacity: 0.5;
+  /* Fainter than a filled chip, but it still carries the namespace as text. */
+  opacity: 0.7;
 }
 
 /* The two icons sit where the state word is and take its place on hover, so a resting card stays
