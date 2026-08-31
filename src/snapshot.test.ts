@@ -271,9 +271,32 @@ describe('readSnapshot', () => {
   )
 
   it('rejects a timestamp that would render as NaN rather than an age', async () => {
-    for (const savedAt of ['yesterday', Number.NaN, Number.POSITIVE_INFINITY, null]) {
+    // The last two are finite numbers that Date cannot represent: the ECMAScript time range is
+    // ±8.64e15 ms, so finiteness alone still lets an Invalid Date reach the banner.
+    const bad = [
+      'yesterday',
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      null,
+      1e20,
+      8_640_000_000_000_001,
+      -8_640_000_000_000_001,
+    ]
+
+    for (const savedAt of bad) {
       const read = await readSnapshot(await fragmentFor(wholePayload({ savedAt })), 'a/b')
       expect(read.kind, String(savedAt)).toBe('invalid')
+    }
+  })
+
+  it('accepts the extremes of the range Date can represent', async () => {
+    // The other side of the boundary above, so the check cannot be tightened into rejecting
+    // every large timestamp and still pass.
+    for (const savedAt of [0, 8_640_000_000_000_000, -8_640_000_000_000_000]) {
+      const read = await readSnapshot(await fragmentFor(wholePayload({ savedAt })), 'a/b')
+      expect(read.kind, String(savedAt)).toBe('snapshot')
+      if (read.kind !== 'snapshot') continue
+      expect(Number.isNaN(read.view.capturedAt.getTime())).toBe(false)
     }
   })
 

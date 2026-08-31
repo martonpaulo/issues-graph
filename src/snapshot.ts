@@ -181,15 +181,24 @@ function isUnresolved(value: unknown): boolean {
 }
 
 /**
- * Whether the stored graph is whole enough to draw.
+ * Whether a number is a timestamp `Date` can actually represent.
  *
- * `savedAt` must be a finite number: `new Date(undefined)` is an Invalid Date, which renders as
- * `NaN days ago` rather than failing anywhere a reader would recognize as a broken link.
+ * Finiteness is not enough: the ECMAScript time range is ±8.64e15 ms, so `1e20` is a perfectly
+ * finite number that yields an Invalid Date. Asking the constructed date settles the whole
+ * question at once — out of range, `NaN` and `Infinity` all fail the same way — and an Invalid
+ * Date reaching the banner renders as `NaN days ago` rather than as anything a reader would
+ * recognize as a broken link.
+ * https://tc39.es/ecma262/#sec-time-values-and-time-range
  */
+function isTimestamp(value: unknown): boolean {
+  return typeof value === 'number' && !Number.isNaN(new Date(value).getTime())
+}
+
+/** Whether the stored graph is whole enough to draw. */
 function isStoredGraph(value: unknown): value is StoredGraph {
   if (!isRecord(value)) return false
   if (value.version !== 1) return false
-  if (typeof value.savedAt !== 'number' || !Number.isFinite(value.savedAt)) return false
+  if (!isTimestamp(value.savedAt)) return false
   if (!Array.isArray(value.issues) || !value.issues.every(isIssue)) return false
   if (!Array.isArray(value.blockers) || !value.blockers.every(isBlockerEntry)) return false
   if (typeof value.complete !== 'boolean') return false
