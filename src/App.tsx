@@ -1337,6 +1337,8 @@ function GraphLoad({
           return
         }
 
+        // Somebody else's link, so its payloads do not get to say which repository this is:
+        // `readSnapshot` bound it to the one in the path, and that binding is the whole guarantee.
         const graph = await buildGraph(read.view.data, target, {
           showClosed: read.view.showClosed,
         })
@@ -1436,7 +1438,11 @@ function GraphLoad({
             rememberTarget(target)
             writeCache(slug, result.data)
             setPhase({ kind: 'drawing' })
-            const graph = await buildGraph(result.data, target, { showClosed: includeClosed })
+            // Read from GitHub just now, so the payloads may name the repository they came from.
+            const graph = await buildGraph(result.data, target, {
+              showClosed: includeClosed,
+              trustedIdentity: true,
+            })
             if (!controller.signal.aborted) {
               setPhase({
                 kind: 'ready',
@@ -1475,7 +1481,8 @@ function GraphLoad({
       if (decision.kind !== 'open') return
 
       setPhase({ kind: 'drawing' })
-      void buildGraph(copy.data, target, { showClosed }).then((graph) =>
+      // This browser's own copy of a read it made from GitHub, under this repository's key.
+      void buildGraph(copy.data, target, { showClosed, trustedIdentity: true }).then((graph) =>
         setPhase({
           kind: 'ready',
           graph,

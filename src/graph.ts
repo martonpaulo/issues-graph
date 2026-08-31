@@ -493,23 +493,38 @@ export interface BuildOptions {
    * backlog reads as what is left to do rather than as what has already happened.
    */
   showClosed?: boolean
+  /**
+   * Lets the payloads name the repository being drawn, rather than the address the reader is on.
+   *
+   * True only for data this browser read from GitHub, or its own saved copy of such a read. A
+   * shared link's payload is a hand-writable string: `readSnapshot` binds the link to the
+   * repository in its path, and trusting the issues inside it to name the repository would hand
+   * that binding straight back to whoever wrote the link, letting somebody else's issues be drawn
+   * as local under an address that names a repository they have nothing to do with. Off by
+   * default, so a caller that has not thought about provenance gets the address it is on.
+   */
+  trustedIdentity?: boolean
 }
 
 /**
- * Which repository the drawing is of, taken from the data rather than from the address.
+ * Which repository the drawing is of.
  *
- * Every issue in `data.issues` came from the repository GitHub resolved the request to, so its
- * `repository_url` carries GitHub's own spelling of that repository. The route's spelling can
- * differ — owner and repository path parameters are not case-sensitive, and a renamed repository is
- * still served under its old name through a redirect — and deriving node IDs from the route is how
- * the same issue ended up as two identities, one of them wrongly external, with every edge between
- * them lost. The route is kept only as the fallback for an empty read, where there is nothing to
- * join anyway.
+ * Every issue in a trusted `data.issues` came from the repository GitHub resolved the request to,
+ * so its `repository_url` carries GitHub's own spelling of that repository. The route's spelling
+ * can differ — owner and repository path parameters are not case-sensitive, and a renamed
+ * repository is still served under its old name through a redirect — and deriving node IDs from
+ * the route is how the same issue ended up as two identities, one of them wrongly external, with
+ * every edge between them lost.
+ *
+ * Untrusted data never gets that authority, and neither does an empty read, where there is nothing
+ * to join anyway: both fall back to the address, which is bound to the repository elsewhere.
+ * Identity is only ever compared canonically, so the fallback still joins every casing of the
+ * address to the payloads' own spelling of the same name.
  *
  * https://docs.github.com/en/rest/issues/issue-dependencies
  */
-function resolvedTarget(data: RepositoryGraphData, target: RepoTarget): string {
-  const first = data.issues[0]
+function resolvedTarget(data: RepositoryGraphData, target: RepoTarget, trusted: boolean): string {
+  const first = trusted ? data.issues[0] : undefined
   return first ? repoOf(first.repository_url) : slugOf(target)
 }
 
@@ -519,7 +534,7 @@ export async function buildGraph(
   options: BuildOptions = {},
 ): Promise<IssueGraph> {
   const showClosed = options.showClosed === true
-  const targetSlug = resolvedTarget(data, target)
+  const targetSlug = resolvedTarget(data, target, options.trustedIdentity === true)
   const nodes = new Map<string, GraphNode>()
   // The list is of open issues; this guards the invariant rather than expecting to drop anything.
   for (const issue of data.issues) {

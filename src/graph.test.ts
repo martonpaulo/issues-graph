@@ -584,10 +584,51 @@ describe('repository identity is canonical, not what the address happened to spe
     }
   })
 
-  it('joins the graph when a rename redirected the request to another name', async () => {
+  it('joins the graph when a rename redirected a trusted read to another name', async () => {
     // GitHub answers `acme/old-app` under its current name, so the payloads and the address share
-    // no spelling at all. The payloads are the ones that own the identity.
-    const graph = await buildGraph(blockedPair(), { owner: 'acme', repo: 'old-app' })
+    // no spelling at all. A read this browser just made may say which repository it is of.
+    const graph = await buildGraph(
+      blockedPair(),
+      { owner: 'acme', repo: 'old-app' },
+      { trustedIdentity: true },
+    )
+
+    expect(graph.edges).toHaveLength(1)
+    expect(graph.nodes.every((node) => !node.external)).toBe(true)
+  })
+
+  it('does not let untrusted data name the repository being drawn', async () => {
+    // The shape of a crafted shared link: its path and its own slug field say `acme/app`, which is
+    // all `readSnapshot` checks, while the issues inside it come from somewhere else entirely.
+    // Those issues must not be drawn as this repository's own.
+    const crafted = dataFrom(
+      [
+        issue({
+          number: 5,
+          repository_url: 'https://api.github.com/repos/evil/repo',
+          html_url: 'https://github.com/evil/repo/issues/5',
+        }),
+      ],
+      {},
+    )
+
+    const graph = await buildGraph(crafted, { owner: 'acme', repo: 'app' })
+
+    expect(graph.nodes).toHaveLength(1)
+    expect(graph.nodes[0]).toMatchObject({
+      id: 'evil/repo#5',
+      external: true,
+      repoLabel: 'evil/repo',
+      // An external card carries no local workflow state and no label chips.
+      state: null,
+      labels: [],
+    })
+  })
+
+  it('still folds casing without trusting the data to name the repository', async () => {
+    // The default path: the address owns the identity, and canonical comparison is what makes
+    // `Acme/App` and the payloads' `acme/app` one repository rather than two.
+    const graph = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
 
     expect(graph.edges).toHaveLength(1)
     expect(graph.nodes.every((node) => !node.external)).toBe(true)
