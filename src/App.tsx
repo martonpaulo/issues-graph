@@ -889,7 +889,6 @@ function ShareResult({ outcome, onClose }: { outcome: ShareOutcome; onClose: () 
 function Canvas({
   graph,
   slug,
-  identity,
   savedCopy,
   snapshot,
   onAskAgain,
@@ -897,8 +896,6 @@ function Canvas({
   graph: IssueGraph
   /** The repository as the reader spelled it, for the bar, the link and the accessible name. */
   slug: string
-  /** The same repository as one key, for the hidden cards and the shared link. */
-  identity: string
   savedCopy: SavedCopyProvenance | null
   snapshot: SnapshotView
   /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
@@ -906,6 +903,11 @@ function Canvas({
 }) {
   const { fitView } = useReactFlow()
   const openExternal = useOpenExternal()
+
+  // What is stored and what is sent are keyed by the repository the cards actually belong to, not
+  // by the address they were reached through. The two differ after a rename, and the hidden cards
+  // are recorded as node IDs qualified with the former.
+  const identity = graph.identity
 
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [highlight, setHighlight] = useState<ReadonlySet<string>>(() => new Set())
@@ -1511,7 +1513,6 @@ function GraphLoad({
           key={`${identity}:${showClosed}`}
           graph={phase.graph}
           slug={slug}
-          identity={identity}
           savedCopy={phase.savedCopy}
           snapshot={phase.snapshot}
           onAskAgain={() => onReload()}

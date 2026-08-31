@@ -597,6 +597,23 @@ describe('repository identity is canonical, not what the address happened to spe
     expect(graph.nodes.every((node) => !node.external)).toBe(true)
   })
 
+  it('reports the identity it drew, so what leaves this browser is bound to it', async () => {
+    // A trusted read through an old alias answers with the current repository, and that is what
+    // the cards belong to. A shared link or a hidden-card key built from the address instead would
+    // name a repository none of these nodes are qualified with.
+    const redirected = await buildGraph(
+      blockedPair(),
+      { owner: 'acme', repo: 'old-app' },
+      { trustedIdentity: true },
+    )
+    expect(redirected.identity).toBe('acme/app')
+    expect(redirected.nodes.every((node) => node.id.startsWith('acme/app#'))).toBe(true)
+
+    // Untrusted data does not get to name it, so the identity is the address, canonically.
+    const untrusted = await buildGraph(blockedPair(), { owner: 'Acme', repo: 'App' })
+    expect(untrusted.identity).toBe('acme/app')
+  })
+
   it('does not let untrusted data name the repository being drawn', async () => {
     // The shape of a crafted shared link: its path and its own slug field say `acme/app`, which is
     // all `readSnapshot` checks, while the issues inside it come from somewhere else entirely.

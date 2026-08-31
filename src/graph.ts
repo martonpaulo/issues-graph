@@ -167,6 +167,17 @@ export interface IssueGraph {
   nodes: GraphNode[]
   edges: GraphEdge[]
   groups: GraphGroup[]
+  /**
+   * The repository this drawing is of, canonically, and the repository every node ID is qualified
+   * with. It is not always the address the reader is on: a rename redirect serves one repository
+   * under an older name, and a trusted read then answers with the current one.
+   *
+   * Anything that has to survive leaving this browser is bound to this rather than to the address.
+   * A shared link built from the address would carry issues the recipient reads as somebody else's
+   * — the recipient does not trust the payload to name its own repository, and rightly — so the
+   * link would draw every card as external and join no edges at all.
+   */
+  identity: string
   /** False when any dependency could not be read. The canvas must say so rather than imply whole. */
   complete: boolean
   unresolved: UnresolvedDependency[]
@@ -570,6 +581,7 @@ export async function buildGraph(
     nodes: laid.nodes,
     edges: edges.map((edge) => ({ ...edge, points: laid.routes.get(edge.id) })),
     groups: laid.groups,
+    identity: canonicalSlug(targetSlug),
     complete: data.complete,
     unresolved: data.unresolved,
     rateLimited: data.rateLimited,
