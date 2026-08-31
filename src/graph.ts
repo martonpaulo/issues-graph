@@ -1,6 +1,6 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
 import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
-import { cardLabels, chipText, hasNamespace, type CardChip } from './labels'
+import { cardLabels, needsAttention, type CardChip } from './labels'
 import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
 /**
@@ -52,6 +52,28 @@ const CHIP_ROW_WIDTH = 210
 const CHIP_ROW_SLACK = 1
 
 /**
+ * What one emoji costs.
+ *
+ * `CHIP_FALLBACK_CHAR_WIDTH` is the widest advance captured off Inter, which is the right guess
+ * for a glyph Inter draws but the capture did not record — an accented latin letter, a CJK
+ * ideograph the browser resolves to a face of about the same size. An emoji is not that: Inter has
+ * no emoji glyphs at all, so the browser falls back to the system emoji face, which draws roughly
+ * square and therefore wider than any Inter advance. Labels lead with one often enough on public
+ * repositories to matter, and under-reserving is the direction that pushes chips out of the card.
+ * A cluster spelled with several code points over-reserves, which only leaves slack.
+ */
+const CHIP_EMOJI_CHAR_WIDTH = 13
+
+/** Symbol and pictographic blocks the shipped Inter face does not cover. */
+function isEmoji(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
+    (codePoint >= 0x2b00 && codePoint <= 0x2bff) ||
+    codePoint >= 0x1f000
+  )
+}
+
+/**
  * How wide the browser will draw one chip.
  *
  * Summed from the advances captured off the shipped Inter face rather than from an average
@@ -64,7 +86,12 @@ const CHIP_ROW_SLACK = 1
 function chipWidth(text: string): number {
   let width = CHIP_PADDING
   for (const character of text) {
-    width += CHIP_CHAR_WIDTHS[character] ?? CHIP_FALLBACK_CHAR_WIDTH
+    const captured = CHIP_CHAR_WIDTHS[character]
+    if (captured !== undefined) {
+      width += captured
+      continue
+    }
+    width += isEmoji(character.codePointAt(0)!) ? CHIP_EMOJI_CHAR_WIDTH : CHIP_FALLBACK_CHAR_WIDTH
   }
   return width
 }
@@ -130,9 +157,6 @@ export function cardHeight(titleLines: number, rows: number): number {
   return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + chips
 }
 
-/** The tallest a card is expected to get, which is what a bounding estimate has to assume. */
-export const MAX_NODE_HEIGHT = cardHeight(MAX_TITLE_LINES, 2)
-
 export type IssueState =
   | 'ready'
   | 'unassigned'
@@ -168,7 +192,7 @@ export interface GraphNode {
    * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
    */
   repoLabel: string
-  /** The slots the card shows, filled or not. External cards show none. */
+  /** The chips the card draws, canonical slots first. External cards draw none. */
   labels: CardChip[]
   /** Every label on the issue, which is what the highlight picker offers. */
   allLabels: string[]
@@ -292,8 +316,11 @@ function hasLabel(issue: IssuePayload, name: string): boolean {
  *
  * 1. `in-review` first, because an issue whose change is already written and waiting is the one
  *    error that costs somebody a second implementation of finished work.
- * 2. A `status:` label next. Its description says `in-progress` travels with every one of them, so
- *    the pair means the issue is parked on a human, and parked is the fact worth showing.
+ * 2. A `status:` label whose value this convention defines next. Its description says
+ *    `in-progress` travels with every one of them, so the pair means the issue is parked on a
+ *    human, and parked is the fact worth showing. The value is what is matched, never the
+ *    namespace: `status:` is a namespace half of GitHub uses for board columns, and a repository
+ *    whose issues sit in `status: backlog` is not a repository of issues waiting on somebody.
  * 3. `in-progress` alone: a worker is holding it right now.
  * 4. `blocked_by` counts blockers that are still **open**, while `total_blocked_by` counts open and
  *    closed ones. So `blocked_by > 0` is exactly "has an unfinished blocker", and an issue whose
@@ -310,7 +337,7 @@ export function deriveState(issue: IssuePayload): IssueState {
     return issue.state_reason === 'not_planned' ? 'not-planned' : 'completed'
   }
   if (hasLabel(issue, IN_REVIEW_LABEL)) return 'in-review'
-  if (hasNamespace(issue.labels, 'status')) return 'attention'
+  if (needsAttention(issue.labels)) return 'attention'
   if (hasLabel(issue, IN_PROGRESS_LABEL)) return 'in-progress'
   if ((issue.issue_dependencies_summary?.blocked_by ?? 0) > 0) return 'blocked'
   if (issue.assignees?.length === 0) return 'unassigned'
@@ -347,7 +374,7 @@ function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
   const state = external ? null : deriveState(issue)
   const labels = external ? [] : cardLabels(issue.labels)
   const titleLines = titleLineCount(issue.title)
-  const rows = chipRows(labels.map(chipText))
+  const rows = chipRows(labels.map((chip) => chip.text))
   return {
     id: nodeId(repo, issue.number),
     number: issue.number,

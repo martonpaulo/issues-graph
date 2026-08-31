@@ -781,6 +781,12 @@ code {
   flex-wrap: wrap;
   gap: 4px;
   margin-top: 11px;
+  /* The row the chips wrap inside has to be the card's width and not their own. As a flex item in
+     a column container nothing floors its cross size, so one long label from an arbitrary
+     repository would widen the row past the card instead of wrapping — and the chip's own
+     `max-width: 100%` below, resolved against a row that had already grown, would never clamp. */
+  width: 100%;
+  min-width: 0;
 }
 
 .chip {
@@ -793,6 +799,23 @@ code {
   background: color-mix(in srgb, currentColor 10%, transparent);
   opacity: 0.8;
   white-space: nowrap;
+  /* GitHub allows a 50-character label name, and a public repository uses the room. `graph.ts`
+     already sizes the card for a chip clamped to the row it wraps inside; this is that clamp, so a
+     long label ends in an ellipsis instead of hanging past the card's edge. `min-width` is what
+     lets a flex item shrink below its own text at all. */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* A chip painted from its label's own colour. `labelColor.ts` computed the pair and guarantees it
+   at AA, but only as the two opaque colours it returned: the element's own `opacity` would
+   composite both of them toward whichever card fill is behind, and alpha compositing does not
+   preserve a contrast ratio. So a painted chip is drawn at full opacity and owes nothing to the
+   fill it sits on. */
+.chip--painted {
+  opacity: 1;
 }
 
 /* A slot the issue has no label for. Outlined and empty, because the gap is the point. */
