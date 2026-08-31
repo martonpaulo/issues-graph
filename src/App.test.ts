@@ -119,7 +119,12 @@ describe('saved copy entry', () => {
   })
 
   it('never offers the budget gate when the address carries a shared link', async () => {
-    const link = await buildSnapshotUrl('acme/app', narrowData, new Date(), '', '/')
+    const link = await buildSnapshotUrl(
+      'acme/app',
+      { data: narrowData, capturedAt: new Date(), showClosed: false },
+      '',
+      '/',
+    )
     expect(link.kind).toBe('ready')
     if (link.kind !== 'ready') return
 

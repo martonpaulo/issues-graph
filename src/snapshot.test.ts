@@ -49,8 +49,14 @@ function fragmentOf(url: string): string {
 async function share(
   slug: string,
   data: RepositoryGraphData,
+  showClosed = data.includedClosed,
 ): Promise<Extract<Awaited<ReturnType<typeof buildSnapshotUrl>>, { kind: 'ready' }>> {
-  const link = await buildSnapshotUrl(slug, data, SAVED_AT, ORIGIN, BASE)
+  const link = await buildSnapshotUrl(
+    slug,
+    { data, capturedAt: SAVED_AT, showClosed },
+    ORIGIN,
+    BASE,
+  )
   if (link.kind !== 'ready') throw new Error(`expected a link, got ${link.kind}`)
   return link
 }
@@ -79,7 +85,12 @@ describe('buildSnapshotUrl', () => {
       {},
     )
 
-    const link = await buildSnapshotUrl('martonpaulo/tabelo', bulky, SAVED_AT, ORIGIN, BASE)
+    const link = await buildSnapshotUrl(
+      'martonpaulo/tabelo',
+      { data: bulky, capturedAt: SAVED_AT, showClosed: false },
+      ORIGIN,
+      BASE,
+    )
     expect(link).toMatchObject({ kind: 'too-large', limit: SNAPSHOT_URL_LIMIT })
     if (link.kind === 'too-large') expect(link.chars).toBeGreaterThan(SNAPSHOT_URL_LIMIT)
   })
@@ -92,11 +103,12 @@ describe('readSnapshot', () => {
 
     expect(read.kind).toBe('snapshot')
     if (read.kind !== 'snapshot') return
-    expect(read.savedAt.toISOString()).toBe(SAVED_AT.toISOString())
-    expect(read.data.issues).toEqual(tabelo.issues)
-    expect([...read.data.blockers]).toEqual([...tabelo.blockers])
-    expect(read.data.includedClosed).toBe(false)
-    expect(read.data.complete).toBe(true)
+    expect(read.view.capturedAt.toISOString()).toBe(SAVED_AT.toISOString())
+    expect(read.view.data.issues).toEqual(tabelo.issues)
+    expect([...read.view.data.blockers]).toEqual([...tabelo.blockers])
+    expect(read.view.data.includedClosed).toBe(false)
+    expect(read.view.showClosed).toBe(false)
+    expect(read.view.data.complete).toBe(true)
   })
 
   it('carries the coverage the read that produced it had', async () => {
@@ -108,8 +120,33 @@ describe('readSnapshot', () => {
 
     expect(read.kind).toBe('snapshot')
     if (read.kind !== 'snapshot') return
-    expect(read.data.includedClosed).toBe(true)
-    expect(read.data.issues).toEqual(workflows.issues)
+    expect(read.view.data.includedClosed).toBe(true)
+    expect(read.view.showClosed).toBe(true)
+    expect(read.view.data.issues).toEqual(workflows.issues)
+  })
+
+  it('sends the graph that was drawn, not the wider read behind it', async () => {
+    // A saved copy that covered closed blockers may be opened without them: decideSavedCopyOpen
+    // only refuses the reverse. Deriving the drawing from the coverage would hand the recipient
+    // nodes and edges the sender was not looking at.
+    const broad = graph(tabeloIssues, tabeloBlockedBy, { includedClosed: true })
+    const link = await share('martonpaulo/tabelo', broad, false)
+    const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/tabelo')
+
+    expect(read.kind).toBe('snapshot')
+    if (read.kind !== 'snapshot') return
+    expect(read.view.showClosed).toBe(false)
+    expect(read.view.data.includedClosed).toBe(true)
+  })
+
+  it('keeps a widened view widened when the sender was looking at one', async () => {
+    const broad = graph(tabeloIssues, tabeloBlockedBy, { includedClosed: true })
+    const link = await share('martonpaulo/tabelo', broad, true)
+    const read = await readSnapshot(fragmentOf(link.url), 'martonpaulo/tabelo')
+
+    expect(read.kind).toBe('snapshot')
+    if (read.kind !== 'snapshot') return
+    expect(read.view.showClosed).toBe(true)
   })
 
   it('reports no budget of its own, because the requests were spent when it was taken', async () => {
@@ -118,9 +155,9 @@ describe('readSnapshot', () => {
 
     expect(read.kind).toBe('snapshot')
     if (read.kind !== 'snapshot') return
-    expect(read.data.rateLimited).toBe(false)
-    expect(read.data.rateLimit).toBeNull()
-    expect(read.data.rateLimitReset).toBeNull()
+    expect(read.view.data.rateLimited).toBe(false)
+    expect(read.view.data.rateLimit).toBeNull()
+    expect(read.view.data.rateLimitReset).toBeNull()
   })
 
   it('finds nothing in an absent, empty or unrelated fragment', async () => {
@@ -156,7 +193,9 @@ describe('readSnapshot', () => {
   it('rejects a payload from a format it does not know', async () => {
     // Encoded the same way the module does, so only the version differs.
     const bytes = await new Response(
-      new Blob([new TextEncoder().encode(JSON.stringify({ v: 2, slug: 'a/b', graph: {} }))])
+      new Blob([
+        new TextEncoder().encode(JSON.stringify({ v: 2, slug: 'a/b', graph: {}, shown: false })),
+      ])
         .stream()
         .pipeThrough(new CompressionStream('deflate-raw')),
     ).arrayBuffer()

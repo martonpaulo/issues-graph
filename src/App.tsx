@@ -30,7 +30,6 @@ import {
   UNAUTHENTICATED_HOURLY_LIMIT,
   type LoadFailure,
   type RateLimitStatus,
-  type RepositoryGraphData,
 } from './github'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
@@ -39,7 +38,7 @@ import { IssueCard, type IssueNode } from './IssueCard'
 import { RepoInput } from './RepoInput'
 import { parseRoute, pathForTarget, slugOf, titleForRoute, type RepoTarget } from './route'
 import { readStored, writeStored } from './storage'
-import { buildSnapshotUrl, hasSnapshot, readSnapshot } from './snapshot'
+import { buildSnapshotUrl, hasSnapshot, readSnapshot, type SnapshotView } from './snapshot'
 import { rememberTarget } from './suggestions'
 import { readToken, writeToken } from './token'
 import { describeAge, describeUntil } from './time'
@@ -880,12 +879,6 @@ function ShareResult({ outcome, onClose }: { outcome: ShareOutcome; onClose: () 
   )
 }
 
-/** The graph as it can be shared: the data it was drawn from, and when that read happened. */
-export interface SnapshotSource {
-  data: RepositoryGraphData
-  capturedAt: Date
-}
-
 function Canvas({
   graph,
   slug,
@@ -896,7 +889,7 @@ function Canvas({
   graph: IssueGraph
   slug: string
   savedCopy: SavedCopyProvenance | null
-  snapshot: SnapshotSource
+  snapshot: SnapshotView
   /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
   onAskAgain: () => void
 }) {
@@ -920,13 +913,7 @@ function Canvas({
   const share = useCallback(() => {
     setSharing(true)
     setShared(null)
-    void buildSnapshotUrl(
-      slug,
-      snapshot.data,
-      snapshot.capturedAt,
-      window.location.origin,
-      BASE,
-    )
+    void buildSnapshotUrl(slug, snapshot, window.location.origin, BASE)
       .then(async (link): Promise<ShareOutcome> => {
         if (link.kind !== 'ready') return link
         try {
@@ -1181,7 +1168,7 @@ type Phase =
       graph: IssueGraph
       savedCopy: SavedCopyProvenance | null
       /** Kept beside the drawn graph because a shareable link is built from the data, not the layout. */
-      snapshot: SnapshotSource
+      snapshot: SnapshotView
     }
 
 function GraphView({
@@ -1340,18 +1327,21 @@ function GraphLoad({
           return
         }
 
-        const showClosedInLink = read.data.includedClosed
-        const graph = await buildGraph(read.data, target, { showClosed: showClosedInLink })
+        const graph = await buildGraph(read.view.data, target, {
+          showClosed: read.view.showClosed,
+        })
         if (cancelled) return
         setPhase({
           kind: 'ready',
           graph,
           savedCopy: {
-            savedAt: read.savedAt,
-            includedClosed: showClosedInLink,
+            savedAt: read.view.capturedAt,
+            // What the recipient is looking at, which is the sender's drawing rather than the
+            // wider read that may lie behind it.
+            includedClosed: read.view.showClosed,
             source: 'shared',
           },
-          snapshot: { data: read.data, capturedAt: read.savedAt },
+          snapshot: read.view,
         })
       })
       .catch(() => {
@@ -1442,7 +1432,11 @@ function GraphLoad({
                 kind: 'ready',
                 graph,
                 savedCopy: null,
-                snapshot: { data: result.data, capturedAt: new Date() },
+                snapshot: {
+                  data: result.data,
+                  capturedAt: new Date(),
+                  showClosed: includeClosed,
+                },
               })
             }
           } else if (result.failure.kind === 'cancelled') {
@@ -1476,7 +1470,7 @@ function GraphLoad({
           kind: 'ready',
           graph,
           savedCopy: decision.provenance,
-          snapshot: { data: copy.data, capturedAt: copy.savedAt },
+          snapshot: { data: copy.data, capturedAt: copy.savedAt, showClosed },
         }),
       )
     },

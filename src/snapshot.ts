@@ -27,6 +27,22 @@ interface SnapshotPayload {
    */
   slug: string
   graph: StoredGraph
+  /**
+   * The closed-blocker choice the graph was drawn with, which is not the same fact as the
+   * coverage stored in `graph.includedClosed`. A read that covered closed blockers can be drawn
+   * without them, and deriving the drawing from the coverage would hand the recipient nodes and
+   * edges the sender was not looking at.
+   */
+  shown: boolean
+}
+
+/** A drawn graph, as the thing a link is made from and the thing a link produces. */
+export interface SnapshotView {
+  data: RepositoryGraphData
+  /** When the GitHub read behind it happened, not when the link was built. */
+  capturedAt: Date
+  /** The closed-blocker choice it was drawn with. */
+  showClosed: boolean
 }
 
 /**
@@ -47,7 +63,7 @@ export type SnapshotLink =
 
 export type SnapshotRead =
   | { kind: 'none' }
-  | { kind: 'snapshot'; data: RepositoryGraphData; savedAt: Date }
+  | { kind: 'snapshot'; view: SnapshotView }
   | { kind: 'invalid'; reason: string }
 
 /* Base64url, because `+`, `/` and `=` are all either reserved or escaped in a URL. */
@@ -94,14 +110,18 @@ async function inflate(bytes: Uint8Array<ArrayBuffer>): Promise<string> {
  */
 export async function buildSnapshotUrl(
   slug: string,
-  data: RepositoryGraphData,
-  savedAt: Date,
+  view: SnapshotView,
   origin: string,
   base: string,
 ): Promise<SnapshotLink> {
   if (!supported()) return { kind: 'unsupported' }
 
-  const payload: SnapshotPayload = { v: 1, slug, graph: toStored(data, savedAt.getTime()) }
+  const payload: SnapshotPayload = {
+    v: 1,
+    slug,
+    graph: toStored(view.data, view.capturedAt.getTime()),
+    shown: view.showClosed,
+  }
   const encoded = toBase64Url(await deflate(JSON.stringify(payload)))
 
   const prefix = base.endsWith('/') ? base : `${base}/`
@@ -146,7 +166,12 @@ export async function readSnapshot(hash: string, slug: string): Promise<Snapshot
     return { kind: 'invalid', reason: 'This shared link is damaged or incomplete.' }
   }
 
-  if (payload?.v !== 1 || !payload.graph || payload.graph.version !== 1) {
+  if (
+    payload?.v !== 1 ||
+    !payload.graph ||
+    payload.graph.version !== 1 ||
+    typeof payload.shown !== 'boolean'
+  ) {
     return { kind: 'invalid', reason: 'This shared link was made by a different version.' }
   }
   if (payload.slug !== slug) {
@@ -161,7 +186,10 @@ export async function readSnapshot(hash: string, slug: string): Promise<Snapshot
 
   return {
     kind: 'snapshot',
-    data: fromStored(payload.graph),
-    savedAt: new Date(payload.graph.savedAt),
+    view: {
+      data: fromStored(payload.graph),
+      capturedAt: new Date(payload.graph.savedAt),
+      showClosed: payload.shown,
+    },
   }
 }
