@@ -159,6 +159,41 @@ describe('a failed layout engine can be retried', () => {
  * path. `layoutWorker.ts` turns that death into a rejection; these cover what `graph.ts` must then
  * do with the engine that produced it.
  */
+describe('discarding the engine detaches it before anything awaits', () => {
+  it('does not hand a discarded engine to a draw that starts in the same turn', async () => {
+    const { buildGraph, discardLayoutEngine } = await freshGraph()
+
+    await buildGraph(data(), AW)
+    expect(elk.constructions).toBe(1)
+
+    // A close and an immediate remount: no await between them, which is the window in which the
+    // memo used to still be holding the engine it was about to terminate.
+    discardLayoutEngine()
+    const redrawn = await buildGraph(data(), AW)
+
+    expect(redrawn.nodes.length).toBeGreaterThan(0)
+    expect(elk.constructions).toBe(2)
+  })
+
+  it('terminates the engine it detached', async () => {
+    const { buildGraph, discardLayoutEngine } = await freshGraph()
+
+    await buildGraph(data(), AW)
+    discardLayoutEngine()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(elk.terminations).toBe(1)
+  })
+
+  it('does nothing when no engine has been built', async () => {
+    const { discardLayoutEngine } = await freshGraph()
+
+    expect(() => discardLayoutEngine()).not.toThrow()
+    expect(elk.terminations).toBe(0)
+  })
+})
+
 describe('an engine whose layout fails is not kept', () => {
   it('reports the failure rather than resolving', async () => {
     const { buildGraph } = await freshGraph()
@@ -208,22 +243,5 @@ describe('an engine whose layout fails is not kept', () => {
     // stopped there.
     await buildGraph(data(), AW)
     expect(elk.constructions).toBe(before)
-  })
-})
-
-describe('drawFailure', () => {
-  it('carries the reason the layout gave', async () => {
-    const { drawFailure } = await freshGraph()
-
-    expect(drawFailure(new Error('Failed to fetch dynamically imported module'))).toEqual({
-      kind: 'draw',
-      message: 'Failed to fetch dynamically imported module',
-    })
-  })
-
-  it('still names a cause when something other than an Error was thrown', async () => {
-    const { drawFailure } = await freshGraph()
-
-    expect(drawFailure('boom')).toEqual({ kind: 'draw', message: 'The layout failed.' })
   })
 })

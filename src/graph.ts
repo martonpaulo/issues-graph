@@ -433,6 +433,12 @@ interface ElkEngine {
 }
 
 let engine: Promise<ElkEngine> | null = null
+/**
+ * What `engine` resolved to, kept beside it so a discard can decide *and* detach without awaiting.
+ * Reading the engine out of its own promise is a turn too late: the memo would still be handing the
+ * doomed engine to anything that asked in between.
+ */
+let ready: ElkEngine | null = null
 
 /**
  * A real worker where the platform has one, and the bundled engine where it does not.
@@ -470,33 +476,22 @@ async function createEngine(): Promise<ElkEngine> {
 async function elk(): Promise<ElkEngine> {
   if (!engine) {
     const attempt: Promise<ElkEngine> = createEngine()
+      .then((created) => {
+        if (engine === attempt) ready = created
+        return created
+      })
       .catch((error: unknown) => {
         // Cleared only while this attempt is still the one on record, so a later attempt that has
         // already replaced it — and may well have succeeded — is not discarded by an older failure.
-        if (engine === attempt) engine = null
+        if (engine === attempt) {
+          engine = null
+          ready = null
+        }
         throw error
       })
     engine = attempt
   }
   return engine
-}
-
-/**
- * A layout that could not be produced.
- *
- * `LoadFailure` says what went wrong reading GitHub, and layout is not a read: an engine that
- * failed to load says nothing about the repository, so folding it into that union would make every
- * exhaustive answer to a load result answer for a case a load cannot produce. The interface still
- * wants one shape for "there is nothing to show and here is why", which is why this is a typed
- * value rather than a bare thrown error.
- */
-export interface DrawFailure {
-  kind: 'draw'
-  message: string
-}
-
-export function drawFailure(error: unknown): DrawFailure {
-  return { kind: 'draw', message: error instanceof Error ? error.message : 'The layout failed.' }
 }
 
 /**
@@ -509,14 +504,18 @@ export function drawFailure(error: unknown): DrawFailure {
 function discard(used: ElkEngine | null): void {
   const held = engine
   if (!held) return
+  // Whether this discard applies is decided here rather than inside the callback below, because
+  // `ready` already knows what the memo holds.
+  if (used && ready !== used) return
+  // Detached before anything is awaited. Resolving the engine first to identify it left the memo
+  // pointing at it for a further turn, so a draw beginning in that window — a close and an
+  // immediate remount is exactly that — was handed an engine on its way to being terminated.
+  engine = null
+  ready = null
   void held.then(
-    (current) => {
-      if (used && current !== used) return
-      if (engine === held) engine = null
-      current.terminate?.()
-    },
+    (current) => current.terminate?.(),
     () => {
-      // An attempt that never produced an engine has already cleared itself, and its rejection
+      // An attempt that never produced an engine has nothing to terminate, and its rejection
       // belongs to whoever asked for it.
     },
   )
