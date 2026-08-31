@@ -961,6 +961,18 @@ code {
   white-space: nowrap;
 }
 
+/* Pushed to the far end of the row: it removes what this browser saved, and it should not sit
+   shoulder to shoulder with the two buttons that open the graph. */
+.stage__actions .button--aside {
+  margin-right: auto;
+  color: var(--muted);
+}
+
+.stage__actions .button--aside:hover {
+  border-color: var(--blocked-line);
+  color: var(--text);
+}
+
 /* Repository combobox ------------------------------------------------------ */
 
 .repoinput {

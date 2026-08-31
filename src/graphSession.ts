@@ -19,6 +19,8 @@
  */
 
 import { readCache, writeCache, type CachedGraph } from './cache'
+import { clearRepositoryData } from './retention'
+import type { StorageWriteResult } from './storage'
 import { buildGraph, type IssueGraph } from './graph'
 import {
   loadRepositoryGraph,
@@ -100,6 +102,12 @@ export interface SessionState {
   linkProblem: string | null
   /** Why a read in flight was stopped, when the token behind it changed. */
   stopped: string | null
+  /**
+   * Why the graph just read could not be saved for next time, when it could not. Kept beside the
+   * other two because it is the same kind of fact: something the page attempted, could not
+   * finish, and owes the reader a sentence about.
+   */
+  saveProblem: string | null
 }
 
 /**
@@ -112,8 +120,9 @@ export interface SessionEffects {
   buildGraph: typeof buildGraph
   readSnapshot: (hash: string, slug: string) => Promise<SnapshotRead>
   readCache: (slug: string) => CachedGraph | null
-  writeCache: (slug: string, data: RepositoryGraphData) => void
+  writeCache: (slug: string, data: RepositoryGraphData) => StorageWriteResult
   rememberTarget: (target: RepoTarget) => void
+  clearRepositoryData: (slug: string) => StorageWriteResult
   /** Drops a snapshot out of the address bar once the page has stopped showing it. */
   clearFragment: () => void
   now: () => Date
@@ -127,6 +136,7 @@ export const browserEffects: SessionEffects = {
   readCache,
   writeCache,
   rememberTarget,
+  clearRepositoryData,
   clearFragment: () => {
     window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`)
   },
@@ -173,6 +183,19 @@ export function stopsForTokenChange(kind: Phase['kind'], carriesToken: boolean):
   return kind === 'listing' || kind === 'confirm' || kind === 'resolving' || kind === 'drawing'
 }
 
+/**
+ * What to say when the graph could not be saved.
+ *
+ * Worth saying because the cost lands later and elsewhere: the graph on screen is fine, and the
+ * consequence is that the next visit spends GitHub requests the reader thought they had already
+ * spent. Nothing here asks them to act — there is nothing useful to do about a full quota from
+ * this page — so it explains rather than instructs.
+ */
+export function describeSaveProblem(result: StorageWriteResult): string | null {
+  if (result.ok) return null
+  return `${result.message} This graph was not saved, so opening it again will read from GitHub.`
+}
+
 function messageOf(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
@@ -183,7 +206,7 @@ export class GraphSession {
   readonly #options: SessionOptions
   readonly #effects: SessionEffects
   readonly #sharedLink: boolean
-  readonly #cached: CachedGraph | null
+  #cached: CachedGraph | null
   readonly #listeners = new Set<() => void>()
 
   #token: string
@@ -224,6 +247,7 @@ export class GraphSession {
       phase: this.#sharedLink ? { kind: 'drawing' } : CHECKING_GATE,
       linkProblem: null,
       stopped: null,
+      saveProblem: null,
     }
   }
 
@@ -249,13 +273,13 @@ export class GraphSession {
     this.#closed = false
     this.#run += 1
     if (this.#sharedLink) {
-      this.#state = { phase: { kind: 'drawing' }, linkProblem: null, stopped: null }
+      this.#state = { phase: { kind: 'drawing' }, linkProblem: null, stopped: null, saveProblem: null }
       this.#notify()
       // Drawing a payload that arrived in the address bar: no request, and no token on it.
       this.#openSharedLink(this.#beginWork(false))
       return
     }
-    this.#state = { phase: CHECKING_GATE, linkProblem: null, stopped: null }
+    this.#state = { phase: CHECKING_GATE, linkProblem: null, stopped: null, saveProblem: null }
     this.#notify()
     this.#probeBudget()
   }
@@ -296,6 +320,20 @@ export class GraphSession {
    * handler nor a way to be cancelled: a failure left `Laying out the graph…` on screen with
    * nothing coming, and a session closed mid-layout drew into a page that had gone.
    */
+  /**
+   * Removes everything this browser holds for the repository, and stops offering the copy.
+   *
+   * The saved copy is read once when the session opens, so dropping it here is what makes the
+   * removal visible: the page stops naming a copy that no longer exists, in the same gesture that
+   * removed it.
+   */
+  forgetSavedCopy(): StorageWriteResult {
+    const result = this.#effects.clearRepositoryData(this.#options.identity)
+    this.#cached = null
+    this.#set({})
+    return result
+  }
+
   openSavedCopy(showClosed: boolean): void {
     if (this.#closed) return
     const copy = this.#cached
@@ -482,8 +520,8 @@ export class GraphSession {
     }
 
     this.#effects.rememberTarget(this.#options.target)
-    this.#effects.writeCache(this.#options.identity, result.data)
-    this.#set({ phase: { kind: 'drawing' } })
+    const saved = this.#effects.writeCache(this.#options.identity, result.data)
+    this.#set({ phase: { kind: 'drawing' }, saveProblem: describeSaveProblem(saved) })
 
     let graph: IssueGraph
     try {

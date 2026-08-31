@@ -49,6 +49,7 @@ import {
   type SessionFailure,
   type SessionState,
 } from './graphSession'
+import { dimmedKey } from './retention'
 import { DependencyEdge, type DependencyEdgeType } from './DependencyEdge'
 import { GroupFrame, type GroupNode } from './GroupFrame'
 import { Icon } from './icons'
@@ -63,7 +64,13 @@ import {
   type RepoTarget,
 } from './route'
 import { difference, union } from './sets'
-import { asBoolean, asStringArray, readStored, writeStored } from './storage'
+import {
+  asBoolean,
+  asStringArray,
+  readStored,
+  writeStored,
+  type StorageWriteResult,
+} from './storage'
 import { buildSnapshotUrl, type SnapshotView } from './snapshot'
 import { readToken, writeToken } from './token'
 import { describeAge, describeUntil } from './time'
@@ -87,9 +94,9 @@ const ZOOM_OUT_ALLOWANCE = 0.75
 const ABSOLUTE_MIN_ZOOM = 0.05
 
 const SHOW_CLOSED_KEY = 'issue-graph:show-closed'
-// The stored key still says "hidden": it predates the rename to dimming, and the copy change is
-// not worth stranding every reader's saved set. The value is a list of node IDs either way.
-export const dimmedKey = (slug: string) => `issue-graph:hidden:${slug}`
+// Re-exported because the key belongs to `retention.ts`, which owns every key one repository owns
+// and is what removes them together; the canvas is only one of the two things that writes one.
+export { dimmedKey }
 
 function savedCopyCoverage(includedClosed: boolean): string {
   return includedClosed ? 'includes closed blockers' : 'open blockers only'
@@ -101,6 +108,20 @@ export function describeSavedCopy(
 ): string {
   const what = savedCopy.source === 'shared' ? 'Shared copy' : 'Saved copy'
   return `${what} · ${describeAge(savedCopy.savedAt, now)} · ${savedCopyCoverage(savedCopy.includedClosed)}`
+}
+
+/**
+ * What to say once the reader has asked for this browser's copy of a repository to go.
+ *
+ * Naming the repository is the point: everything the viewer saves is per repository, and a reader
+ * who has opened several needs to know that the others are untouched. Nothing here offers an
+ * undo, because there is nothing to undo to — a copy is reconstructible by reading GitHub again,
+ * which is what the button beside this one does.
+ */
+export function describeClear(result: StorageWriteResult, slug: string): string {
+  return result.ok
+    ? `Everything saved for ${slug} was removed from this browser. Other repositories are untouched.`
+    : `${result.message} Nothing saved for ${slug} could be removed.`
 }
 
 /* Sharing the graph ------------------------------------------------------
@@ -1002,16 +1023,23 @@ export function SelectionBar({
 function GraphStatus({
   graph,
   savedCopy,
+  saveProblem,
 }: {
   graph: IssueGraph
   savedCopy: SavedCopyProvenance | null
+  saveProblem: string | null
 }) {
-  if (!savedCopy && graph.complete) return null
+  if (!savedCopy && !saveProblem && graph.complete) return null
 
   return (
     <Panel position="bottom-right" className="info">
       {savedCopy && (
         <div className="info__row info__row--muted">{describeSavedCopy(savedCopy)}</div>
+      )}
+      {saveProblem && (
+        <div className="info__warn" role="status">
+          {saveProblem}
+        </div>
       )}
       {!graph.complete && (
         /* One live region holding one complete sentence, so the whole gap is announced once
@@ -1075,6 +1103,7 @@ function Canvas({
   graph,
   slug,
   savedCopy,
+  saveProblem,
   snapshot,
   onAskAgain,
 }: {
@@ -1082,6 +1111,8 @@ function Canvas({
   /** The repository as the reader spelled it, for the bar, the link and the accessible name. */
   slug: string
   savedCopy: SavedCopyProvenance | null
+  /** Why this graph could not be kept for next time, when it could not. */
+  saveProblem: string | null
   snapshot: SnapshotView
   /** Opens the page that quotes what a fresh read costs. It never spends anything by itself. */
   onAskAgain: () => void
@@ -1348,7 +1379,7 @@ function Canvas({
         onClearSelection={() => setSelected(new Set())}
       />
 
-      <GraphStatus graph={graph} savedCopy={savedCopy} />
+      <GraphStatus graph={graph} savedCopy={savedCopy} saveProblem={saveProblem} />
 
       {/* Mounted before there is anything to say, because a live region added at the same moment
           as its text is not reliably announced. It carries no chrome while it is empty. */}
@@ -1477,9 +1508,18 @@ function GraphLoad({
   const slug = slugOf(target)
 
   const { session, state } = useGraphSession({ target, identity, token, onCancelled: onReload })
-  const { phase, linkProblem, stopped } = state
+  const { phase, linkProblem, stopped, saveProblem } = state
   const cached = session.cached
   const savedCopyDecision = cached ? decideSavedCopyOpen(cached, showClosed) : null
+  // What became of clearing, once it has been asked for. The saved-copy row and its button
+  // disappear on their own; this is the part that says so out loud, and the part that says when
+  // the browser refused.
+  const [cleared, setCleared] = useState<string | null>(null)
+
+  const clearSavedData = () => {
+    const result = session.forgetSavedCopy()
+    setCleared(describeClear(result, slug))
+  }
 
   if (phase.kind === 'ready' && phase.graph.nodes.length > 0) {
     return (
@@ -1489,6 +1529,7 @@ function GraphLoad({
           graph={phase.graph}
           slug={slug}
           savedCopy={phase.savedCopy}
+          saveProblem={saveProblem}
           snapshot={phase.snapshot}
           onAskAgain={() => onReload()}
         />
@@ -1539,6 +1580,18 @@ function GraphLoad({
             include closed blockers · costs more requests
           </label>
           <div className="stage__actions">
+            {/* Sits apart from the two buttons that open the graph, because it is the one that
+                takes something away. Offered only where there is something to take away, which
+                is also the only place the reader can see what they are removing. */}
+            {cached && (
+              <button
+                className="button button--small button--aside"
+                type="button"
+                onClick={clearSavedData}
+              >
+                <Icon name="trash" size={12} /> Clear saved data
+              </button>
+            )}
             <button
               className={savedCopyDecision?.kind === 'open' ? 'button' : 'button button--primary'}
               type="button"
@@ -1566,6 +1619,11 @@ function GraphLoad({
           {savedCopyDecision?.kind === 'requires-latest' && (
             <p className="notice" id="saved-copy-unavailable" role="status">
               {savedCopyDecision.reason}
+            </p>
+          )}
+          {cleared && (
+            <p className="notice" role="status">
+              {cleared}
             </p>
           )}
         </>

@@ -17,6 +17,7 @@ export type IconName =
   | 'clock'
   | 'link'
   | 'list'
+  | 'trash'
 
 const PATHS: Record<IconName, React.ReactNode> = {
   graph: (
@@ -91,6 +92,14 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M6 4h7.5M6 8h7.5M6 12h7.5" />
       <path d="M3 4h.01M3 8h.01M3 12h.01" />
+    </>
+  ),
+  trash: (
+    <>
+      <path d="M2.5 4.5h11" />
+      <path d="M6 4.5V3a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 .5.5v1.5" />
+      <path d="M3.9 4.5 4.5 13a.5.5 0 0 0 .5.5h6a.5.5 0 0 0 .5-.5l.6-8.5" />
+      <path d="M6.8 7v4M9.2 7v4" />
     </>
   ),
 }

@@ -13,6 +13,7 @@ import {
   DependencyTable,
   DIRECTION_LEGEND,
   budgetParts,
+  describeClear,
   describeSavedCopy,
   describeShare,
   describeUnresolved,
@@ -23,7 +24,7 @@ import {
   SelectionBar,
   TopChrome,
 } from './App'
-import { decideSavedCopyOpen } from './graphSession'
+import { decideSavedCopyOpen, describeSaveProblem } from './graphSession'
 import { readCache, writeCache } from './cache'
 import { buildSnapshotUrl } from './snapshot'
 import type { IssuePayload, RepositoryGraphData } from './github'
@@ -99,6 +100,15 @@ describe('saved copy entry', () => {
     })
   })
 
+  it('offers to clear the saved data exactly where there is saved data to clear', () => {
+    withBrowserStorage(() => {
+      expect(renderToStaticMarkup(createElement(App))).not.toContain('Clear saved data')
+
+      writeCache('acme/app', narrowData)
+      expect(renderToStaticMarkup(createElement(App))).toContain('Clear saved data')
+    })
+  })
+
   it('cannot open an open-only copy as a complete closed-blocker view', () => {
     withBrowserStorage(() => {
       writeCache('acme/app', narrowData)
@@ -169,6 +179,43 @@ describe('saved copy entry', () => {
     )
     expect(describeSavedCopy({ savedAt, includedClosed: true, source: 'shared' }, now)).toBe(
       'Shared copy · 2 hours ago · includes closed blockers',
+    )
+  })
+})
+
+describe('describeClear', () => {
+  it('names the repository that was cleared and says the others were not', () => {
+    expect(describeClear({ ok: true }, 'martonpaulo/tabelo')).toBe(
+      'Everything saved for martonpaulo/tabelo was removed from this browser. Other repositories are untouched.',
+    )
+  })
+
+  it('says nothing was removed when the browser refused', () => {
+    expect(
+      describeClear(
+        { ok: false, reason: 'unavailable', message: 'This browser is not letting the page save anything.' },
+        'martonpaulo/tabelo',
+      ),
+    ).toBe(
+      'This browser is not letting the page save anything. Nothing saved for martonpaulo/tabelo could be removed.',
+    )
+  })
+})
+
+describe('describeSaveProblem', () => {
+  it('says nothing at all when the copy was saved', () => {
+    expect(describeSaveProblem({ ok: true })).toBeNull()
+  })
+
+  it('names the cost of a copy that was not saved, which lands on the next visit', () => {
+    expect(
+      describeSaveProblem({
+        ok: false,
+        reason: 'quota',
+        message: 'This browser\u2019s storage is full.',
+      }),
+    ).toBe(
+      'This browser\u2019s storage is full. This graph was not saved, so opening it again will read from GitHub.',
     )
   })
 })
