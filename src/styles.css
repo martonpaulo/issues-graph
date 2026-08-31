@@ -787,6 +787,15 @@ code {
   text-overflow: ellipsis;
 }
 
+/* A chip painted from its label's own colour. `labelColor.ts` computed the pair and guarantees it
+   at AA, but only as the two opaque colours it returned: the element's own `opacity` would
+   composite both of them toward whichever card fill is behind, and alpha compositing does not
+   preserve a contrast ratio. So a painted chip is drawn at full opacity and owes nothing to the
+   fill it sits on. */
+.chip--painted {
+  opacity: 1;
+}
+
 /* A slot the issue has no label for. Outlined and empty, because the gap is the point. */
 .chip--empty {
   background: none;

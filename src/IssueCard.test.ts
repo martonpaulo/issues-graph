@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { GraphNode } from './graph'
 import { IssueCard, type IssueCardData } from './IssueCard'
+import { chipPalette } from './labelColor'
 import { cardLabels } from './labels'
 
 function issueNode(overrides: Partial<GraphNode>): GraphNode {
@@ -73,7 +74,9 @@ function buttonContents(html: string): string[] {
 
 /** The chips a card drew, in document order, with their markup stripped. */
 function chips(html: string): string[] {
-  return [...html.matchAll(/<span class="chip[^"]*">([\s\S]*?)<\/span>/g)].map((match) => match[1])
+  return [...html.matchAll(/<span class="chip[^"]*"[^>]*>([\s\S]*?)<\/span>/g)].map(
+    (match) => match[1],
+  )
 }
 
 function accessibleNames(html: string): string[] {
@@ -161,7 +164,8 @@ describe('IssueCard', () => {
     expect(chips(html)).toEqual(['type: bug', 'priority: P1', 'effort', 'area: grid'])
     // The gap is drawn as a gap, so the missing estimate reads as missing rather than as absent.
     expect(html).toContain('<span class="chip chip--empty">effort</span>')
-    expect(html).toContain('<span class="chip">type: bug</span>')
+    // And a filled slot is painted from its own label's colour, like any other chip.
+    expect(html).toContain('chip chip--painted')
   })
 
   /**
@@ -181,6 +185,33 @@ describe('IssueCard', () => {
 
     expect(chips(html)).toEqual(['bug', 'good first issue', '🐛 needs repro'])
     expect(html).not.toContain('chip--empty')
+  })
+
+  it("paints a chip in the pair derived from its label's own colour", () => {
+    const html = renderCard(
+      issueNode({ labels: cardLabels([{ name: 'bug', color: 'd73a4a' }]) }),
+    )
+    const palette = chipPalette('d73a4a')!
+
+    expect(html).toContain('chip--painted')
+    expect(html).toContain(`background:${palette.background}`)
+    expect(html).toContain(`color:${palette.foreground}`)
+    expect(html).toContain(`border-color:${palette.border}`)
+  })
+
+  it('leaves an empty slot and an unusable colour to the stylesheet', () => {
+    // An empty slot is the card's own colour, not a label's; a payload carrying no usable hex —
+    // a hand-written shared link, an older cached copy — falls back to the same treatment.
+    const empty = renderCard(
+      issueNode({ labels: cardLabels([{ name: 'type: bug', color: 'd73a4a' }, { name: 'priority: P1', color: 'b60205' }]) }),
+    )
+    expect(empty).toContain('<span class="chip chip--empty">effort</span>')
+
+    const unusable = renderCard(
+      issueNode({ labels: cardLabels([{ name: 'bug', color: 'not-a-colour' }]) }),
+    )
+    expect(unusable).toContain('<span class="chip">bug</span>')
+    expect(unusable).not.toContain('chip--painted')
   })
 
   it('escapes a label rather than letting its text reach the markup', () => {

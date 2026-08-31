@@ -37,6 +37,11 @@ export interface CardChip {
   namespace: CardNamespace | null
   /** A canonical slot the issue carries no label for, drawn as an outlined gap. */
   empty: boolean
+  /**
+   * GitHub's own six-digit hex for the label, which `labelColor.ts` turns into the pair the chip
+   * is painted in. Null for an empty slot, which is the card's own colour and not a label's.
+   */
+  color: string | null
 }
 
 /**
@@ -121,14 +126,15 @@ export function cardLabels(labels: LabelPayload[]): CardChip[] {
   const slots: CardChip[] = []
   for (const namespace of CARD_NAMESPACES) {
     const match = filled.get(namespace)
-    if (match) slots.push({ text: match.raw, namespace, empty: false })
-    else if (followsConvention) slots.push({ text: namespace, namespace, empty: true })
+    if (match) slots.push({ text: match.raw, namespace, empty: false, color: match.color })
+    else if (followsConvention)
+      slots.push({ text: namespace, namespace, empty: true, color: null })
   }
 
   const taken = new Set([...filled.values()].map((label) => label.raw))
   const rest: CardChip[] = parsed
     .filter((label) => !taken.has(label.raw))
-    .map((label) => ({ text: label.raw, namespace: null, empty: false }))
+    .map((label) => ({ text: label.raw, namespace: null, empty: false, color: label.color }))
 
   return [...slots, ...rest]
 }

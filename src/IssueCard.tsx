@@ -4,6 +4,7 @@ import { useId, useRef } from 'react'
 import { issueRef } from './dependencies'
 import type { GraphNode, IssueState } from './graph'
 import { Icon } from './icons'
+import { chipPalette } from './labelColor'
 
 export interface IssueCardData extends Record<string, unknown> {
   node: GraphNode
@@ -127,14 +128,29 @@ function CardBody({
         {/* An empty slot is keyed by its namespace and a real label by its own name, which a
             repository cannot repeat on one issue. Keying on the text alone would collide where a
             repository has a bare `effort` label and the card also draws an outlined `effort`. */}
-        {node.labels.map((chip) => (
-          <span
-            key={`${chip.namespace ?? ''}:${chip.text}`}
-            className={`chip${chip.empty ? ' chip--empty' : ''}`}
-          >
-            {chip.text}
-          </span>
-        ))}
+        {node.labels.map((chip) => {
+          /* The repository's own colour is what tells one arbitrary label from another, so the
+             chip is painted in the pair derived from it. A label whose payload carries no usable
+             hex falls back to the stylesheet's chip, which is held at AA over every card fill. */
+          const palette = chip.color === null ? null : chipPalette(chip.color)
+          return (
+            <span
+              key={`${chip.namespace ?? ''}:${chip.text}`}
+              className={`chip${chip.empty ? ' chip--empty' : ''}${palette ? ' chip--painted' : ''}`}
+              style={
+                palette
+                  ? {
+                      background: palette.background,
+                      color: palette.foreground,
+                      borderColor: palette.border,
+                    }
+                  : undefined
+              }
+            >
+              {chip.text}
+            </span>
+          )
+        })}
       </span>
     </button>
   )
