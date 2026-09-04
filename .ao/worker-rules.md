@@ -106,7 +106,7 @@ Never invent a product decision, a provenance label, or a new `status:` value.
 
 Auto-merge: available under the predicates below.
 
-Arm `gh pr merge --auto --merge` only when **all** predicates hold: CI is green on the exact
+Arm `gh pr merge --auto --squash` only when **all** predicates hold: CI is green on the exact
 current head; an approved review exists from a different model family than the implementer;
 branch protection satisfied. Effort size is not a predicate; every approved change is eligible.
 Record the basis in the PR body. Outside the predicates, leave the pull request open for the

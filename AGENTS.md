@@ -20,7 +20,11 @@
 - Implementation agent: `claude`
 - Review agent: `codex`
 - Orchestration agent: `codex`
-- Merge policy: merge commits only, every commit of the branch preserved. Never squash.
+- Merge policy: squash. Adopted 2026-09-04: Agent Orchestrator's merge endpoint squash-merges and
+  only squash-merges, so the previous merge-commit policy made the orchestrated lane stop at its
+  last step — an approved pull request was refused with `PR_NOT_MERGEABLE` while GitHub and AO both
+  reported it mergeable. The accepted cost is that per-concern branch commits do not reach `main`;
+  the complete issue set survives in the pull request title and its closing block.
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
 - Review policy: `main` requires one approving review (ruleset `21918709`). The reviewing harness posts a `COMMENT` review because GitHub refuses an approving review from the account that opened the pull request; the approving identity is the operator's GitHub App `marton-agent-approver`, which `skd merge` uses once the orchestrator has recorded an approved verdict.
@@ -476,7 +480,8 @@ unblocking action, and the observable condition for resumption.
 - Check status and branch before editing and before the final report. Work only on task files and leave unrelated changes untouched.
 - Use Conventional Commits in English. Make one commit per concern: a small task usually has one; a large task may have several independent concerns. Do not split mechanically or combine unrelated changes.
 - End a commit subject with its issue number when the commit belongs to one: `feat: add the export button (#54)`. Use the issue number, never the pull request's, and leave the suffix off when there is no issue.
-- Merge a branch with all of its commits: `gh pr merge <number> --merge --delete-branch`. Never squash. Squashing discards the one-commit-per-concern history and every issue reference but one.
+- Merge a branch with `gh pr merge <number> --squash --delete-branch`. The repository allows no
+  other method, and `skd merge` lets Agent Orchestrator perform it.
 - Inspect the exact payload before publishing it: the staged diff before a commit, the outgoing
   commit range before a push, the final text before an issue, pull request, comment, or review, and
   the artifact set before a release upload. Never commit secrets, caches, generated logs, temporary
