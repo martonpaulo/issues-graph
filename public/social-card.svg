@@ -1,3 +1,6 @@
+<!-- Source of truth for social-card.png. After editing, regenerate with:
+     rsvg-convert -w 1200 -h 630 social-card.svg -o social-card.png
+     magick social-card.png -strip -colors 256 -define png:compression-level=9 PNG8:social-card.png -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="Issues Graph: the blocking order of a GitHub backlog">
   <rect width="1200" height="630" fill="#f3f5f8"/>
   <rect x="0" y="0" width="1200" height="10" fill="#1f2a37"/>
