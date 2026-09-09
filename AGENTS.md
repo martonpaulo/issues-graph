@@ -7,7 +7,7 @@
 - Benefit-first description: See the blocking order of a GitHub backlog as a graph, in a browser, with nothing installed in the repository being read.
 - Repository: `martonpaulo/issues-graph` (public)
 - Public identifiers: none published. The hosted page is the only public surface; there is no package, module, or executable identifier, and nothing consumes this repository as a dependency.
-- Landing page: `https://martonpaulo.github.io/issues-graph/`, a GitHub Pages site built from this repository by `.github/workflows/pages.yml`. The page **is** the product, not a description of it; there is no separate marketing site.
+- Landing page: `https://issues.martonpaulo.com/`, a GitHub Pages site built from this repository by `.github/workflows/pages.yml`. The page **is** the product, not a description of it; there is no separate marketing site.
 - License: `MIT`
 - Copyright: 2026 Marton Paulo
 - Development language: English.

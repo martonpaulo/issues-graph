@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config'
 
 /**
  * GitHub Pages serves `404.html` for any path that does not match a file on disk, which is what
- * keeps real routes such as `/dependencies/owner/repo` working on a static project site.
+ * keeps real routes such as `/dependencies/owner/repo` working on a static site.
  * https://docs.github.com/en/pages/getting-started-with-github-pages/creating-a-custom-404-page-for-your-github-pages-site
  */
 function pagesSpaFallback(): Plugin {
@@ -22,8 +22,9 @@ function pagesSpaFallback(): Plugin {
 }
 
 export default defineConfig({
-  // Project sites are served from /<repository>/, so every asset URL carries that prefix.
-  base: '/issues-graph/',
+  // The site is served at the root of its own host (issues.martonpaulo.com), so asset URLs carry
+  // no repository prefix.
+  base: '/',
   plugins: [react(), pagesSpaFallback()],
   test: {
     environment: 'node',

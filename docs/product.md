@@ -10,7 +10,7 @@ graph. You give it an owner and a repository; it reads the native `blocked by` r
 already tracks and renders them.
 
 ```
-https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>
+https://issues.martonpaulo.com/dependencies/<owner>/<repo>
 ```
 
 It is one of three repositories that divide this work. [`martonpaulo/skills`](https://github.com/martonpaulo/skills)

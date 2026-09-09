@@ -8,8 +8,8 @@ import tabeloIssues from './__fixtures__/tabelo.issues.json'
 import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
 import arbaroIssues from './__fixtures__/arbaro.issues.json'
 
-const ORIGIN = 'https://martonpaulo.github.io'
-const BASE = '/issues-graph/'
+const ORIGIN = 'https://issues.martonpaulo.com'
+const BASE = '/'
 
 function blockersOf(raw: unknown): Map<number, IssuePayload[]> {
   return new Map(

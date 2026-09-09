@@ -12,12 +12,37 @@ import {
 } from './route'
 
 const BASE = '/issues-graph/'
+/** The base the site is deployed with: its own host, no repository prefix. */
+const ROOT = '/'
 
 describe('parseRoute', () => {
   it('reads owner and repository from the canonical path', () => {
     expect(parseRoute(`${BASE}dependencies/acme/app`, BASE)).toEqual({
       kind: 'graph',
       target: { owner: 'acme', repo: 'app' },
+    })
+  })
+
+  it('reads owner and repository when the base is the root', () => {
+    expect(parseRoute('/dependencies/acme/app', ROOT)).toEqual({
+      kind: 'graph',
+      target: { owner: 'acme', repo: 'app' },
+    })
+    expect(parseRoute('/dependencies/acme/app/', ROOT)).toEqual({
+      kind: 'graph',
+      target: { owner: 'acme', repo: 'app' },
+    })
+  })
+
+  it('treats the bare root as the index when the base is the root', () => {
+    expect(parseRoute('/', ROOT)).toEqual({ kind: 'index' })
+    expect(parseRoute('/dependencies', ROOT)).toEqual({ kind: 'index' })
+  })
+
+  it('does not strip a repository prefix that is not part of a root base', () => {
+    expect(parseRoute('/issues-graph/dependencies/acme/app', ROOT)).toEqual({
+      kind: 'invalid',
+      reason: 'Unknown path "/issues-graph/dependencies/acme/app".',
     })
   })
 
@@ -121,6 +146,15 @@ describe('pathForTarget', () => {
   it('round-trips through parseRoute', () => {
     const target = { owner: 'acme', repo: 'app' }
     expect(parseRoute(pathForTarget(target, BASE), BASE)).toEqual({ kind: 'graph', target })
+  })
+
+  it('writes a single leading slash when the base is the root', () => {
+    expect(pathForTarget({ owner: 'acme', repo: 'app' }, ROOT)).toBe('/dependencies/acme/app')
+  })
+
+  it('round-trips through parseRoute when the base is the root', () => {
+    const target = { owner: 'acme', repo: 'app' }
+    expect(parseRoute(pathForTarget(target, ROOT), ROOT)).toEqual({ kind: 'graph', target })
   })
 })
 

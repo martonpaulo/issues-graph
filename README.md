@@ -5,7 +5,7 @@ repository's open issues, the native `blocked by` relationships between them, an
 sub-issue hierarchy, as a graph you can read.
 
 ```
-https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>
+https://issues.martonpaulo.com/dependencies/<owner>/<repo>
 ```
 
 It is a static page. There is no backend, no credential of its own, and no generated graph file in
@@ -80,7 +80,7 @@ spends none of their own GitHub budget: the graph itself travels in the URL, and
 request to `api.github.com` at all on that path.
 
 ```text
-https://martonpaulo.github.io/issues-graph/dependencies/<owner>/<repo>#g=<the graph>
+https://issues.martonpaulo.com/dependencies/<owner>/<repo>#g=<the graph>
 ```
 
 The graph rides in the fragment — the part after `#` — which browsers never send to a server. It
