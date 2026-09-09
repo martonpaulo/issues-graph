@@ -49,7 +49,7 @@ describe('what each route costs to open', () => {
   it('draws the landing page without reaching the graph runtime', () => {
     const html = atPath('/', () => renderToStaticMarkup(createElement(App)))
 
-    expect(html).toContain('Issue dependencies')
+    expect(html).toContain('Issues Graph')
     expect(html).toContain('owner/repo')
     // React Flow renders this wrapper around every canvas, and nothing else in the page does.
     expect(html).not.toContain('react-flow')
@@ -62,7 +62,7 @@ describe('what each route costs to open', () => {
 
     expect(html).toContain('Loading the graph')
     // The heading and the repository field never move, so the page continues rather than blanks.
-    expect(html).toContain('Issue dependencies')
+    expect(html).toContain('Issues Graph')
     expect(html).toContain('acme/app')
   })
 })
@@ -122,7 +122,7 @@ describe('when the graph chunk never arrives', () => {
 
     // The heading and the repository field survive the failure, so the reader is never left with
     // a blank page and no way to reach another repository.
-    expect(html).toContain('Issue dependencies')
+    expect(html).toContain('Issues Graph')
     expect(html).toContain('acme/app')
     expect(html).toContain('role="alert"')
     expect(html).toContain('Reload the page')

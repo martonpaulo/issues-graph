@@ -23,7 +23,7 @@ import {
 import { AUTHENTICATED_HOURLY_LIMIT, UNAUTHENTICATED_HOURLY_LIMIT } from './github'
 import { Icon } from './icons'
 import { RepoInput } from './RepoInput'
-import type { RepoTarget } from './route'
+import { PRODUCT, type RepoTarget } from './route'
 
 /** Project sites are served from `/<repository>/`, so every in-app path carries that prefix. */
 export const BASE = import.meta.env.BASE_URL
@@ -470,7 +470,7 @@ export function Start({
     <div className="centre">
       <div className="start">
         <h1 className="start__title">
-          <Icon name="graph" size={20} /> Issue dependencies
+          <Icon name="graph" size={20} /> {PRODUCT}
         </h1>
         <p className="start__lead">
           Any public repository, from native GitHub issue relationships. Nothing is installed.

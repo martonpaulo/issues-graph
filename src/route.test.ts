@@ -183,16 +183,16 @@ describe('titleForRoute', () => {
   const titleAt = (pathname: string) => titleForRoute(parseRoute(pathname, BASE))
 
   it('names the product on the index', () => {
-    expect(titleAt(BASE)).toBe('Issue dependencies')
+    expect(titleAt(BASE)).toBe('Issues Graph: see what blocks what in a GitHub backlog')
   })
 
   it('leads with the repository on a graph route', () => {
-    expect(titleAt(`${BASE}dependencies/acme/app`)).toBe('acme/app · Issue dependencies')
+    expect(titleAt(`${BASE}dependencies/acme/app`)).toBe('acme/app · Issues Graph')
   })
 
   it('falls back to the index title without echoing a rejected path', () => {
     const title = titleAt(`${BASE}dependencies/acme/${encodeURIComponent('<img src=x>')}`)
-    expect(title).toBe('Issue dependencies')
+    expect(title).toBe('Issues Graph: see what blocks what in a GitHub backlog')
     expect(title).not.toContain('<')
   })
 
@@ -207,12 +207,13 @@ describe('titleForRoute', () => {
       `${BASE}dependencies/acme/app`,
     ]
 
+    const index = 'Issues Graph: see what blocks what in a GitHub backlog'
     expect(visited.map(titleAt)).toEqual([
-      'Issue dependencies',
-      'acme/app · Issue dependencies',
-      'other/repo · Issue dependencies',
-      'Issue dependencies',
-      'acme/app · Issue dependencies',
+      index,
+      'acme/app · Issues Graph',
+      'other/repo · Issues Graph',
+      index,
+      'acme/app · Issues Graph',
     ])
   })
 })

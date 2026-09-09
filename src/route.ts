@@ -116,8 +116,15 @@ export function canonicalSlugOf(target: RepoTarget): string {
   return canonicalSlug(slugOf(target))
 }
 
-/** The product's name for what the page shows, and the title of the index route. */
-export const TITLE = 'Issue dependencies'
+/** The product's name. It leads the index title and trails a repository's own. */
+export const PRODUCT = 'Issues Graph'
+
+/**
+ * The title of the index route. It repeats the one in `index.html` on purpose: the static head
+ * is what a crawler and a link preview read, and this is what replaces it once the app mounts.
+ * Two different strings there would advertise two different pages for one URL.
+ */
+export const TITLE = `${PRODUCT}: see what blocks what in a GitHub backlog`
 
 /**
  * The document title for a route. Repository identity leads, because that is the half that
@@ -129,7 +136,7 @@ export const TITLE = 'Issue dependencies'
  * never parsed as markup, so no name here reaches an HTML sink.
  */
 export function titleForRoute(route: Route): string {
-  return route.kind === 'graph' ? `${slugOf(route.target)} · ${TITLE}` : TITLE
+  return route.kind === 'graph' ? `${slugOf(route.target)} · ${PRODUCT}` : TITLE
 }
 
 /** Accepts `owner/repo`, or the same thing pasted as a github.com URL. */
