@@ -1,4 +1,4 @@
-# issues-graph
+# Issues Graph
 
 A hosted dependency graph for GitHub Issues. Point it at any public repository and it renders that
 repository's open issues, the native `blocked by` relationships between them, and the native
