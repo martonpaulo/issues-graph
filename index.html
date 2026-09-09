@@ -6,14 +6,38 @@
     <!-- Absolute, not relative: a real route such as /dependencies/owner/repo is served by the
          same document, and a relative icon would be looked for beside that path. -->
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
-    <meta name="description" content="Dependency graph for GitHub Issues, built from native issue relationships." />
-    <title>Issue dependencies</title>
+    <meta name="description" content="See the blocking order of a GitHub backlog as a graph, in the browser, with nothing installed in the repository being read." />
+    <title>Issues Graph: see what blocks what in a GitHub backlog</title>
     <link rel="canonical" href="https://issues.martonpaulo.com/" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Issue dependencies" />
-    <meta property="og:description" content="Dependency graph for GitHub Issues, built from native issue relationships." />
+    <meta property="og:site_name" content="Issues Graph" />
+    <meta property="og:locale" content="en_US" />
+    <meta property="og:title" content="Issues Graph: see what blocks what in a GitHub backlog" />
+    <meta property="og:description" content="See the blocking order of a GitHub backlog as a graph, in the browser, with nothing installed in the repository being read." />
     <meta property="og:url" content="https://issues.martonpaulo.com/" />
-    <meta name="twitter:card" content="summary" />
+    <!-- 1200x630 is the size every link preview crops to; declaring it stops the
+         platforms from guessing while the image downloads. -->
+    <meta property="og:image" content="https://issues.martonpaulo.com/social-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Issues Graph: see what blocks what in a GitHub backlog" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:image" content="https://issues.martonpaulo.com/social-card.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Issues Graph",
+        "url": "https://issues.martonpaulo.com/",
+        "description": "See the blocking order of a GitHub backlog as a graph, in the browser, with nothing installed in the repository being read.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Any browser",
+        "image": "https://issues.martonpaulo.com/social-card.png",
+        "isAccessibleForFree": true,
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR" },
+        "author": { "@type": "Person", "name": "Marton Paulo", "url": "https://martonpaulo.com" }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
