@@ -27,7 +27,7 @@ edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed
 
 <br />
 
-## 🌱 Quick Start
+## Quick Start
 
 ```bash
 npm ci
@@ -43,7 +43,7 @@ read a repository — a GitHub token is optional, and only raises the rate limit
 
 <br />
 
-## 🛠 Commands
+## Commands
 
 | Command | What it does |
 | --- | --- |
@@ -55,18 +55,6 @@ read a repository — a GitHub token is optional, and only raises the rate limit
 | `npm run lint` | ESLint over the whole repository |
 | `npm test` | Vitest, against captured API fixtures |
 | `npm run social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg` (on a Mac) |
-
-<br />
-
-## 🔐 Secrets and variables
-
-The project reads **none**. There is no environment variable, no `.env` file, no GitHub Actions
-secret and no application credential anywhere in this repository; every product read is
-unauthenticated, and the deployment is a GitHub Pages build that needs nothing beyond the workflow's
-own token.
-
-The optional GitHub token a visitor may paste belongs to that visitor, is kept in their browser and
-is never committed here. See [Rate limit](#rate-limit).
 
 ---
 
