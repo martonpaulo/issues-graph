@@ -21,7 +21,9 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src https://api.github.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <!-- Absolute, not relative: a real route such as /dependencies/owner/repo is served by the
          same document, and a relative icon would be looked for beside that path. -->
+    <link rel="icon" href="%BASE_URL%favicon.ico" sizes="48x48" />
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
     <meta name="description" content="See the blocking order of a GitHub backlog as a graph, in the browser, with nothing installed in the repository being read." />
     <title>Issues Graph · See what blocks what in a GitHub backlog</title>
     <link rel="canonical" href="https://issues.martonpaulo.com/" />
