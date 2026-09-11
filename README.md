@@ -73,6 +73,8 @@ opens the whole relationship set as a table, one row per drawn edge, with the bl
 beside it. Both are derived from the same edges the canvas draws, so they say what the picture
 says. The direction an arrowhead carries is written out too: **arrow: blocker → dependent**.
 
+<br />
+
 ## Keyboard shortcuts
 
 On the canvas, with nothing focused in a field and no dialog open:
@@ -88,6 +90,8 @@ On the canvas, with nothing focused in a field and no dialog open:
 
 A key pressed inside an input, a text area, or an open overlay belongs to that control, and
 anything held with `Alt` or `Ctrl` is left to the browser.
+
+<br />
 
 ## Rate limit
 
@@ -109,6 +113,8 @@ Nothing is registered under this repository's owner, and no token is ever commit
 who can run scripts in your browser on this origin can read what `localStorage` holds, so use a
 token scoped to public reads and revoke it when you are done.
 
+<br />
+
 ## Saved copies
 
 Reading a repository saves its graph in your browser, so opening it again costs no GitHub
@@ -122,6 +128,8 @@ else in the browser is touched, and nothing is lost that reading GitHub again ca
 **Clear saved data**, on the screen that offers the saved copy, removes everything held for that
 one repository straight away. Other repositories and your token are left alone; the token has its
 own **Remove**.
+
+<br />
 
 ## Sharing a graph
 
@@ -140,6 +148,8 @@ nothing is uploaded, no account is written to, and no short-link service is invo
 A shared graph is a point-in-time copy and says so on screen, with the same age and coverage the
 page shows for your own saved copies. **Read latest from GitHub** leaves it behind and reads the
 repository live.
+
+<br />
 
 ## Tests and fixtures
 
@@ -160,6 +170,8 @@ Card heights are computed without a browser, so `src/interMetrics.ts` holds the 
 advances captured from the shipped Inter face by `scripts/capture-chip-metrics.mjs`. Regenerate it
 after upgrading `@fontsource-variable/inter` or changing the chip font size; a stale table makes
 cards a row too short and the chips hang out of them.
+
+<br />
 
 ## Related repositories
 
@@ -183,6 +195,8 @@ issues-graph                               renders them
 
 This viewer is not authoritative for anything. Deleting it would lose a view, never a fact.
 
+<br />
+
 ## History and versioning
 
 Extracted from [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro), where it lived as
@@ -192,6 +206,8 @@ There is no version number, deliberately. Nothing pins this repository, so there
 contract a version could describe: `main` is what is deployed, and Git history is the record.
 [`AGENTS.md`](AGENTS.md) carries the full policy and [`docs/product.md`](docs/product.md) says what
 this is and what it will never do.
+
+<br />
 
 ## Limitations
 
@@ -203,6 +219,8 @@ this is and what it will never do.
   hundred issues — the page declines to build one instead of handing you a truncated link.
 - Saved copies are per-browser and bounded to six repositories and about a megabyte.
 - The viewer never writes: it cannot create, verify or repair a dependency.
+
+<br />
 
 ## License
 
