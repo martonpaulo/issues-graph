@@ -12,9 +12,9 @@
 - Copyright: 2026 Marton Paulo
 - Development language: English.
 - Product copy: the interface text, in English, with no localization strategy. The audience is maintainers reading their own GitHub backlog, and every proper noun on screen — issue numbers, labels, repository names — comes from GitHub already.
-- Branch policy: Branch-based. Work happens on a branch and merges into `main`; `main` is what is deployed, so it stays working.
+- Branch policy: The owner and the owner's agents commit validated work directly to `main` in focused single-concern commits (owner decision, 2026-09-11). Branches and pull requests stay available for work that benefits from review, and are required for outside contributors. `main` is what is deployed, so only validated work reaches it.
 - Commit policy: Automatic. Commit each completed concern without waiting to be asked.
-- Push policy: Automatic. Push the working branch after committing.
+- Push policy: Automatic. Push `main`, or the pull request's branch when one is used, after committing validated work.
 - Product versioning: None. This is a continuously deployed page: `main` is what is live, and no consumer pins anything, so there is no compatibility contract for a version number to describe. Git history is the record. Do not add tags, a `CHANGELOG.md`, or release ceremony without an explicit decision to start versioning.
 - Agent automation: `enabled`
 - Implementation agent: `claude`
@@ -27,7 +27,7 @@
   the complete issue set survives in the pull request title and its closing block.
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
-- Review policy: `main` requires one approving review (ruleset `21918709`). The reviewing harness posts a `COMMENT` review because GitHub refuses an approving review from the account that opened the pull request; the approving identity is the operator's GitHub App `marton-agent-approver`, which `skd merge` uses once the orchestrator has recorded an approved verdict.
+- Review policy: none required. Ruleset `21918709` no longer exists, and since 2026-09-11 validated work goes straight to `main`. A pull request, when used, merges after `validate` and `pr-conventions` pass; orchestrated lanes may still record an approval through `marton-agent-approver` and `skd merge`.
 - Release and signing policy: Not applicable. Nothing is packaged or signed; deployment is a GitHub Pages build from `main`.
 - Secret-storage policy: the product has no credential and every product read is unauthenticated. Agent-automation credentials, when provisioned, live only as GitHub Actions repository secrets and never in the repository or agent transcripts.
 - Client guidance: Gemini CLI (`unavailable`) uses `GEMINI.md -> AGENTS.md`; Antigravity CLI (`unavailable`) uses root `AGENTS.md`. Functional verification is pending for both clients.
