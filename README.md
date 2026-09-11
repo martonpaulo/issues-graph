@@ -27,8 +27,7 @@ edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed
 
 <br />
 
-## Quick Start
-
+## 🌱 Quick Start
 Requires **Node.js 22 or newer** and npm.
 
 ```bash
@@ -46,8 +45,7 @@ No credential is needed to run the page or to read a repository: a GitHub token 
 
 <br />
 
-## Commands
-
+## 🛠 Commands
 | Command | What it does |
 | --- | --- |
 | `npm run validate` | Runs the full gate before a commit: `typecheck`, `lint`, `test`, `build`. |
@@ -197,9 +195,6 @@ This viewer is not authoritative for anything. Deleting it would lose a view, ne
 
 ## History and versioning
 
-Extracted from [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro), where it lived as
-`web/`, so that repository stays what its name says it is. The commit history came with it.
-
 There is no version number, deliberately. Nothing pins this repository, so there is no compatibility
 contract a version could describe: `main` is what is deployed, and Git history is the record.
 [`AGENTS.md`](AGENTS.md) carries the full policy and [`docs/product.md`](docs/product.md) says what
@@ -222,6 +217,8 @@ this is and what it will never do.
 
 <br />
 
-## License
+## License and attribution
 
 [MIT](LICENSE) © 2026 Marton Paulo.
+
+Extracted from [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro), where it lived as `web/`, with its commit history.
