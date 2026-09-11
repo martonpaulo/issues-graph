@@ -183,7 +183,7 @@ describe('titleForRoute', () => {
   const titleAt = (pathname: string) => titleForRoute(parseRoute(pathname, BASE))
 
   it('names the product on the index', () => {
-    expect(titleAt(BASE)).toBe('Issues Graph: see what blocks what in a GitHub backlog')
+    expect(titleAt(BASE)).toBe('Issues Graph · See what blocks what in a GitHub backlog')
   })
 
   it('leads with the repository on a graph route', () => {
@@ -192,7 +192,7 @@ describe('titleForRoute', () => {
 
   it('falls back to the index title without echoing a rejected path', () => {
     const title = titleAt(`${BASE}dependencies/acme/${encodeURIComponent('<img src=x>')}`)
-    expect(title).toBe('Issues Graph: see what blocks what in a GitHub backlog')
+    expect(title).toBe('Issues Graph · See what blocks what in a GitHub backlog')
     expect(title).not.toContain('<')
   })
 
@@ -207,7 +207,7 @@ describe('titleForRoute', () => {
       `${BASE}dependencies/acme/app`,
     ]
 
-    const index = 'Issues Graph: see what blocks what in a GitHub backlog'
+    const index = 'Issues Graph · See what blocks what in a GitHub backlog'
     expect(visited.map(titleAt)).toEqual([
       index,
       'acme/app · Issues Graph',
