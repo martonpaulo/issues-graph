@@ -124,7 +124,7 @@ export const PRODUCT = 'Issues Graph'
  * is what a crawler and a link preview read, and this is what replaces it once the app mounts.
  * Two different strings there would advertise two different pages for one URL.
  */
-export const TITLE = `${PRODUCT} · See what blocks what in a GitHub backlog`
+export const TITLE = `${PRODUCT} · GitHub issue dependency graph in your browser`
 
 /**
  * The document title for a route. Repository identity leads, because that is the half that

@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "social-card": "npx --yes playwright@1.63.0 screenshot --viewport-size=1200,630 \"file://$PWD/design/social-card/social-card.html\" \"${TMPDIR:-/tmp}/issues-card.png\" && magick \"${TMPDIR:-/tmp}/issues-card.png\" -strip -quality 92 -sampling-factor 4:4:4 -interlace Plane public/social-card.jpg"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

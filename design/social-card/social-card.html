@@ -1,0 +1,70 @@
+<!doctype html>
+<!-- Issues Graph social card. Source of truth for public/social-card.jpg, served at
+     https://issues.martonpaulo.com/social-card.jpg (1200x630). Never edit the JPEG.
+     Render on a Mac (the drawn interface uses the system font): npm run social-card
+     System, grid and contrast rules: the social card standard (skill-deck#261).
+     Fonts: Gabarito and Figtree (OFL, fonts/*-OFL.txt), the typefaces of martonpaulo.com. -->
+<meta charset="utf-8">
+<title>Issues Graph social card</title>
+<style>
+@font-face { font-family: "Gabarito"; font-weight: 700; src: url(fonts/gabarito-latin-700-normal.woff2); }
+@font-face { font-family: "Figtree"; font-weight: 400; src: url(fonts/figtree-latin-400-normal.woff2); }
+@font-face { font-family: "Figtree"; font-weight: 500; src: url(fonts/figtree-latin-500-normal.woff2); }
+@font-face { font-family: "Figtree"; font-weight: 600; src: url(fonts/figtree-latin-600-normal.woff2); }
+@font-face { font-family: "Figtree"; font-weight: 700; src: url(fonts/figtree-latin-700-normal.woff2); }
+html, body { margin: 0; }
+.card { position: relative; width: 1200px; height: 630px; overflow: hidden; font-family: "Figtree", sans-serif;
+        color: var(--ink); background: var(--gradient); }
+.card::before { content: ""; position: absolute; inset: 0; background: var(--glow, none); }
+/* One grid for every card: the copy block is centred vertically in a 440px column at x=96;
+   the product visual always starts at x=600, a fixed gutter. */
+.copy { position: absolute; left: 96px; top: 50%; transform: translateY(-50%); width: 440px; z-index: 2; }
+.icon { width: 104px; height: 104px; display: block; margin-bottom: 30px; filter: drop-shadow(0 16px 26px rgba(0,0,0,.22)); }
+.eyebrow { display: inline-block; margin: 0 0 20px; padding: 8px 16px; border-radius: 999px;
+           background: var(--pill-bg); border: 1px solid var(--pill-line);
+           font-weight: 700; font-size: 19px; letter-spacing: .1em; text-transform: uppercase; }
+h1 { margin: 0; font: 700 88px/1 "Gabarito", sans-serif; letter-spacing: -0.03em; }
+.promise { margin: 20px 0 0; font-weight: 500; font-size: 38px; line-height: 1.2; letter-spacing: -0.01em;
+           color: var(--ink-soft); text-wrap: balance; }
+.domain { margin: 34px 0 0; font-size: 24px; font-weight: 500; color: var(--ink-soft); }
+/* The drawn interface: the system font, the way the real app renders. */
+.ui { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; color: #1f2937; }
+.win { position: absolute; background: #fff; border-radius: 22px;
+       box-shadow: 0 40px 80px rgba(15,23,42,.30), 0 8px 20px rgba(15,23,42,.12); }
+.bar { height: 11px; border-radius: 6px; background: #e5e7eb; }
+
+.card { --gradient: linear-gradient(135deg,#1e2733 0%,#27323f 40%,#34414f 70%,#51606f 100%); --glow: radial-gradient(640px 520px at 94% 55%,rgba(170,190,215,.22),transparent 65%); --ink: #fff; --ink-soft: rgba(255,255,255,.9);
+        --pill-bg: rgba(255,255,255,.12); --pill-line: rgba(255,255,255,.34); }
+.canvas{left:600px;top:50%;transform:translateY(-50%);width:760px;height:520px;border-radius:18px;overflow:hidden;
+ background:#f3f5f8 radial-gradient(circle,#d4dae2 1.3px,transparent 1.6px) 0 0/18px 18px}
+.tool{position:absolute;left:16px;top:16px;display:flex;align-items:center;gap:10px;padding:9px 14px;background:#fff;border:1px solid #e3e7ee;border-radius:10px;
+ box-shadow:0 1px 2px rgba(31,42,55,.06),0 4px 14px rgba(31,42,55,.06);font-size:13px;color:#4b5563;white-space:nowrap}
+.tool b{color:#1f2a37;font-weight:600}.tool .repo{font-family:ui-monospace,Menlo,monospace;color:#1f2a37;font-size:13px}
+.tool .sep{width:1px;height:16px;background:#e3e7ee}
+.frame{position:absolute;left:22px;top:72px;width:800px;height:424px;border:1.5px dashed #c6ced9;border-radius:14px}
+.frame span{position:absolute;left:16px;top:-2px;transform:translateY(-100%);font-size:13px;font-weight:600;color:#6b7280;padding-bottom:4px}
+.edges{position:absolute;left:0;top:0}
+.ic{position:absolute;width:184px;padding:11px 12px 12px;border-radius:12px;background:#fff;border:1px solid #d9dee6;box-shadow:0 1px 2px rgba(31,42,55,.06),0 4px 14px rgba(31,42,55,.06);box-sizing:border-box}
+.ic.ready{background:#ddf3e6;border-color:#74bd94}.ic.blocked{background:#fdf1c7;border-color:#e2b950}.ic.att{background:#eadcf8;border-color:#ac86dd}
+.ic .h{display:flex;justify-content:space-between;font-size:13px;color:#1f2a37;font-weight:600}.ic .h i{font-style:normal;font-weight:400;color:#4b5563;font-size:12px}
+.ic .t{margin:10px 0 11px}.ic .t .bar{height:9px;background:rgba(31,42,55,.16);margin-bottom:7px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}.chips u{text-decoration:none;font-size:10.5px;padding:2px 6px;border-radius:5px;border:1px solid;white-space:nowrap}
+.c-type{color:#7e3fb0;border-color:#cfa9ec;background:#f8f0fe}.c-pri{color:#b45a17;border-color:#f1b98a;background:#fff4ea}
+.c-ev{color:#1f7a4a;border-color:#95d3ae;background:#ecf9f1}.c-area{color:#4b5563;border-color:#cbd2dc;background:#f3f5f8}
+</style>
+<div class="card">
+  <div class="copy">
+    
+    <p class="eyebrow">Free · Open source</p>
+    <h1>Issues Graph</h1>
+    <p class="promise">See what blocks what in any GitHub backlog</p>
+    <p class="domain">issues.martonpaulo.com</p>
+  </div>
+  <div class="win canvas ui">
+    <div class="tool"><svg width="16" height="16" viewBox="0 0 32 32"><g fill="none" stroke="#1f2a37" stroke-width="2.4" stroke-linecap="round"><path d="M13.4 10.8 8.8 21.2M18.6 10.8l4.6 10.4M10.8 24.8h10.4"/></g><g fill="#1f2a37"><circle cx="16" cy="8.4" r="3.6"/><circle cx="7.2" cy="24.8" r="3.6"/><circle cx="24.8" cy="24.8" r="3.6"/></g></svg><span class="repo">martonpaulo/issues-graph</span><span class="sep"></span><span><b>4</b> issues · <b>3</b> depend on others · <b>3</b> block others</span></div>
+    <div class="frame"><span>Chain · 4 issues</span></div>
+    <svg class="edges" width="760" height="520"><defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#8c97a8"/></marker></defs>
+<path d="M230 283 C258.0 283 258.0 179 280 179" fill="none" stroke="#8c97a8" stroke-width="2" marker-end="url(#ah)"/><path d="M230 283 C258.0 283 258.0 391 280 391" fill="none" stroke="#8c97a8" stroke-width="2" marker-end="url(#ah)"/><path d="M470 179 C498.0 179 498.0 283 520 283" fill="none" stroke="#8c97a8" stroke-width="2" marker-end="url(#ah)"/><path d="M470 391 C498.0 391 498.0 283 520 283" fill="none" stroke="#8c97a8" stroke-width="2" marker-end="url(#ah)"/></svg>
+    <div class="ic ready" style="left:46px;top:222px"><div class="h">#12<i>ready</i></div><div class="t"><span class="bar" style="display:block;width:92%"></span><span class="bar" style="display:block;width:58%"></span></div><div class="chips"><u class="c-type">type: feature</u><u class="c-pri">priority: P1</u><u class="c-area">area: graph</u></div></div><div class="ic blocked" style="left:286px;top:118px"><div class="h">#15<i>blocked</i></div><div class="t"><span class="bar" style="display:block;width:86%"></span><span class="bar" style="display:block;width:64%"></span></div><div class="chips"><u class="c-type">type: feature</u><u class="c-pri">priority: P2</u><u class="c-ev">evidence: confirmed</u></div></div><div class="ic blocked" style="left:286px;top:330px"><div class="h">#18<i>blocked</i></div><div class="t"><span class="bar" style="display:block;width:90%"></span><span class="bar" style="display:block;width:48%"></span></div><div class="chips"><u class="c-type">type: bug</u><u class="c-pri">priority: P1</u><u class="c-area">area: layout</u></div></div><div class="ic att" style="left:526px;top:222px"><div class="h">#21<i>needs attention</i></div><div class="t"><span class="bar" style="display:block;width:84%"></span><span class="bar" style="display:block;width:70%"></span></div><div class="chips"><u class="c-type">type: improvement</u><u class="c-pri">priority: P2</u></div></div>
+  </div>
+</div>
