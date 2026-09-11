@@ -28,31 +28,36 @@ edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed
 <br />
 
 ## Quick Start
+
+Requires **Node.js 22 or newer** and npm.
+
 ```bash
+git clone https://github.com/martonpaulo/issues-graph.git
+cd issues-graph
 npm ci
 npm run dev
 ```
 
-Then open [http://localhost:5173](http://localhost:5173).
+[http://localhost:5173](http://localhost:5173)
 
 That is Vite's default port; nothing else is configured.
 
-Prerequisites: **Node.js 22 or newer** (CI runs 22) and npm. No credential is needed to run or to
-read a repository — a GitHub token is optional, and only raises the rate limit.
+No credential is needed to run the page or to read a repository: a GitHub token is optional and only raises the rate limit.
 
 <br />
 
 ## Commands
+
 | Command | What it does |
 | --- | --- |
-| `npm run validate` | The full gate before a commit: `typecheck`, `lint`, `test`, `build` |
-| `npm run dev` | Development server |
-| `npm run build` | Production build into `dist/` |
-| `npm run preview` | Serves the built `dist/` the way the deployed site is served |
-| `npm run typecheck` | TypeScript, no emit |
-| `npm run lint` | ESLint over the whole repository |
-| `npm test` | Vitest, against captured API fixtures |
-| `npm run social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg` (on a Mac) |
+| `npm run validate` | Runs the full gate before a commit: `typecheck`, `lint`, `test`, `build`. |
+| `npm run dev` | Starts the Vite development server. |
+| `npm run build` | Builds production output into `dist/`. |
+| `npm run preview` | Serves the built `dist/` the way the deployed site is served. |
+| `npm run typecheck` | Type-checks the repository with `tsc --noEmit`. |
+| `npm run lint` | Runs ESLint over the whole repository. |
+| `npm test` | Runs Vitest against the captured API fixtures. |
+| `npm run social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg`. Mac only. |
 
 ---
 
