@@ -1,5 +1,7 @@
 # Issues Graph
 
+![Issues Graph: a dependency graph of a GitHub repository's open issues, blocked-by links and sub-issues](public/social-card.jpg)
+
 A hosted dependency graph for GitHub Issues. Point it at any public repository and it renders that
 repository's open issues, the native `blocked by` relationships between them, and the native
 sub-issue hierarchy, as a graph you can read.
