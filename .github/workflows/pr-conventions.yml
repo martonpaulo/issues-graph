@@ -52,18 +52,36 @@ jobs:
 
           failures = []
 
-          # `Issue #12 - Description` for one, `Issues #70, #73 - Description` for several.
-          single = re.fullmatch(r"Issue #(\d+) - (\S.*)", title)
-          plural = re.fullmatch(r"Issues ((?:#\d+, )+#\d+) - (\S.*)", title)
-          if single:
-              title_issues = [int(single.group(1))]
-          elif plural:
-              title_issues = [int(n) for n in re.findall(r"#(\d+)", plural.group(1))]
+          # Conventional Commits, with the issue numbers as the subject's suffix when it closes any:
+          #   feat(grid): add the export button (#54)
+          #   fix: normalize carriage returns (#54, #61)
+          #   docs: fix a typo in the README        (closes no issue)
+          #
+          # An issue is optional: the owner opens pull requests for work no issue tracks. What is
+          # checked is agreement: a pull request that closes issues names them in the title and in
+          # the closing block, and the two sets match.
+          #
+          # Squash merge makes this title the subject of the only commit that reaches the default
+          # branch, so it is the same grammar the commit rule already requires. The previous
+          # `Issue #<n> - ...` form put a shape on the default branch that no changelog, release
+          # tool, or version inference reads.
+          conventional = re.fullmatch(
+              r"(?P<type>build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test)"
+              r"(?:\((?P<scope>[^()\n]+)\))?"
+              r"(?P<breaking>!)?"
+              r": (?P<description>\S.*?)"
+              r"(?: \((?P<issues>#\d+(?:, #\d+)*)\))?",
+              title,
+          )
+          if conventional:
+              title_issues = [int(n) for n in re.findall(r"#(\d+)", conventional.group("issues") or "")]
           else:
               title_issues = []
               failures.append(
-                  "title must read 'Issue #<n> - <description>', or "
-                  "'Issues #<a>, #<b> - <description>' when it closes several; got: " + repr(title)
+                  "title must be a Conventional Commits subject, ending in the issue numbers it "
+                  "closes, for example 'feat(grid): add the export button (#54)', "
+                  "'fix: normalize carriage returns (#54, #61)' or 'docs: fix a typo'; got: "
+                  + repr(title)
               )
 
           if title_issues != sorted(set(title_issues)):
@@ -80,9 +98,14 @@ jobs:
               elif line.strip():
                   break
 
-          if not closes:
+          if title_issues and not closes:
               failures.append("body must start with one `Closes #<n>` line for every issue it closes")
-          elif sorted(set(closes)) != sorted(set(title_issues)) and title_issues:
+          elif closes and conventional and not title_issues:
+              failures.append(
+                  "the body closes %s, so the title must end in the same issue numbers"
+                  % sorted(set(closes))
+              )
+          elif sorted(set(closes)) != sorted(set(title_issues)):
               failures.append(
                   "the title's issues %s and the closing block's %s must name the same set"
                   % (sorted(set(title_issues)), sorted(set(closes)))
@@ -98,7 +121,11 @@ jobs:
                   "request title or body and this check re-runs on its own."
               )
           else:
-              summary = "Title and closing block agree on issue(s) %s." % sorted(set(title_issues))
+              summary = (
+                  "Title and closing block agree on issue(s) %s." % sorted(set(title_issues))
+                  if title_issues
+                  else "Conventional title; the pull request closes no issue."
+              )
               print(summary)
 
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
