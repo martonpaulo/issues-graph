@@ -21,7 +21,6 @@ file in the repository being rendered** — every read goes straight to the publ
 from the browser, and the relationships GitHub already tracks are the only source of truth for the
 edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed ones.
 
-
 ---
 
 <br />
@@ -63,7 +62,6 @@ own token.
 
 The optional GitHub token a visitor may paste belongs to that visitor, is kept in their browser and
 is never committed here. See [Rate limit](#rate-limit).
-
 
 ---
 
@@ -210,7 +208,6 @@ There is no version number, deliberately. Nothing pins this repository, so there
 contract a version could describe: `main` is what is deployed, and Git history is the record.
 [`AGENTS.md`](AGENTS.md) carries the full policy and [`docs/product.md`](docs/product.md) says what
 this is and what it will never do.
-
 
 ---
 
