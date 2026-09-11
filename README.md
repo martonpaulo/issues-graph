@@ -1,21 +1,69 @@
+<div align="center">
+
+<img src="public/social-card.jpg" width="100%" alt="Issues Graph: a dependency graph of a GitHub repository's open issues, blocked-by links and sub-issues">
+
 # Issues Graph
 
-![Issues Graph: a dependency graph of a GitHub repository's open issues, blocked-by links and sub-issues](public/social-card.jpg)
+See the blocking order of a GitHub backlog as a graph, in a browser, with nothing installed in the repository being read.
 
-A hosted dependency graph for GitHub Issues. Point it at any public repository and it renders that
-repository's open issues, the native `blocked by` relationships between them, and the native
-sub-issue hierarchy, as a graph you can read.
+[![Validate](https://github.com/martonpaulo/issues-graph/actions/workflows/validate.yml/badge.svg)](https://github.com/martonpaulo/issues-graph/actions/workflows/validate.yml) [![Deploy](https://github.com/martonpaulo/issues-graph/actions/workflows/pages.yml/badge.svg)](https://github.com/martonpaulo/issues-graph/actions/workflows/pages.yml) [![React 19.2](https://img.shields.io/badge/React-19.2-149eca)](https://react.dev/) [![Vite 8.2](https://img.shields.io/badge/Vite-8.2-646cff)](https://vite.dev/) [![TypeScript 6.0](https://img.shields.io/badge/TypeScript-6.0-3178c6)](https://www.typescriptlang.org/)
 
+</div>
+
+Issues Graph points at any public repository and renders that repository's **open issues**, the
+native **`blocked by`** relationships between them, and the native **sub-issue hierarchy**, as a
+graph you can read. Each card names its own state in words — `ready`, `unassigned`, `blocked`,
+`in progress`, `needs attention`, `delivered` — read from the issue's own labels, assignees and
+dependency counts.
+
+It is a **static page**. There is no backend, no credential of its own, and **no generated graph
+file in the repository being rendered** — every read goes straight to the public GitHub REST API
+from the browser, and the relationships GitHub already tracks are the only source of truth for the
+edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed ones.
+
+<br />
+
+---
+
+## 🌱 Quick Start
+
+```bash
+npm ci
+npm run dev
 ```
-https://issues.martonpaulo.com/dependencies/<owner>/<repo>
-```
 
-It is a static page. There is no backend, no credential of its own, and no generated graph file in
-the repository being rendered — every read goes straight to the public GitHub REST API from the
-browser, and the relationships GitHub already tracks are the only source of truth for the edges:
-`blocked by` for the solid arrows, and the sub-issue hierarchy for the dashed ones. Each card names
-its own state in words — `ready`, `unassigned`, `blocked`, `in progress`, `needs attention`,
-`delivered` — read from the issue's own labels, assignees and dependency counts.
+Then open `http://localhost:5173`. Vite's default port; nothing else is configured.
+
+Prerequisites: **Node.js 22 or newer** (CI runs 22) and npm. No credential is needed to run or to
+read a repository — a GitHub token is optional, and only raises the rate limit.
+
+<br />
+
+## 🛠 Commands
+
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` | Production build into `dist/` |
+| `npm run preview` | Serves the built `dist/` the way the deployed site is served |
+| `npm run typecheck` | TypeScript, no emit |
+| `npm run lint` | ESLint over the whole repository |
+| `npm test` | Vitest, against captured API fixtures |
+| `npm run social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg` (on a Mac) |
+
+<br />
+
+## 🔐 Secrets and variables
+
+The project reads **none**. There is no environment variable, no `.env` file, no GitHub Actions
+secret and no application credential anywhere in this repository; every product read is
+unauthenticated, and the deployment is a GitHub Pages build that needs nothing beyond the workflow's
+own token.
+
+The optional GitHub token a visitor may paste belongs to that visitor, is kept in their browser and
+is never committed here. See [Rate limit](#rate-limit).
+
+<br />
 
 ## Reading it without the picture
 
@@ -82,7 +130,7 @@ spends none of their own GitHub budget: the graph itself travels in the URL, and
 request to `api.github.com` at all on that path.
 
 ```text
-https://issues.martonpaulo.com/dependencies/<owner>/<repo>#g=<the graph>
+/dependencies/<owner>/<repo>#g=<the graph>
 ```
 
 The graph rides in the fragment — the part after `#` — which browsers never send to a server. It
@@ -93,46 +141,7 @@ A shared graph is a point-in-time copy and says so on screen, with the same age 
 page shows for your own saved copies. **Read latest from GitHub** leaves it behind and reads the
 repository live.
 
-Very large backlogs are the limit of the approach. Above 32,000 characters — roughly a few hundred
-issues — the link stops surviving being pasted into a message, and the page declines to build one
-and tells you the size instead of handing you a link that arrives truncated.
-
-## Related repositories
-
-Three repositories divide this work, and the boundary between them is deliberate:
-
-| Repository | Owns |
-| --- | --- |
-| [`martonpaulo/skills`](https://github.com/martonpaulo/skills) | The agent skills that capture, plan, groom and implement issues — including the ones that **create and verify** the GitHub issue dependencies this viewer renders |
-| [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro) | The local-first board that drives those issues through planning, implementation, CI and review with AI agents |
-| **`martonpaulo/issues-graph`** (this one) | The visualization. It reads; it never writes |
-
-The data flows one way, and this repository is the last step:
-
-```
-skills                    creates and verifies dependencies
-   ↓
-GitHub native issue relationships          the source of truth
-   ↓
-issues-graph                               renders them
-```
-
-This viewer is not authoritative for anything. Deleting it would lose a view, never a fact.
-
-## Running it locally
-
-```bash
-npm ci
-npm run dev
-```
-
-| Command | What it does |
-| --- | --- |
-| `npm run dev` | Development server |
-| `npm run build` | Production build into `dist/` |
-| `npm run typecheck` | TypeScript, no emit |
-| `npm run lint` | ESLint |
-| `npm test` | Vitest, against captured API fixtures |
+## Tests and fixtures
 
 Tests run against fixtures in `src/__fixtures__/`, captured from the live API rather than written by
 hand — a hand-written payload asserts what somebody assumed the API returns. Recapture them with an
@@ -152,14 +161,49 @@ advances captured from the shipped Inter face by `scripts/capture-chip-metrics.m
 after upgrading `@fontsource-variable/inter` or changing the chip font size; a stale table makes
 cards a row too short and the chips hang out of them.
 
-## History
+## Related repositories
+
+Three repositories divide this work, and the boundary between them is deliberate:
+
+| Repository | Owns |
+| --- | --- |
+| [`martonpaulo/skills`](https://github.com/martonpaulo/skills) | The agent skills that capture, plan, groom and implement issues — including the ones that **create and verify** the GitHub issue dependencies this viewer renders |
+| [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro) | The local-first board that drives those issues through planning, implementation, CI and review with AI agents |
+| **`martonpaulo/issues-graph`** (this one) | The visualization. It reads; it never writes |
+
+The data flows one way, and this repository is the last step:
+
+```text
+skills                                     creates and verifies dependencies
+   ↓
+GitHub native issue relationships          the source of truth
+   ↓
+issues-graph                               renders them
+```
+
+This viewer is not authoritative for anything. Deleting it would lose a view, never a fact.
+
+## History and versioning
 
 Extracted from [`martonpaulo/arbaro`](https://github.com/martonpaulo/arbaro), where it lived as
 `web/`, so that repository stays what its name says it is. The commit history came with it.
 
-## Versioning
-
-There is none, deliberately. Nothing pins this repository, so there is no compatibility contract a
-version number could describe: `main` is what is deployed. Git history is the record.
+There is no version number, deliberately. Nothing pins this repository, so there is no compatibility
+contract a version could describe: `main` is what is deployed, and Git history is the record.
 [`AGENTS.md`](AGENTS.md) carries the full policy and [`docs/product.md`](docs/product.md) says what
 this is and what it will never do.
+
+## Limitations
+
+- Only **open** issues are drawn, and only the relationships GitHub itself tracks — a dependency
+  written in prose is invisible here.
+- Unauthenticated reads share 60 GitHub requests per hour per IP address; a large backlog can
+  exhaust that in one read without a token.
+- A shared link carries the graph in its fragment, so above roughly 32,000 characters — a few
+  hundred issues — the page declines to build one instead of handing you a truncated link.
+- Saved copies are per-browser and bounded to six repositories and about a megabyte.
+- The viewer never writes: it cannot create, verify or repair a dependency.
+
+## License
+
+[MIT](LICENSE) © 2026 Marton Paulo.
