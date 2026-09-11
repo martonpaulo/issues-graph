@@ -7,7 +7,7 @@
 - Benefit-first description: See the blocking order of a GitHub backlog as a graph, in a browser, with nothing installed in the repository being read.
 - Repository: `martonpaulo/issues-graph` (public)
 - Public identifiers: none published. The hosted page is the only public surface; there is no package, module, or executable identifier, and nothing consumes this repository as a dependency.
-- Landing page: `https://issues.martonpaulo.com/`, a GitHub Pages site built from this repository by `.github/workflows/pages.yml`. The page **is** the product, not a description of it; there is no separate marketing site.
+- Landing page: `https://issues.martonpaulo.com/`, a GitHub Pages site built from this repository by `.github/workflows/deploy.yml`. The page **is** the product, not a description of it; there is no separate marketing site.
 - License: `MIT`
 - Copyright: 2026 Marton Paulo
 - Development language: English.
@@ -27,11 +27,11 @@
   the complete issue set survives in the pull request title and its closing block.
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
-- Review policy: none required. Ruleset `21918709` no longer exists, and since 2026-09-11 validated work goes straight to `main`. A pull request, when used, merges after `validate` and `pr-conventions` pass; orchestrated lanes may still record an approval through `marton-agent-approver` and `skd merge`.
+- Review policy: none required. Ruleset `21918709` no longer exists, and since 2026-09-11 validated work goes straight to `main`. A pull request, when used, merges after `Validate` passes; orchestrated lanes may still record an approval through `marton-agent-approver` and `skd merge`.
 - Release and signing policy: Not applicable. Nothing is packaged or signed; deployment is a GitHub Pages build from `main`.
 - Secret-storage policy: the product has no credential and every product read is unauthenticated. Agent-automation credentials, when provisioned, live only as GitHub Actions repository secrets and never in the repository or agent transcripts.
 - Client guidance: Gemini CLI (`unavailable`) uses `GEMINI.md -> AGENTS.md`; Antigravity CLI (`unavailable`) uses root `AGENTS.md`. Functional verification is pending for both clients.
-- Agent orchestration: Enabled for Agent Orchestrator local workers. `main` now carries required status checks (`validate`, `pr-conventions`), so auto-merge is armable under the predicates recorded in `.ao/worker-rules.md`; `skd merge` remains the path for a verdict the orchestrator recorded.
+- Agent orchestration: Enabled for Agent Orchestrator local workers. `main` now carries the required status check (`Validate`), so auto-merge is armable under the predicates recorded in `.ao/worker-rules.md`; `skd merge` remains the path for a verdict the orchestrator recorded.
 - Skills baseline revision: `10d02773253766a032f490f1a5ec27d2157f3281`
 - Skills baseline applied: `2026-08-31`
 

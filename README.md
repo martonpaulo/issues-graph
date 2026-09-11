@@ -6,7 +6,7 @@
 
 See the blocking order of a GitHub backlog as a graph, in a browser, with nothing installed in the repository being read.
 
-[![Validate](https://github.com/martonpaulo/issues-graph/actions/workflows/validate.yml/badge.svg)](https://github.com/martonpaulo/issues-graph/actions/workflows/validate.yml) [![Deploy](https://github.com/martonpaulo/issues-graph/actions/workflows/pages.yml/badge.svg)](https://github.com/martonpaulo/issues-graph/actions/workflows/pages.yml) [![React 19.2](https://img.shields.io/badge/React-19.2-149eca)](https://react.dev/) [![Vite 8.2](https://img.shields.io/badge/Vite-8.2-646cff)](https://vite.dev/) [![TypeScript 6.0](https://img.shields.io/badge/TypeScript-6.0-3178c6)](https://www.typescriptlang.org/)
+[![Validate](https://github.com/martonpaulo/issues-graph/actions/workflows/validate.yml/badge.svg)](https://github.com/martonpaulo/issues-graph/actions/workflows/validate.yml) [![Deploy](https://github.com/martonpaulo/issues-graph/actions/workflows/deploy.yml/badge.svg)](https://github.com/martonpaulo/issues-graph/actions/workflows/deploy.yml) [![React 19.2](https://img.shields.io/badge/React-19.2-149eca)](https://react.dev/) [![Vite 8.2](https://img.shields.io/badge/Vite-8.2-646cff)](https://vite.dev/) [![TypeScript 6.0](https://img.shields.io/badge/TypeScript-6.0-3178c6)](https://www.typescriptlang.org/)
 
 </div>
 

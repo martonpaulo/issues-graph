@@ -1,5 +1,5 @@
 # Publishes the issue dependency viewer to GitHub Pages at https://issues.martonpaulo.com/.
-name: Deploy issues-graph
+name: Deploy
 
 on:
   push:

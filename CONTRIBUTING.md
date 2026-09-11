@@ -34,7 +34,7 @@ writes to GitHub, and a proposal that would change that is out of scope.
 - One concern per commit. A commit or pull request made for an issue **ends with the issue numbers**:
   `feat(graph): add the export button (#54)`, `fix: normalize carriage returns (#54, #61)`.
 - A pull request that closes issues starts its body with one `Closes #<n>` line per issue, and the
-  title's numbers must name the same set. `.github/workflows/pr-conventions.yml` checks exactly this.
+  title's numbers must name the same set.
 - Pull requests are squash-merged, so the title becomes the commit subject on `main`.
 - No force pushes.
 
