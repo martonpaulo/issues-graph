@@ -28,7 +28,6 @@ edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed
 <br />
 
 ## Quick Start
-
 ```bash
 npm ci
 npm run dev
@@ -44,7 +43,6 @@ read a repository — a GitHub token is optional, and only raises the rate limit
 <br />
 
 ## Commands
-
 | Command | What it does |
 | --- | --- |
 | `npm run validate` | The full gate before a commit: `typecheck`, `lint`, `test`, `build` |
