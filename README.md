@@ -32,7 +32,9 @@ npm ci
 npm run dev
 ```
 
-Then open `http://localhost:5173`. Vite's default port; nothing else is configured.
+Then open [http://localhost:5173](http://localhost:5173).
+
+That is Vite's default port; nothing else is configured.
 
 Prerequisites: **Node.js 22 or newer** (CI runs 22) and npm. No credential is needed to run or to
 read a repository — a GitHub token is optional, and only raises the rate limit.
