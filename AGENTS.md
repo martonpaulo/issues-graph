@@ -72,8 +72,9 @@ label — and inventing a second name for any of it would be the drift a glossar
 Rules for any executor working from a clone of this repository, including cloud executors that
 read only committed files.
 
-- Run tests with `npm test`; run lint with `npm run lint`. A change is not done while either fails
-  on the exact current head.
+- Run the full gate with `npm run validate` (`typecheck`, `lint`, `test`, `build`); during iteration
+  run the smallest relevant piece, `npm test` or `npm run lint`. A change is not done while the gate
+  fails on the exact current head.
 - Branch as `<type>/<agent>/issue-<n>/<short-slug>`; commit with Conventional Commits, subject
   ending in `(#<n>)`.
 - Never push to `main` and never merge: open a pull request and stop. Merge belongs to the owner,

@@ -47,6 +47,7 @@ read a repository — a GitHub token is optional, and only raises the rate limit
 
 | Command | What it does |
 | --- | --- |
+| `npm run validate` | The full gate before a commit: `typecheck`, `lint`, `test`, `build` |
 | `npm run dev` | Development server |
 | `npm run build` | Production build into `dist/` |
 | `npm run preview` | Serves the built `dist/` the way the deployed site is served |

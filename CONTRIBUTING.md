@@ -40,15 +40,15 @@ writes to GitHub, and a proposal that would change that is out of scope.
 
 ## Run the validation gate
 
-Everything CI runs, in order:
+One command, running everything CI runs, in order:
 
 ```bash
 npm ci
-npm run typecheck
-npm run lint
-npm test
-npm run build
+npm run validate
 ```
+
+That is `typecheck`, `lint`, `test` and `build`. During iteration run the smallest relevant piece
+instead — `npm run lint`, `npm test`.
 
 `npm test` runs Vitest against the captured fixtures in `src/__fixtures__/`, so no network access and
 no GitHub token are needed.
