@@ -3,6 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- The page keeps a visitor's GitHub token in localStorage, so the policy limits which
+         script can run here and where anything can be sent. Pages serves no custom headers, so it
+         is a meta tag, placed before every script, stylesheet and icon it governs; the meta form
+         ignores frame-ancestors, report-uri and sandbox.
+         - script-src 'self': the only executable script is Vite's module entry. The JSON-LD block
+           below is data, which script-src does not govern.
+         - style-src 'self' with no 'unsafe-inline': every inline style on the page (the canvas
+           transform, node positions, label colours, line clamps) is written through the CSSOM by
+           React and @xyflow/react, which CSP does not govern. Measured with zero violations.
+         - connect-src: every request goes to api.github.com (src/github.ts).
+         - worker-src 'self': ELK's worker is its own emitted asset, not a blob: URL.
+         - img-src and font-src 'self': the favicon and the bundled Inter; no avatars are drawn.
+         - form-action 'none': the repository form is handled in script and never submits.
+         vite.config.ts removes this tag from the dev server's page only, which needs inline styles
+         and a websocket for hot reload. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src https://api.github.com; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'" />
     <!-- Absolute, not relative: a real route such as /dependencies/owner/repo is served by the
          same document, and a relative icon would be looked for beside that path. -->
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
