@@ -21,11 +21,28 @@ function pagesSpaFallback(): Plugin {
   }
 }
 
+/**
+ * The Content-Security-Policy in `index.html` is written against the built page, and the dev server
+ * cannot satisfy it: it delivers CSS as injected `<style>` elements and hot reload over a
+ * `ws://` connection, both refused by that policy by design. So the tag is removed from the page the
+ * dev server serves, and only there — `vite build`, and therefore `vite preview` and the deployed
+ * site, ship it exactly as written.
+ */
+function devServerWithoutCsp(): Plugin {
+  return {
+    name: 'dev-server-without-csp',
+    apply: 'serve',
+    transformIndexHtml(html) {
+      return html.replace(/\s*<meta http-equiv="Content-Security-Policy"[^>]*>/, '')
+    },
+  }
+}
+
 export default defineConfig({
   // The site is served at the root of its own host (issues.martonpaulo.com), so asset URLs carry
   // no repository prefix.
   base: '/',
-  plugins: [react(), pagesSpaFallback()],
+  plugins: [react(), pagesSpaFallback(), devServerWithoutCsp()],
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts'],
