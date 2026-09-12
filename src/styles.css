@@ -8,19 +8,76 @@
  */
 
 /**
- * Inter, self-hosted, so the page asks nothing of a third party at load time. Only the latin
- * subset is shipped: the viewer's own chrome is English, and an issue title outside that range
- * falls back to the system stack rather than dragging 1.9 MB of subsets into the deployment.
+ * Gabarito and Figtree, the fleet's display and body faces
+ * (skill-deck/docs/typography-standard.md), self-hosted so the page asks nothing of a third party
+ * at load time. Three static files, one per weight the standard ships, and only the latin subset:
+ * the viewer's own chrome is English, and an issue title outside that range falls back to the
+ * system stack rather than dragging every subset into the deployment.
+ *
+ * The `unicode-range` is the latin block each Fontsource file actually covers. Declaring it keeps
+ * the browser from paying for a download it cannot draw from, and — this being the load-bearing
+ * part — keeps `chipMetrics.ts` honest: a character outside the range is drawn by the fallback
+ * stack, which is exactly what the captured-metrics fallback width assumes.
  */
 @font-face {
-  font-family: 'Inter Variable';
+  font-family: 'Figtree';
   font-style: normal;
   font-display: swap;
-  font-weight: 100 900;
-  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')
-    format('woff2-variations');
+  font-weight: 400;
+  src: url('@fontsource/figtree/files/figtree-latin-400-normal.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
     U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 600;
+  src: url('@fontsource/figtree/files/figtree-latin-600-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Gabarito';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 700;
+  src: url('@fontsource/gabarito/files/gabarito-latin-700-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/**
+ * The metric-matched fallbacks, copied from the built rules the portfolio ships
+ * (martonpaulo.github.io). Arial is overridden to each face's own metrics, so the text the browser
+ * paints before the webfont arrives occupies the same box and the swap does not reflow. That
+ * matters more here than on a page of prose: a card's geometry is computed in `graph.ts`, so a
+ * fallback drawn at a different width would shift every chip for the length of the swap.
+ */
+@font-face {
+  font-family: 'Figtree Fallback';
+  src: local('Arial');
+  font-display: swap;
+  font-weight: 400;
+  font-style: normal;
+  size-adjust: 100.7176%;
+  ascent-override: 94.3231%;
+  descent-override: 24.8219%;
+  line-gap-override: 0%;
+}
+
+@font-face {
+  font-family: 'Gabarito Fallback';
+  src: local('Arial Bold');
+  font-display: swap;
+  font-weight: 700;
+  font-style: normal;
+  size-adjust: 93.9622%;
+  ascent-override: 100.0403%;
+  descent-override: 27.6707%;
+  line-gap-override: 0%;
 }
 
 :root {
@@ -72,8 +129,13 @@
    * The fleet typography standard's settings, copied verbatim and kept contiguous in its order:
    * skill-deck/docs/typography-standard.md. The chrome reads them; the card, the chip and the
    * state word do not, because their sizes are layout geometry — `graph.ts` sizes a node from
-   * them and `interMetrics.ts` holds the advance width of every character at the chip's 10px.
+   * them and `chipMetrics.ts` holds the advance width of every character at the chip's 10px.
    */
+  /* The standard's three family stacks, with the metric-matched fallback declared above inserted
+     after each webfont so the pre-swap paint occupies the same box. */
+  --font-display: "Gabarito", "Gabarito Fallback", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Figtree", "Figtree Fallback", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-md: 1.125rem;
@@ -128,8 +190,7 @@ body {
   /* The page is a diagram, not a document: dragging across it pans and selects nothing. */
   user-select: none;
   -webkit-user-select: none;
-  font-family: 'Inter Variable', Inter, ui-sans-serif, -apple-system, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  font-family: var(--font-body);
   /* `--text-sm`, not `--text-md`: this page is a canvas with panels floating over it, and the
      card sizes beside them are computed in `graph.ts` from fixed pixel type. */
   font-size: var(--text-sm);
@@ -139,7 +200,7 @@ body {
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 0.92em;
 }
 
@@ -257,7 +318,7 @@ code {
   width: max-content;
   padding: 5px 8px;
   border-radius: 7px;
-  font-family: 'Inter Variable', Inter, ui-sans-serif, -apple-system, sans-serif;
+  font-family: var(--font-body);
   font-size: var(--text-xs);
   font-weight: var(--weight-body);
   line-height: var(--leading-relaxed);
@@ -398,7 +459,7 @@ code {
 }
 
 .bar__slug {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
 
   /* Every other hint is a phrase this project wrote, so 240px of centred text with the default
      word breaking fits it. This one carries a repository name: up to 140 characters GitHub allows,
@@ -768,7 +829,7 @@ code {
   align-items: baseline;
   gap: 5px;
   min-width: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
@@ -1000,6 +1061,9 @@ code {
   align-items: center;
   gap: 8px;
   margin: 0 0 5px;
+  /* The two headings on the page — this and the dialog's — are the display role, so they are the
+     only places Gabarito is drawn. Everything else is Figtree. */
+  font-family: var(--font-display);
   font-size: var(--text-lg);
   font-weight: var(--weight-display);
   letter-spacing: var(--tracking-display);
@@ -1138,7 +1202,7 @@ code {
 }
 
 .repoinput__option {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   padding: 6px 8px;
   border-radius: 7px;
@@ -1340,8 +1404,10 @@ code {
 
 .dialog__title {
   margin: 0 0 6px;
+  font-family: var(--font-display);
   font-size: var(--text-md);
   font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
 }
 
 .dialog__body {

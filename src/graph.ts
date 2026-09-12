@@ -1,5 +1,5 @@
 import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
-import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './interMetrics'
+import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './chipMetrics'
 import { cardLabels, needsAttention, type CardChip } from './labels'
 import { canonicalSlug, slugOf, type RepoTarget } from './route'
 
@@ -26,7 +26,7 @@ const TITLE_LINE_HEIGHT = 17
 /**
  * Width available to a title, expressed in quarter-character units. Most glyphs cost four; the
  * narrow glyphs below cost three. This keeps the old conservative 33-character bound for wide
- * text without reserving a second line for narrow text that Inter renders on one.
+ * text without reserving a second line for narrow text that Figtree renders on one.
  */
 const TITLE_UNITS_PER_LINE = 33 * 4
 const TITLE_CHAR_UNITS = 4
@@ -45,26 +45,26 @@ const CHIP_PADDING = 12
 const CHIP_ROW_WIDTH = 210
 /**
  * Held back from the row so a chip run that ends within a pixel of the edge is treated as wrapping.
- * One real combination — `type: improvement`, `priority: P2` and an empty `effort` — measures
- * 210.2px inside a 210px row, so the boundary is genuinely decided by fractions of a pixel; this
- * also covers the system face the browser draws with while Inter is still loading.
+ * Real combinations land within a pixel of the 210px row — `type: documentation`, `priority: P1`
+ * and `effort: M` is one — so the boundary is genuinely decided by fractions of a pixel; this also
+ * covers the metric-matched fallback the browser draws with while Figtree is still loading.
  */
 const CHIP_ROW_SLACK = 1
 
 /**
  * What one emoji costs.
  *
- * `CHIP_FALLBACK_CHAR_WIDTH` is the widest advance captured off Inter, which is the right guess
- * for a glyph Inter draws but the capture did not record — an accented latin letter, a CJK
- * ideograph the browser resolves to a face of about the same size. An emoji is not that: Inter has
- * no emoji glyphs at all, so the browser falls back to the system emoji face, which draws roughly
- * square and therefore wider than any Inter advance. Labels lead with one often enough on public
+ * `CHIP_FALLBACK_CHAR_WIDTH` is the widest advance captured off Figtree, which is the right guess
+ * for a glyph Figtree draws but the capture did not record — an accented latin letter, a CJK
+ * ideograph the browser resolves to a face of about the same size. An emoji is not that: Figtree
+ * has no emoji glyphs at all, so the browser falls back to the system emoji face, which draws
+ * roughly square and therefore wider than any Figtree advance. Labels lead with one often enough on public
  * repositories to matter, and under-reserving is the direction that pushes chips out of the card.
  * A cluster spelled with several code points over-reserves, which only leaves slack.
  */
 const CHIP_EMOJI_CHAR_WIDTH = 13
 
-/** Symbol and pictographic blocks the shipped Inter face does not cover. */
+/** Symbol and pictographic blocks the shipped Figtree face does not cover. */
 function isEmoji(codePoint: number): boolean {
   return (
     (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
@@ -76,8 +76,8 @@ function isEmoji(codePoint: number): boolean {
 /**
  * How wide the browser will draw one chip.
  *
- * Summed from the advances captured off the shipped Inter face rather than from an average
- * per-character width: Inter's advances run from 2.4px to 9.9px at 10px, and the cards that wrap
+ * Summed from the advances captured off the shipped Figtree face rather than from an average
+ * per-character width: Figtree's advances run from 2.0px to 9.9px at 10px, and the cards that wrap
  * differ from the cards that do not by a fraction of a row, which no single average separates.
  * Kerning is not applied, which makes the sum marginally wider than the rendered text — 0.4px on
  * the longest chip a card shows — and that is the safe direction: a row too many only leaves a gap

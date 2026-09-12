@@ -14,7 +14,7 @@
            React and @xyflow/react, which CSP does not govern. Measured with zero violations.
          - connect-src: every request goes to api.github.com (src/github.ts).
          - worker-src 'self': ELK's worker is its own emitted asset, not a blob: URL.
-         - img-src and font-src 'self': the favicon and the bundled Inter; no avatars are drawn.
+         - img-src and font-src 'self': the favicon and the bundled Gabarito and Figtree; no avatars are drawn.
          - form-action 'none': the repository form is handled in script and never submits.
          vite.config.ts removes this tag from the dev server's page only, which needs inline styles
          and a websocket for hot reload. -->

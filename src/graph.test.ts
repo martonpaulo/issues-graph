@@ -105,15 +105,22 @@ describe('chipRows and cardHeight', () => {
 
   /**
    * The row counts asserted here were measured in a browser against `styles.css` and the shipped
-   * Inter face, not derived from the estimator. The first case is the regression: its chips run to
-   * 210.2px inside a 210px row, so the browser wraps them onto a second row, and a card sized for
-   * one row let the `effort` chip hang below its bottom edge.
+   * Figtree face, not derived from the estimator. The first case is the boundary: its chips run to
+   * 210.1px inside a 210px row, so the browser wraps them onto a second row, and a card sized for
+   * one row would let the `effort` chip hang below its bottom edge.
+   *
+   * They were remeasured when the page moved from Inter to Figtree. Figtree draws these label
+   * words narrower, so the combination that used to decide the boundary — `type: improvement`,
+   * `priority: P2`, `effort` — now ends at 203.4px and fits, and the cases below are the ones that
+   * land on the edge in the face the page actually ships.
    */
   it('agrees with the browser on the combinations that wrap by a fraction of a pixel', () => {
-    expect(chipRows(['type: improvement', 'priority: P2', 'effort'])).toBe(2)
+    expect(chipRows(['type: performance', 'priority: P1', 'effort: L'])).toBe(2)
+    expect(chipRows(['type: documentation', 'priority: P1', 'effort'])).toBe(2)
     expect(chipRows(['type: improvement', 'priority: P2', 'effort: S'])).toBe(2)
     expect(chipRows(['type: documentation', 'priority: P2', 'effort'])).toBe(2)
-    // Just inside the row, and must not lose the slack the case above needs.
+    // Just inside the row, and must not lose the slack the cases above need.
+    expect(chipRows(['type: improvement', 'priority: P2', 'effort'])).toBe(1)
     expect(chipRows(['type: refactor', 'priority: P3', 'effort: M'])).toBe(1)
     expect(chipRows(['type: feature', 'priority: P1', 'effort: XS'])).toBe(1)
     expect(chipRows(['type: bug', 'priority: P2', 'effort'])).toBe(1)
@@ -121,7 +128,7 @@ describe('chipRows and cardHeight', () => {
   })
 
   it('reserves a second row for the chips that overflow the first, so nothing hangs out', () => {
-    const overflowing = ['type: improvement', 'priority: P2', 'effort']
+    const overflowing = ['type: performance', 'priority: P1', 'effort: L']
     // A narrower row is what the failing card effectively had: the chips do not fit, so the height
     // has to pay for the row they wrap onto.
     expect(chipRows(overflowing, 209)).toBe(2)
@@ -135,9 +142,9 @@ describe('chipRows and cardHeight', () => {
     expect(chipRows(['type: 改善改善改善改善改善改善改善改善改善改善改善改善'])).toBe(1)
   })
 
-  it('reserves more for an emoji than for a glyph Inter itself draws', () => {
-    // Inter carries no emoji, so the browser falls back to a face that draws roughly square —
-    // wider than any advance captured off Inter, and wider than the accented latin the same
+  it('reserves more for an emoji than for a glyph Figtree itself draws', () => {
+    // Figtree carries no emoji, so the browser falls back to a face that draws roughly square —
+    // wider than any advance captured off Figtree, and wider than the accented latin the same
     // fallback is the right guess for. Measured against a narrow row so that difference is the
     // only thing deciding the wrap.
     expect(chipRows(['\u{1F41B}', '\u{1F41B}'], 52)).toBe(2)

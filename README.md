@@ -162,10 +162,10 @@ issue payload that proves the projection drops no field the client reads. A slug
 is refused rather than followed silently, so a fixture is never written under a name that no longer
 exists.
 
-Card heights are computed without a browser, so `src/interMetrics.ts` holds the label-chip character
-advances captured from the shipped Inter face by `scripts/capture-chip-metrics.mjs`. Regenerate it
-after upgrading `@fontsource-variable/inter` or changing the chip font size; a stale table makes
-cards a row too short and the chips hang out of them.
+Card heights are computed without a browser, so `src/chipMetrics.ts` holds the label-chip character
+advances captured from the shipped Figtree face by `scripts/capture-chip-metrics.mjs`. Regenerate it
+after upgrading `@fontsource/figtree` or changing the chip's font family, weight or size; a stale
+table makes cards a row too short and the chips hang out of them.
 
 <br />
 
