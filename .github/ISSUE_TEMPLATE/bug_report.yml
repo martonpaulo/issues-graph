@@ -1,0 +1,57 @@
+name: Bug report
+description: Report something in Issues Graph that does not work the way it should.
+title: "bug: "
+labels: ["type: bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This viewer only draws the native `blocked by` and sub-issue relationships GitHub already
+        tracks, so a missing edge is often a missing relationship rather than a drawing bug. Never
+        paste a GitHub token, or any other credential, into an issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The fastest thing you can give is a public `owner/repo` slug plus the issue numbers whose edges look wrong.
+      placeholder: |
+        1. Load martonpaulo/issues-graph…
+        2. Look at #12 and #15…
+        3. Observe…
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Firefox 141 on macOS 26
+    validations:
+      required: true
+
+  - type: dropdown
+    id: private-window
+    attributes:
+      label: Does it still happen in a private window?
+      description: A private window rules out an extension or stale stored state.
+      options:
+        - "Yes"
+        - "No"
+        - Not checked
+    validations:
+      required: true

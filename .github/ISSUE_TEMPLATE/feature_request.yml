@@ -1,0 +1,28 @@
+name: Feature request
+description: Propose a focused improvement to Issues Graph.
+title: "feat: "
+labels: ["type: feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What limitation are you running into?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: What should Issues Graph do instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: What do you do today instead?
+      description: The workaround you use now, even if it is doing without.
+    validations:
+      required: true
