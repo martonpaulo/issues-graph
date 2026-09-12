@@ -13,4 +13,4 @@ Closes #
 
 <!-- Replace this with what you ran and what it reported. -->
 
-- [ ] `npm run validate` passes (typecheck, lint, test, build)
+- [ ] `pnpm validate` passes (typecheck, lint, test, build)

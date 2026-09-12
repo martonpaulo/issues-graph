@@ -43,14 +43,14 @@ writes to GitHub, and a proposal that would change that is out of scope.
 One command, running everything CI runs, in order:
 
 ```bash
-npm ci
-npm run validate
+pnpm install --frozen-lockfile
+pnpm validate
 ```
 
 That is `typecheck`, `lint`, `test` and `build`. During iteration run the smallest relevant piece
-instead — `npm run lint`, `npm test`.
+instead — `pnpm lint`, `pnpm test`.
 
-`npm test` runs Vitest against the captured fixtures in `src/__fixtures__/`, so no network access and
+`pnpm test` runs Vitest against the captured fixtures in `src/__fixtures__/`, so no network access and
 no GitHub token are needed.
 
 ## Code of conduct

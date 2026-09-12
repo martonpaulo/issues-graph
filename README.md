@@ -28,13 +28,13 @@ edges: `blocked by` for the solid arrows, the sub-issue hierarchy for the dashed
 <br />
 
 ## 🌱 Quick Start
-Requires **Node.js 22 or newer** and npm.
+Requires **Node.js 22 or newer** and **pnpm 11 or newer**.
 
 ```bash
 git clone https://github.com/martonpaulo/issues-graph.git
 cd issues-graph
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
 [http://localhost:5173](http://localhost:5173)
@@ -48,15 +48,15 @@ No credential is needed to run the page or to read a repository: a GitHub token 
 ## 🛠 Commands
 | Command | What it does |
 | --- | --- |
-| `npm run validate` | Runs the full gate before a commit: `typecheck`, `lint`, `test`, `build`. |
-| `npm run dev` | Starts the Vite development server. |
-| `npm run build` | Builds production output into `dist/`. |
-| `npm run preview` | Serves the built `dist/` the way the deployed site is served. |
-| `npm run typecheck` | Type-checks the repository with `tsc --noEmit`. |
-| `npm run lint` | Runs Biome over the whole repository: lint rules, formatting and import order. |
-| `npm run format` | Applies what `npm run lint` reports and can fix safely. |
-| `npm test` | Runs Vitest against the captured API fixtures. |
-| `npm run social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg`. Mac only. |
+| `pnpm validate` | Runs the full gate before a commit: `typecheck`, `lint`, `test`, `build`. |
+| `pnpm dev` | Starts the Vite development server. |
+| `pnpm build` | Builds production output into `dist/`. |
+| `pnpm preview` | Serves the built `dist/` the way the deployed site is served. |
+| `pnpm typecheck` | Type-checks the repository with `tsc --noEmit`. |
+| `pnpm lint` | Runs Biome over the whole repository: lint rules, formatting and import order. |
+| `pnpm format` | Applies what `pnpm lint` reports and can fix safely. |
+| `pnpm test` | Runs Vitest against the captured API fixtures. |
+| `pnpm social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg`. Mac only. |
 
 ---
 

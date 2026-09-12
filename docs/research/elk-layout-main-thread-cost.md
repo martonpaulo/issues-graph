@@ -5,7 +5,7 @@ measurement rather than on the local test timings.
 
 ## Why the local numbers were not enough
 
-`npm test` lays the captured fixtures out in Node in 4–122 ms, which says how long the algorithm
+`pnpm test` lays the captured fixtures out in Node in 4–122 ms, which says how long the algorithm
 takes but nothing about what the *page* is doing meanwhile. The question the issue asks is whether
 layout blocks the browser's main thread long enough to matter, and only a browser can answer that.
 
