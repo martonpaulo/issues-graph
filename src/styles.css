@@ -98,7 +98,7 @@ body {
 }
 
 code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
 }
 
@@ -357,7 +357,7 @@ code {
 }
 
 .bar__slug {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 
   /* Every other hint is a phrase this project wrote, so 240px of centred text with the default
      word breaking fits it. This one carries a repository name: up to 140 characters GitHub allows,
@@ -727,7 +727,7 @@ code {
   align-items: baseline;
   gap: 5px;
   min-width: 0;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 16px;
   white-space: nowrap;
@@ -1097,7 +1097,7 @@ code {
 }
 
 .repoinput__option {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   font-size: 13px;
   padding: 6px 8px;
   border-radius: 7px;
