@@ -1,9 +1,9 @@
-import { copyFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
+import { copyFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-import react from '@vitejs/plugin-react'
-import type { Plugin } from 'vite'
-import { defineConfig } from 'vitest/config'
+import react from "@vitejs/plugin-react";
+import type { Plugin } from "vite";
+import { defineConfig } from "vitest/config";
 
 /**
  * GitHub Pages serves `404.html` for any path that does not match a file on disk, which is what
@@ -12,13 +12,16 @@ import { defineConfig } from 'vitest/config'
  */
 function pagesSpaFallback(): Plugin {
   return {
-    name: 'pages-spa-fallback',
-    apply: 'build',
+    name: "pages-spa-fallback",
+    apply: "build",
     closeBundle() {
-      const dist = new URL('./dist/', import.meta.url)
-      copyFileSync(fileURLToPath(new URL('index.html', dist)), fileURLToPath(new URL('404.html', dist)))
+      const dist = new URL("./dist/", import.meta.url);
+      copyFileSync(
+        fileURLToPath(new URL("index.html", dist)),
+        fileURLToPath(new URL("404.html", dist)),
+      );
     },
-  }
+  };
 }
 
 /**
@@ -30,22 +33,25 @@ function pagesSpaFallback(): Plugin {
  */
 function devServerWithoutCsp(): Plugin {
   return {
-    name: 'dev-server-without-csp',
-    apply: 'serve',
+    name: "dev-server-without-csp",
+    apply: "serve",
     transformIndexHtml(html) {
-      return html.replace(/\s*<meta http-equiv="Content-Security-Policy"[^>]*>/, '')
+      return html.replace(
+        /\s*<meta http-equiv="Content-Security-Policy"[^>]*>/,
+        "",
+      );
     },
-  }
+  };
 }
 
 export default defineConfig({
   // The site is served at the root of its own host (issues.martonpaulo.com), so asset URLs carry
   // no repository prefix.
-  base: '/',
+  base: "/",
   plugins: [react(), pagesSpaFallback(), devServerWithoutCsp()],
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+    environment: "node",
+    include: ["src/**/*.test.ts"],
     /**
      * ELK lays out the captured backlogs for real, which is seconds of genuine work — the largest
      * single test measures ~2s on its own. Vitest runs the files in parallel workers, so that test
@@ -56,4 +62,4 @@ export default defineConfig({
      */
     testTimeout: 30000,
   },
-})
+});

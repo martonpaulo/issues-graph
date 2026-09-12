@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import arbaroBlockedBy from './__fixtures__/arbaro.blocked-by.json'
-import arbaroIssues from './__fixtures__/arbaro.issues.json'
-import type { IssuePayload, RepositoryGraphData } from './github'
+import arbaroBlockedBy from "./__fixtures__/arbaro.blocked-by.json";
+import arbaroIssues from "./__fixtures__/arbaro.issues.json";
+import type { IssuePayload, RepositoryGraphData } from "./github";
 
 /**
  * The engine's lifecycle, which the real ELK cannot be made to fail on demand.
@@ -18,62 +18,67 @@ const elk = vi.hoisted(() => ({
   terminations: 0,
   failNext: false,
   failLayout: false,
-}))
+}));
 
-vi.mock('elkjs/lib/elk.bundled.js', () => {
+vi.mock("elkjs/lib/elk.bundled.js", () => {
   interface FakeNode {
-    id: string
-    width?: number
-    height?: number
-    x?: number
-    y?: number
-    children?: FakeNode[]
-    edges?: { id: string; sources: string[]; targets: string[] }[]
+    id: string;
+    width?: number;
+    height?: number;
+    x?: number;
+    y?: number;
+    children?: FakeNode[];
+    edges?: { id: string; sources: string[]; targets: string[] }[];
   }
 
   class FakeElk {
     constructor() {
-      elk.constructions += 1
+      elk.constructions += 1;
       if (elk.failNext) {
-        elk.failNext = false
+        elk.failNext = false;
         // The shape a failed chunk load actually takes in a browser.
-        throw new Error('Failed to fetch dynamically imported module')
+        throw new Error("Failed to fetch dynamically imported module");
       }
     }
 
     terminate(): void {
-      elk.terminations += 1
+      elk.terminations += 1;
     }
 
     layout(graph: FakeNode): Promise<FakeNode> {
-      elk.layouts += 1
+      elk.layouts += 1;
       if (elk.failLayout) {
         // What a worker that died after construction looks like from here: the layout rejects
         // rather than resolving, and the engine that produced it is no longer trustworthy.
-        return Promise.reject(new Error('The layout engine could not be loaded.'))
+        return Promise.reject(
+          new Error("The layout engine could not be loaded."),
+        );
       }
       // Positions are irrelevant here — this file is about the engine's lifecycle, and
       // `graph.test.ts` already holds every assertion about where cards land.
       return Promise.resolve({
         ...graph,
-        children: (graph.children ?? []).map((child, index) => ({ ...child, x: 0, y: index * 100 })),
+        children: (graph.children ?? []).map((child, index) => ({
+          ...child,
+          x: 0,
+          y: index * 100,
+        })),
         edges: [],
-      })
+      });
     }
   }
 
-  return { default: FakeElk }
-})
+  return { default: FakeElk };
+});
 
-const ARBARO = { owner: 'martonpaulo', repo: 'arbaro' }
+const ARBARO = { owner: "martonpaulo", repo: "arbaro" };
 
 function data(): RepositoryGraphData {
   const blockers = new Map(
-    Object.entries(arbaroBlockedBy as Record<string, IssuePayload[]>).map(([number, list]) => [
-      Number(number),
-      list,
-    ]),
-  )
+    Object.entries(arbaroBlockedBy as Record<string, IssuePayload[]>).map(
+      ([number, list]) => [Number(number), list],
+    ),
+  );
   return {
     issues: arbaroIssues as IssuePayload[],
     blockers,
@@ -84,7 +89,7 @@ function data(): RepositoryGraphData {
     requestCount: 1 + blockers.size,
     rateLimit: null,
     includedClosed: true,
-  }
+  };
 }
 
 /**
@@ -93,64 +98,67 @@ function data(): RepositoryGraphData {
  * test would ever call.
  */
 async function freshGraph() {
-  vi.resetModules()
-  elk.constructions = 0
-  elk.layouts = 0
-  elk.terminations = 0
-  elk.failNext = false
-  elk.failLayout = false
-  return import('./graph')
+  vi.resetModules();
+  elk.constructions = 0;
+  elk.layouts = 0;
+  elk.terminations = 0;
+  elk.failNext = false;
+  elk.failLayout = false;
+  return import("./graph");
 }
 
-describe('a failed layout engine can be retried', () => {
+describe("a failed layout engine can be retried", () => {
   beforeEach(() => {
-    elk.failNext = false
-  })
+    elk.failNext = false;
+  });
 
-  it('does not keep a rejected engine, so the next draw builds a new one', async () => {
-    const { buildGraph } = await freshGraph()
+  it("does not keep a rejected engine, so the next draw builds a new one", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failNext = true
+    elk.failNext = true;
     await expect(buildGraph(data(), ARBARO)).rejects.toThrow(
-      'Failed to fetch dynamically imported module',
-    )
+      "Failed to fetch dynamically imported module",
+    );
 
-    const graph = await buildGraph(data(), ARBARO)
+    const graph = await buildGraph(data(), ARBARO);
 
-    expect(graph.nodes.length).toBeGreaterThan(0)
-    expect(elk.constructions).toBe(2)
-  })
+    expect(graph.nodes.length).toBeGreaterThan(0);
+    expect(elk.constructions).toBe(2);
+  });
 
-  it('reuses the engine it kept, so a retry costs one initialization and no more', async () => {
-    const { buildGraph } = await freshGraph()
+  it("reuses the engine it kept, so a retry costs one initialization and no more", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failNext = true
-    await expect(buildGraph(data(), ARBARO)).rejects.toThrow()
+    elk.failNext = true;
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow();
 
-    await buildGraph(data(), ARBARO)
-    await buildGraph(data(), ARBARO)
+    await buildGraph(data(), ARBARO);
+    await buildGraph(data(), ARBARO);
 
     // One failure, one replacement, and nothing built for the draw that reused it.
-    expect(elk.constructions).toBe(2)
-    expect(elk.layouts).toBe(2)
-  })
+    expect(elk.constructions).toBe(2);
+    expect(elk.layouts).toBe(2);
+  });
 
-  it('rejects every draw that shares the failing attempt, and only those', async () => {
-    const { buildGraph } = await freshGraph()
+  it("rejects every draw that shares the failing attempt, and only those", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failNext = true
+    elk.failNext = true;
     // Started together, so both hold the same in-flight engine Promise: both must fail, and the
     // one started afterwards must not.
-    const [first, second] = await Promise.allSettled([buildGraph(data(), ARBARO), buildGraph(data(), ARBARO)])
+    const [first, second] = await Promise.allSettled([
+      buildGraph(data(), ARBARO),
+      buildGraph(data(), ARBARO),
+    ]);
 
-    expect(first.status).toBe('rejected')
-    expect(second.status).toBe('rejected')
-    expect(elk.constructions).toBe(1)
+    expect(first.status).toBe("rejected");
+    expect(second.status).toBe("rejected");
+    expect(elk.constructions).toBe(1);
 
-    await expect(buildGraph(data(), ARBARO)).resolves.toBeTruthy()
-    expect(elk.constructions).toBe(2)
-  })
-})
+    await expect(buildGraph(data(), ARBARO)).resolves.toBeTruthy();
+    expect(elk.constructions).toBe(2);
+  });
+});
 
 /**
  * The worker's own failure mode. `new Worker(url)` succeeds whatever the URL says, and `elk-api`
@@ -159,89 +167,91 @@ describe('a failed layout engine can be retried', () => {
  * path. `layoutWorker.ts` turns that death into a rejection; these cover what `graph.ts` must then
  * do with the engine that produced it.
  */
-describe('discarding the engine detaches it before anything awaits', () => {
-  it('does not hand a discarded engine to a draw that starts in the same turn', async () => {
-    const { buildGraph, discardLayoutEngine } = await freshGraph()
+describe("discarding the engine detaches it before anything awaits", () => {
+  it("does not hand a discarded engine to a draw that starts in the same turn", async () => {
+    const { buildGraph, discardLayoutEngine } = await freshGraph();
 
-    await buildGraph(data(), ARBARO)
-    expect(elk.constructions).toBe(1)
+    await buildGraph(data(), ARBARO);
+    expect(elk.constructions).toBe(1);
 
     // A close and an immediate remount: no await between them, which is the window in which the
     // memo used to still be holding the engine it was about to terminate.
-    discardLayoutEngine()
-    const redrawn = await buildGraph(data(), ARBARO)
+    discardLayoutEngine();
+    const redrawn = await buildGraph(data(), ARBARO);
 
-    expect(redrawn.nodes.length).toBeGreaterThan(0)
-    expect(elk.constructions).toBe(2)
-  })
+    expect(redrawn.nodes.length).toBeGreaterThan(0);
+    expect(elk.constructions).toBe(2);
+  });
 
-  it('terminates the engine it detached', async () => {
-    const { buildGraph, discardLayoutEngine } = await freshGraph()
+  it("terminates the engine it detached", async () => {
+    const { buildGraph, discardLayoutEngine } = await freshGraph();
 
-    await buildGraph(data(), ARBARO)
-    discardLayoutEngine()
-    await Promise.resolve()
-    await Promise.resolve()
+    await buildGraph(data(), ARBARO);
+    discardLayoutEngine();
+    await Promise.resolve();
+    await Promise.resolve();
 
-    expect(elk.terminations).toBe(1)
-  })
+    expect(elk.terminations).toBe(1);
+  });
 
-  it('does nothing when no engine has been built', async () => {
-    const { discardLayoutEngine } = await freshGraph()
+  it("does nothing when no engine has been built", async () => {
+    const { discardLayoutEngine } = await freshGraph();
 
-    expect(() => discardLayoutEngine()).not.toThrow()
-    expect(elk.terminations).toBe(0)
-  })
-})
+    expect(() => discardLayoutEngine()).not.toThrow();
+    expect(elk.terminations).toBe(0);
+  });
+});
 
-describe('an engine whose layout fails is not kept', () => {
-  it('reports the failure rather than resolving', async () => {
-    const { buildGraph } = await freshGraph()
+describe("an engine whose layout fails is not kept", () => {
+  it("reports the failure rather than resolving", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failLayout = true
-    await expect(buildGraph(data(), ARBARO)).rejects.toThrow('The layout engine could not be loaded.')
-  })
+    elk.failLayout = true;
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow(
+      "The layout engine could not be loaded.",
+    );
+  });
 
-  it('builds a new engine for the retry instead of reusing the dead one', async () => {
-    const { buildGraph } = await freshGraph()
+  it("builds a new engine for the retry instead of reusing the dead one", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failLayout = true
-    await expect(buildGraph(data(), ARBARO)).rejects.toThrow()
+    elk.failLayout = true;
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow();
 
-    elk.failLayout = false
-    const graph = await buildGraph(data(), ARBARO)
+    elk.failLayout = false;
+    const graph = await buildGraph(data(), ARBARO);
 
-    expect(graph.nodes.length).toBeGreaterThan(0)
+    expect(graph.nodes.length).toBeGreaterThan(0);
     // The retry is only a retry if it is not handed the same corpse.
-    expect(elk.constructions).toBe(2)
-  })
+    expect(elk.constructions).toBe(2);
+  });
 
-  it('terminates the failed engine, so a dead worker is not left running', async () => {
-    const { buildGraph } = await freshGraph()
+  it("terminates the failed engine, so a dead worker is not left running", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failLayout = true
-    await expect(buildGraph(data(), ARBARO)).rejects.toThrow()
+    elk.failLayout = true;
+    await expect(buildGraph(data(), ARBARO)).rejects.toThrow();
     // The discard resolves the memoized engine before terminating it.
-    await Promise.resolve()
-    await Promise.resolve()
+    await Promise.resolve();
+    await Promise.resolve();
 
-    expect(elk.terminations).toBe(1)
-  })
+    expect(elk.terminations).toBe(1);
+  });
 
-  it('keeps a healthy engine that replaced the failed one', async () => {
-    const { buildGraph } = await freshGraph()
+  it("keeps a healthy engine that replaced the failed one", async () => {
+    const { buildGraph } = await freshGraph();
 
-    elk.failLayout = true
-    const failing = buildGraph(data(), ARBARO)
-    await expect(failing).rejects.toThrow()
+    elk.failLayout = true;
+    const failing = buildGraph(data(), ARBARO);
+    await expect(failing).rejects.toThrow();
 
-    elk.failLayout = false
-    await buildGraph(data(), ARBARO)
-    const before = elk.constructions
+    elk.failLayout = false;
+    await buildGraph(data(), ARBARO);
+    const before = elk.constructions;
 
     // A third draw reuses the replacement: the earlier failure took its own engine down and
     // stopped there.
-    await buildGraph(data(), ARBARO)
-    expect(elk.constructions).toBe(before)
-  })
-})
+    await buildGraph(data(), ARBARO);
+    expect(elk.constructions).toBe(before);
+  });
+});

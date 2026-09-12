@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * The worker adapter itself, which the rest of the suite cannot reach.
@@ -15,112 +15,118 @@ const state = vi.hoisted(() => ({
   listeners: new Map<string, (event: unknown) => void>(),
   terminations: 0,
   workers: 0,
-}))
+}));
 
-vi.mock('elkjs/lib/elk-worker.min.js?url', () => ({ default: 'blob:elk-worker' }))
+vi.mock("elkjs/lib/elk-worker.min.js?url", () => ({
+  default: "blob:elk-worker",
+}));
 
-vi.mock('elkjs/lib/elk-api.js', () => {
+vi.mock("elkjs/lib/elk-api.js", () => {
   class FakeELK {
     // A layout that never settles: exactly what a dead or terminated worker leaves behind, since
     // elk-api only ever resolves on a reply that is no longer coming.
     layout(): Promise<unknown> {
-      return new Promise(() => {})
+      return new Promise(() => {});
     }
 
     terminateWorker(): void {
-      state.terminations += 1
+      state.terminations += 1;
     }
   }
 
-  return { default: FakeELK }
-})
+  return { default: FakeELK };
+});
 
 class FakeWorker {
   constructor() {
-    state.workers += 1
+    state.workers += 1;
   }
 
   addEventListener(type: string, handler: (event: unknown) => void): void {
-    state.listeners.set(type, handler)
+    state.listeners.set(type, handler);
   }
 
   terminate(): void {}
 }
 
 beforeEach(() => {
-  state.listeners.clear()
-  state.terminations = 0
-  state.workers = 0
-  vi.stubGlobal('Worker', FakeWorker)
-})
+  state.listeners.clear();
+  state.terminations = 0;
+  state.workers = 0;
+  vi.stubGlobal("Worker", FakeWorker);
+});
 
 afterEach(() => {
-  vi.unstubAllGlobals()
-})
+  vi.unstubAllGlobals();
+});
 
 async function engine() {
-  const { workerEngine } = await import('./layoutWorker')
-  return workerEngine()
+  const { workerEngine } = await import("./layoutWorker");
+  return workerEngine();
 }
 
-describe('a worker that dies takes its layout down with it', () => {
-  it('rejects the layout when the worker reports an error', async () => {
-    const elk = await engine()
-    const laying = elk.layout({ id: 'root' })
+describe("a worker that dies takes its layout down with it", () => {
+  it("rejects the layout when the worker reports an error", async () => {
+    const elk = await engine();
+    const laying = elk.layout({ id: "root" });
 
-    state.listeners.get('error')?.({ message: 'Failed to load script' })
+    state.listeners.get("error")?.({ message: "Failed to load script" });
 
-    await expect(laying).rejects.toThrow('Failed to load script')
-  })
+    await expect(laying).rejects.toThrow("Failed to load script");
+  });
 
-  it('names the failure when the error event carries no message', async () => {
-    const elk = await engine()
-    const laying = elk.layout({ id: 'root' })
+  it("names the failure when the error event carries no message", async () => {
+    const elk = await engine();
+    const laying = elk.layout({ id: "root" });
 
     // A load failure and a cross-origin error both arrive without one.
-    state.listeners.get('error')?.({ message: '' })
+    state.listeners.get("error")?.({ message: "" });
 
-    await expect(laying).rejects.toThrow('The layout engine could not be loaded.')
-  })
+    await expect(laying).rejects.toThrow(
+      "The layout engine could not be loaded.",
+    );
+  });
 
-  it('rejects the layout when a reply cannot be read', async () => {
-    const elk = await engine()
-    const laying = elk.layout({ id: 'root' })
+  it("rejects the layout when a reply cannot be read", async () => {
+    const elk = await engine();
+    const laying = elk.layout({ id: "root" });
 
-    state.listeners.get('messageerror')?.({})
+    state.listeners.get("messageerror")?.({});
 
-    await expect(laying).rejects.toThrow('could not be read')
-  })
-})
+    await expect(laying).rejects.toThrow("could not be read");
+  });
+});
 
-describe('terminating settles the work it stops', () => {
+describe("terminating settles the work it stops", () => {
   /**
    * The leak this covers: `terminate()` fires no `error` event and `elk-api` keeps the pending
    * layout's resolver, so a draw abandoned mid-layout used to leave a promise that could never
    * settle — holding the graph it was handed, once per abandoned draw.
    */
-  it('rejects a layout that was still running', async () => {
-    const elk = await engine()
-    const laying = elk.layout({ id: 'root' })
+  it("rejects a layout that was still running", async () => {
+    const elk = await engine();
+    const laying = elk.layout({ id: "root" });
 
-    elk.terminate()
+    elk.terminate();
 
-    await expect(laying).rejects.toThrow('The layout was stopped.')
-    expect(state.terminations).toBe(1)
-  })
+    await expect(laying).rejects.toThrow("The layout was stopped.");
+    expect(state.terminations).toBe(1);
+  });
 
-  it('still stops the thread', async () => {
-    const elk = await engine()
+  it("still stops the thread", async () => {
+    const elk = await engine();
 
-    elk.terminate()
+    elk.terminate();
 
-    expect(state.terminations).toBe(1)
-  })
+    expect(state.terminations).toBe(1);
+  });
 
-  it('rejects a layout started after termination rather than leaving it pending', async () => {
-    const elk = await engine()
-    elk.terminate()
+  it("rejects a layout started after termination rather than leaving it pending", async () => {
+    const elk = await engine();
+    elk.terminate();
 
-    await expect(elk.layout({ id: 'root' })).rejects.toThrow('The layout was stopped.')
-  })
-})
+    await expect(elk.layout({ id: "root" })).rejects.toThrow(
+      "The layout was stopped.",
+    );
+  });
+});

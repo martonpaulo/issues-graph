@@ -1,5 +1,5 @@
-import type { LabelPayload } from './labels'
-import type { RepoTarget } from './route'
+import type { LabelPayload } from "./labels";
+import type { RepoTarget } from "./route";
 
 /**
  * The only module that talks to GitHub.
@@ -14,7 +14,7 @@ import type { RepoTarget } from './route'
  * https://docs.github.com/en/rest/issues/issue-dependencies
  */
 
-const API_ROOT = 'https://api.github.com'
+const API_ROOT = "https://api.github.com";
 
 /**
  * Unauthenticated REST requests share one budget per IP address. Used only as the figure to quote
@@ -22,7 +22,7 @@ const API_ROOT = 'https://api.github.com'
  * or from the headers of a real response.
  * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
  */
-export const UNAUTHENTICATED_HOURLY_LIMIT = 60
+export const UNAUTHENTICATED_HOURLY_LIMIT = 60;
 
 /**
  * The same budget for a request carrying a token, which belongs to the viewer rather than to an
@@ -30,7 +30,7 @@ export const UNAUTHENTICATED_HOURLY_LIMIT = 60
  * numbers could not be read.
  * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
  */
-export const AUTHENTICATED_HOURLY_LIMIT = 5000
+export const AUTHENTICATED_HOURLY_LIMIT = 5000;
 
 /**
  * How many dependency requests are in flight at once.
@@ -42,7 +42,7 @@ export const AUTHENTICATED_HOURLY_LIMIT = 5000
  * have in the air before the first exhausted-budget response stops the rest.
  * https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api
  */
-export const DEPENDENCY_CONCURRENCY = 6
+export const DEPENDENCY_CONCURRENCY = 6;
 
 /**
  * How many blockers one dependency request asks for.
@@ -53,120 +53,120 @@ export const DEPENDENCY_CONCURRENCY = 6
  * request while the loop below stays correct for the rest.
  * https://docs.github.com/en/rest/issues/issue-dependencies
  */
-export const DEPENDENCY_PAGE_SIZE = 100
+export const DEPENDENCY_PAGE_SIZE = 100;
 
 export interface RateLimitStatus {
-  limit: number
-  remaining: number
-  reset: Date | null
+  limit: number;
+  remaining: number;
+  reset: Date | null;
 }
 
 export interface DependencySummaryPayload {
   /** Blockers that are still open. This is what "blocked" means. */
-  blocked_by: number
+  blocked_by: number;
   /** Blockers open and closed, so a fully unblocked issue can still have a non-zero total. */
-  total_blocked_by: number
-  blocking: number
-  total_blocking: number
+  total_blocked_by: number;
+  blocking: number;
+  total_blocking: number;
 }
 
 /** GitHub's own count of an issue's native sub-issues. Absent on an issue that has none. */
 export interface SubIssuesSummaryPayload {
-  total: number
-  completed: number
-  percent_completed: number
+  total: number;
+  completed: number;
+  percent_completed: number;
 }
 
 /** Only the login is read; the rest of GitHub's user object is not consumed anywhere. */
 export interface AssigneePayload {
-  login: string
+  login: string;
 }
 
 export interface IssuePayload {
-  number: number
-  title: string
-  state: string
-  state_reason: string | null
-  html_url: string
-  repository_url: string
-  labels: LabelPayload[]
-  issue_dependencies_summary?: DependencySummaryPayload
+  number: number;
+  title: string;
+  state: string;
+  state_reason: string | null;
+  html_url: string;
+  repository_url: string;
+  labels: LabelPayload[];
+  issue_dependencies_summary?: DependencySummaryPayload;
   /**
    * Who the issue is queued to. Optional on this type because a cache or a snapshot written
    * before assignees were read carries no such field, and an absent list is not an empty one:
    * the state derivation treats it as unknown rather than as unassigned.
    */
-  assignees?: AssigneePayload[]
+  assignees?: AssigneePayload[];
   /**
    * Native sub-issue progress, on the parent. Rides on the issue list response that already
    * produced this payload, so hierarchy costs no request of its own.
    * https://docs.github.com/en/rest/issues/sub-issues
    */
-  sub_issues_summary?: SubIssuesSummaryPayload
+  sub_issues_summary?: SubIssuesSummaryPayload;
   /**
    * The parent's API URL, on the child. The hierarchy is therefore readable from the same list
    * as the nodes, with no per-parent request; a parent in another repository is named here and
    * simply is not a node, for the same reason outbound `blocking` edges are not fetched.
    */
-  parent_issue_url?: string | null
+  parent_issue_url?: string | null;
   /** Present only on pull requests, which the issues endpoint returns alongside issues. */
-  pull_request?: unknown
+  pull_request?: unknown;
 }
 
 export type LoadFailure =
-  | { kind: 'not-found' }
-  | { kind: 'rate-limited'; reset: Date | null }
-  | { kind: 'bad-credentials' }
-  | { kind: 'network'; message: string }
-  | { kind: 'unexpected'; status: number; message: string }
-  | { kind: 'cancelled' }
+  | { kind: "not-found" }
+  | { kind: "rate-limited"; reset: Date | null }
+  | { kind: "bad-credentials" }
+  | { kind: "network"; message: string }
+  | { kind: "unexpected"; status: number; message: string }
+  | { kind: "cancelled" };
 
 export interface UnresolvedDependency {
-  number: number
-  reason: string
+  number: number;
+  reason: string;
 }
 
 export interface RepositoryGraphData {
-  issues: IssuePayload[]
+  issues: IssuePayload[];
   /** Issue number to the issues blocking it. Absent means "no open blockers to fetch". */
-  blockers: Map<number, IssuePayload[]>
+  blockers: Map<number, IssuePayload[]>;
   /** False when a dependency request actually failed, so the graph must not present itself as whole. */
-  complete: boolean
-  unresolved: UnresolvedDependency[]
-  rateLimited: boolean
-  rateLimitReset: Date | null
-  requestCount: number
+  complete: boolean;
+  unresolved: UnresolvedDependency[];
+  rateLimited: boolean;
+  rateLimitReset: Date | null;
+  requestCount: number;
   /** The budget as GitHub reported it on the last response, so the canvas can show what is left. */
-  rateLimit: RateLimitStatus | null
+  rateLimit: RateLimitStatus | null;
   /** True when the dependency requests covered closed blockers as well as open ones. */
-  includedClosed: boolean
+  includedClosed: boolean;
 }
 
 export type LoadResult =
   | { ok: true; data: RepositoryGraphData }
-  | { ok: false; failure: LoadFailure }
+  | { ok: false; failure: LoadFailure };
 
 export interface LoadProgress {
-  done: number
-  total: number
+  done: number;
+  total: number;
 }
 
 export interface LoadOptions {
-  fetchImpl?: typeof fetch
+  fetchImpl?: typeof fetch;
   /**
    * The viewer's own GitHub token. Present means every request this call makes is authenticated
    * and draws on their 5000/hour budget; absent means the request is exactly what it was before
    * tokens existed.
    */
-  token?: string
-  signal?: AbortSignal
-  onProgress?: (progress: LoadProgress) => void
+  token?: string;
+  signal?: AbortSignal;
+  onProgress?: (progress: LoadProgress) => void;
   /**
    * Widens the dependency phase to every issue that has ever been blocked, which is what it takes
    * to draw closed blockers. It costs more requests, so it follows the viewer's "show closed"
    * switch rather than being on by default.
    */
-  includeClosed?: boolean
+  includeClosed?: boolean;
   /**
    * Asked once, after the issue list is in and before a single dependency request is sent, with
    * the exact number of requests that phase will cost. Returning false abandons the load.
@@ -174,7 +174,7 @@ export interface LoadOptions {
    * The budget is small and shared per IP address, so spending it is the user's decision to make
    * with a real number in front of them rather than a guess made before anything was listed.
    */
-  confirmDependencies?: (cost: number) => boolean | Promise<boolean>
+  confirmDependencies?: (cost: number) => boolean | Promise<boolean>;
 }
 
 /**
@@ -183,23 +183,30 @@ export interface LoadOptions {
  * https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api
  */
 function headersFor(options: LoadOptions): HeadersInit {
-  const token = options.token?.trim()
+  const token = options.token?.trim();
   return token
-    ? { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}` }
-    : { Accept: 'application/vnd.github+json' }
+    ? {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${token}`,
+      }
+    : { Accept: "application/vnd.github+json" };
 }
 
 function parseReset(raw: string | null): Date | null {
-  if (!raw) return null
-  const seconds = Number(raw)
-  return Number.isFinite(seconds) ? new Date(seconds * 1000) : null
+  if (!raw) return null;
+  const seconds = Number(raw);
+  return Number.isFinite(seconds) ? new Date(seconds * 1000) : null;
 }
 
 function statusFrom(response: Response): RateLimitStatus | null {
-  const limit = Number(response.headers.get('x-ratelimit-limit'))
-  const remaining = Number(response.headers.get('x-ratelimit-remaining'))
-  if (!Number.isFinite(limit) || !Number.isFinite(remaining)) return null
-  return { limit, remaining, reset: parseReset(response.headers.get('x-ratelimit-reset')) }
+  const limit = Number(response.headers.get("x-ratelimit-limit"));
+  const remaining = Number(response.headers.get("x-ratelimit-remaining"));
+  if (!Number.isFinite(limit) || !Number.isFinite(remaining)) return null;
+  return {
+    limit,
+    remaining,
+    reset: parseReset(response.headers.get("x-ratelimit-reset")),
+  };
 }
 
 /**
@@ -208,26 +215,32 @@ function statusFrom(response: Response): RateLimitStatus | null {
  * https://docs.github.com/en/rest/rate-limit/rate-limit — "Accessing this endpoint does not count
  * against your REST API rate limit." That is what makes it usable as a pre-flight check.
  */
-export async function readRateLimit(options: LoadOptions = {}): Promise<RateLimitStatus | null> {
-  const doFetch = options.fetchImpl ?? fetch
+export async function readRateLimit(
+  options: LoadOptions = {},
+): Promise<RateLimitStatus | null> {
+  const doFetch = options.fetchImpl ?? fetch;
   try {
     const response = await doFetch(`${API_ROOT}/rate_limit`, {
       signal: options.signal,
       headers: headersFor(options),
-    })
-    if (!response.ok) return null
+    });
+    if (!response.ok) return null;
     const body = (await response.json()) as {
-      resources?: { core?: { limit?: number; remaining?: number; reset?: number } }
-    }
-    const core = body.resources?.core
-    if (typeof core?.limit !== 'number' || typeof core.remaining !== 'number') return null
+      resources?: {
+        core?: { limit?: number; remaining?: number; reset?: number };
+      };
+    };
+    const core = body.resources?.core;
+    if (typeof core?.limit !== "number" || typeof core.remaining !== "number")
+      return null;
     return {
       limit: core.limit,
       remaining: core.remaining,
-      reset: typeof core.reset === 'number' ? new Date(core.reset * 1000) : null,
-    }
+      reset:
+        typeof core.reset === "number" ? new Date(core.reset * 1000) : null,
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -236,76 +249,85 @@ export async function readRateLimit(options: LoadOptions = {}): Promise<RateLimi
  * alone is not enough: a 403 with budget left means something else was refused.
  */
 function isRateLimited(response: Response): boolean {
-  if (response.status !== 403 && response.status !== 429) return false
-  return response.headers.get('x-ratelimit-remaining') === '0'
+  if (response.status !== 403 && response.status !== 429) return false;
+  return response.headers.get("x-ratelimit-remaining") === "0";
 }
 
 /** Reads the `rel="next"` target out of a Link header, which is how the REST API paginates. */
 export function nextPageUrl(linkHeader: string | null): string | null {
-  if (!linkHeader) return null
-  for (const part of linkHeader.split(',')) {
-    const match = /<([^>]+)>\s*;\s*rel="next"/.exec(part.trim())
-    if (match) return match[1]
+  if (!linkHeader) return null;
+  for (const part of linkHeader.split(",")) {
+    const match = /<([^>]+)>\s*;\s*rel="next"/.exec(part.trim());
+    if (match) return match[1];
   }
-  return null
+  return null;
 }
 
 class RequestFailure extends Error {
   constructor(readonly failure: LoadFailure) {
-    super(failure.kind)
-    this.name = 'RequestFailure'
+    super(failure.kind);
+    this.name = "RequestFailure";
   }
 }
 
 interface RequestCounter {
-  requests: number
-  status: RateLimitStatus | null
+  requests: number;
+  status: RateLimitStatus | null;
 }
 
 /**
  * The single place a GitHub response is classified. Callers see either a usable Response or a
  * RequestFailure carrying one of the states the UI knows how to show.
  */
-async function request(url: string, options: LoadOptions, count: RequestCounter): Promise<Response> {
-  const doFetch = options.fetchImpl ?? fetch
-  let response: Response
+async function request(
+  url: string,
+  options: LoadOptions,
+  count: RequestCounter,
+): Promise<Response> {
+  const doFetch = options.fetchImpl ?? fetch;
+  let response: Response;
   try {
     response = await doFetch(url, {
       signal: options.signal,
       headers: headersFor(options),
-    })
+    });
   } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') throw error
-    count.requests += 1
+    if (error instanceof DOMException && error.name === "AbortError")
+      throw error;
+    count.requests += 1;
     throw new RequestFailure({
-      kind: 'network',
-      message: error instanceof Error ? error.message : 'The request could not be sent.',
-    })
+      kind: "network",
+      message:
+        error instanceof Error
+          ? error.message
+          : "The request could not be sent.",
+    });
   }
-  count.requests += 1
-  count.status = statusFrom(response) ?? count.status
+  count.requests += 1;
+  count.status = statusFrom(response) ?? count.status;
 
   if (isRateLimited(response)) {
     throw new RequestFailure({
-      kind: 'rate-limited',
-      reset: parseReset(response.headers.get('x-ratelimit-reset')),
-    })
+      kind: "rate-limited",
+      reset: parseReset(response.headers.get("x-ratelimit-reset")),
+    });
   }
   // A token GitHub refuses is the viewer's to fix, and saying so is the only way they can. It has
   // to be separated from the generic failure below, which tells them nothing actionable.
-  if (response.status === 401) throw new RequestFailure({ kind: 'bad-credentials' })
-  if (response.status === 404) throw new RequestFailure({ kind: 'not-found' })
+  if (response.status === 401)
+    throw new RequestFailure({ kind: "bad-credentials" });
+  if (response.status === 404) throw new RequestFailure({ kind: "not-found" });
   if (!response.ok) {
     throw new RequestFailure({
-      kind: 'unexpected',
+      kind: "unexpected",
       status: response.status,
       // No trailing period: this sentence is composed into longer copy — the stage notice and the
       // per-issue list of unresolved blockers — which supplies its own punctuation.
       message: `GitHub returned error ${response.status}`,
-    })
+    });
   }
 
-  return response
+  return response;
 }
 
 /**
@@ -323,20 +345,20 @@ async function listIssues(
   options: LoadOptions,
   count: RequestCounter,
 ): Promise<IssuePayload[]> {
-  const issues: IssuePayload[] = []
+  const issues: IssuePayload[] = [];
   let url: string | null =
     `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
-    `/issues?per_page=100&state=open`
+    "/issues?per_page=100&state=open";
 
   while (url) {
-    const response = await request(url, options, count)
-    const page = (await response.json()) as IssuePayload[]
+    const response = await request(url, options, count);
+    const page = (await response.json()) as IssuePayload[];
     // The issues endpoint returns pull requests too; only a pull request carries this key.
-    issues.push(...page.filter((item) => item.pull_request === undefined))
-    url = nextPageUrl(response.headers.get('link'))
+    issues.push(...page.filter((item) => item.pull_request === undefined));
+    url = nextPageUrl(response.headers.get("link"));
   }
 
-  return issues
+  return issues;
 }
 
 /**
@@ -351,8 +373,10 @@ export function issuesNeedingBlockers(
   issues: IssuePayload[],
   includeClosed = false,
 ): IssuePayload[] {
-  const key = includeClosed ? 'total_blocked_by' : 'blocked_by'
-  return issues.filter((issue) => (issue.issue_dependencies_summary?.[key] ?? 0) > 0)
+  const key = includeClosed ? "total_blocked_by" : "blocked_by";
+  return issues.filter(
+    (issue) => (issue.issue_dependencies_summary?.[key] ?? 0) > 0,
+  );
 }
 
 /**
@@ -367,17 +391,20 @@ export function issuesNeedingBlockers(
  * they can legitimately disagree — a blocker in a repository this reader cannot see is counted and
  * not listed — so the quote must never promise fewer requests than the loop will send.
  */
-export function dependencyRequestCost(issues: IssuePayload[], includeClosed = false): number {
+export function dependencyRequestCost(
+  issues: IssuePayload[],
+  includeClosed = false,
+): number {
   return issuesNeedingBlockers(issues, includeClosed)
     .map((issue) => plannedPages(issue, includeClosed))
-    .reduce((total, pages) => total + pages, 0)
+    .reduce((total, pages) => total + pages, 0);
 }
 
 /** The pages `dependencyRequestCost` quotes for one issue, kept per issue for progress reporting. */
 function plannedPages(issue: IssuePayload, includeClosed: boolean): number {
-  const key = includeClosed ? 'total_blocked_by' : 'blocked_by'
-  const count = issue.issue_dependencies_summary?.[key] ?? 0
-  return Math.max(1, Math.ceil(count / DEPENDENCY_PAGE_SIZE))
+  const key = includeClosed ? "total_blocked_by" : "blocked_by";
+  const count = issue.issue_dependencies_summary?.[key] ?? 0;
+  return Math.max(1, Math.ceil(count / DEPENDENCY_PAGE_SIZE));
 }
 
 /**
@@ -402,22 +429,22 @@ async function fetchBlockedBy(
   approvedPages: number,
   onPage: () => void,
 ): Promise<{ blockers: IssuePayload[]; exhausted: boolean }> {
-  const blockers: IssuePayload[] = []
-  let spent = 0
+  const blockers: IssuePayload[] = [];
+  let spent = 0;
   let url: string | null =
     `${API_ROOT}/repos/${encodeURIComponent(target.owner)}/${encodeURIComponent(target.repo)}` +
-    `/issues/${issueNumber}/dependencies/blocked_by?per_page=${DEPENDENCY_PAGE_SIZE}`
+    `/issues/${issueNumber}/dependencies/blocked_by?per_page=${DEPENDENCY_PAGE_SIZE}`;
 
   while (url) {
-    if (spent === approvedPages) return { blockers, exhausted: true }
-    const response = await request(url, options, count)
-    spent += 1
-    blockers.push(...((await response.json()) as IssuePayload[]))
-    onPage()
-    url = nextPageUrl(response.headers.get('link'))
+    if (spent === approvedPages) return { blockers, exhausted: true };
+    const response = await request(url, options, count);
+    spent += 1;
+    blockers.push(...((await response.json()) as IssuePayload[]));
+    onPage();
+    url = nextPageUrl(response.headers.get("link"));
   }
 
-  return { blockers, exhausted: false }
+  return { blockers, exhausted: false };
 }
 
 /**
@@ -430,66 +457,71 @@ export async function loadRepositoryGraph(
   target: RepoTarget,
   options: LoadOptions = {},
 ): Promise<LoadResult> {
-  const count: RequestCounter = { requests: 0, status: null }
+  const count: RequestCounter = { requests: 0, status: null };
 
-  let issues: IssuePayload[]
+  let issues: IssuePayload[];
   try {
-    issues = await listIssues(target, options, count)
+    issues = await listIssues(target, options, count);
   } catch (error) {
-    if (error instanceof RequestFailure) return { ok: false, failure: error.failure }
-    throw error
+    if (error instanceof RequestFailure)
+      return { ok: false, failure: error.failure };
+    throw error;
   }
 
-  const includeClosed = options.includeClosed === true
-  const needBlockers = issuesNeedingBlockers(issues, includeClosed)
+  const includeClosed = options.includeClosed === true;
+  const needBlockers = issuesNeedingBlockers(issues, includeClosed);
   // Quoted, spent and reported in the same unit: requests, not issues.
-  const planned = needBlockers.map((issue) => plannedPages(issue, includeClosed))
-  const plannedTotal = dependencyRequestCost(issues, includeClosed)
+  const planned = needBlockers.map((issue) =>
+    plannedPages(issue, includeClosed),
+  );
+  const plannedTotal = dependencyRequestCost(issues, includeClosed);
 
   if (needBlockers.length > 0 && options.confirmDependencies) {
-    const approved = await options.confirmDependencies(plannedTotal)
-    if (!approved) return { ok: false, failure: { kind: 'cancelled' } }
+    const approved = await options.confirmDependencies(plannedTotal);
+    if (!approved) return { ok: false, failure: { kind: "cancelled" } };
   }
 
-  const blockers = new Map<number, IssuePayload[]>()
-  const unresolved: UnresolvedDependency[] = []
-  let rateLimited = false
-  let rateLimitReset: Date | null = null
+  const blockers = new Map<number, IssuePayload[]>();
+  const unresolved: UnresolvedDependency[] = [];
+  let rateLimited = false;
+  let rateLimitReset: Date | null = null;
 
   // Progress counts pages, since that is what the viewer approved and what the budget is spent in.
   // Held per issue so it stays monotone under the parallel workers, and so an issue that finished
   // in fewer pages than quoted still contributes everything it was quoted for.
-  const pagesDone: number[] = needBlockers.map(() => 0)
-  let reported = -1
+  const pagesDone: number[] = needBlockers.map(() => 0);
+  let reported = -1;
   const reportProgress = () => {
-    const done = pagesDone.reduce((total, pages) => total + pages, 0)
+    const done = pagesDone.reduce((total, pages) => total + pages, 0);
     // Reconciling a finished issue to its quoted page count usually changes nothing; saying so
     // again would only make the caller re-render for an unchanged number.
-    if (done === reported) return
-    reported = done
+    if (done === reported) return;
+    reported = done;
     // The quote is a ceiling, not an estimate, so `done` can never exceed it.
-    options.onProgress?.({ done, total: plannedTotal })
-  }
+    options.onProgress?.({ done, total: plannedTotal });
+  };
 
-  reportProgress()
+  reportProgress();
 
   // Kept per issue rather than appended on completion, so the report stays in issue order however
   // the parallel requests happen to finish.
-  const failures: (UnresolvedDependency | null)[] = needBlockers.map(() => null)
-  let nextIndex = 0
+  const failures: (UnresolvedDependency | null)[] = needBlockers.map(
+    () => null,
+  );
+  let nextIndex = 0;
 
   const worker = async (): Promise<void> => {
     while (nextIndex < needBlockers.length) {
-      const index = nextIndex
-      nextIndex += 1
-      const issue = needBlockers[index]
+      const index = nextIndex;
+      nextIndex += 1;
+      const issue = needBlockers[index];
 
       // Once the budget is gone every further request fails the same way; stop asking and report.
       if (rateLimited) {
         failures[index] = {
           number: issue.number,
-          reason: 'rate limit reached before it was read',
-        }
+          reason: "rate limit reached before it was read",
+        };
       } else {
         try {
           const page = await fetchBlockedBy(
@@ -499,55 +531,74 @@ export async function loadRepositoryGraph(
             count,
             planned[index],
             () => {
-              pagesDone[index] += 1
-              reportProgress()
+              pagesDone[index] += 1;
+              reportProgress();
             },
-          )
+          );
           if (page.exhausted) {
             failures[index] = {
               number: issue.number,
-              reason: 'more blockers than the approved requests could read',
-            }
+              reason: "more blockers than the approved requests could read",
+            };
           } else {
             // Whatever GitHub returns is what the graph draws. A summary count that disagrees with
             // the list is GitHub's own inconsistency — a blocker in a repository this reader cannot
             // see, for one — and reporting it as a gap only tells the reader something they can do
             // nothing with.
-            blockers.set(issue.number, page.blockers)
+            blockers.set(issue.number, page.blockers);
           }
         } catch (error) {
-          if (error instanceof DOMException && error.name === 'AbortError') throw error
-          if (!(error instanceof RequestFailure)) throw error
+          if (error instanceof DOMException && error.name === "AbortError")
+            throw error;
+          if (!(error instanceof RequestFailure)) throw error;
 
-          if (error.failure.kind === 'rate-limited') {
-            rateLimited = true
-            rateLimitReset = error.failure.reset
-            failures[index] = { number: issue.number, reason: 'rate limit reached' }
-          } else if (error.failure.kind === 'network') {
-            failures[index] = { number: issue.number, reason: error.failure.message }
-          } else if (error.failure.kind === 'bad-credentials') {
-            failures[index] = { number: issue.number, reason: 'the token was rejected' }
-          } else if (error.failure.kind === 'not-found') {
-            failures[index] = { number: issue.number, reason: 'dependencies were not found' }
-          } else if (error.failure.kind === 'unexpected') {
-            failures[index] = { number: issue.number, reason: error.failure.message }
+          if (error.failure.kind === "rate-limited") {
+            rateLimited = true;
+            rateLimitReset = error.failure.reset;
+            failures[index] = {
+              number: issue.number,
+              reason: "rate limit reached",
+            };
+          } else if (error.failure.kind === "network") {
+            failures[index] = {
+              number: issue.number,
+              reason: error.failure.message,
+            };
+          } else if (error.failure.kind === "bad-credentials") {
+            failures[index] = {
+              number: issue.number,
+              reason: "the token was rejected",
+            };
+          } else if (error.failure.kind === "not-found") {
+            failures[index] = {
+              number: issue.number,
+              reason: "dependencies were not found",
+            };
+          } else if (error.failure.kind === "unexpected") {
+            failures[index] = {
+              number: issue.number,
+              reason: error.failure.message,
+            };
           }
         }
       }
 
       // Finished either way: an issue that failed on page two, or was skipped once the budget was
       // gone, still accounts for every page it was quoted for, so the bar reaches its total.
-      pagesDone[index] = Math.max(pagesDone[index], planned[index])
-      reportProgress()
+      pagesDone[index] = Math.max(pagesDone[index], planned[index]);
+      reportProgress();
     }
-  }
+  };
 
   await Promise.all(
-    Array.from({ length: Math.min(DEPENDENCY_CONCURRENCY, needBlockers.length) }, worker),
-  )
+    Array.from(
+      { length: Math.min(DEPENDENCY_CONCURRENCY, needBlockers.length) },
+      worker,
+    ),
+  );
 
   for (const failure of failures) {
-    if (failure) unresolved.push(failure)
+    if (failure) unresolved.push(failure);
   }
 
   return {
@@ -563,7 +614,7 @@ export async function loadRepositoryGraph(
       rateLimit: count.status,
       includedClosed: includeClosed,
     },
-  }
+  };
 }
 
 /**
@@ -578,29 +629,33 @@ export async function searchRepositories(
   input: string,
   options: LoadOptions = {},
 ): Promise<string[]> {
-  const trimmed = input.trim()
-  if (trimmed.length < 2) return []
+  const trimmed = input.trim();
+  if (trimmed.length < 2) return [];
 
-  const [ownerPart, repoPart] = trimmed.includes('/') ? trimmed.split('/') : [null, trimmed]
+  const [ownerPart, repoPart] = trimmed.includes("/")
+    ? trimmed.split("/")
+    : [null, trimmed];
   const query = ownerPart
-    ? `${repoPart ? `${repoPart} in:name ` : ''}user:${ownerPart}`
-    : `${repoPart} in:name`
+    ? `${repoPart ? `${repoPart} in:name ` : ""}user:${ownerPart}`
+    : `${repoPart} in:name`;
 
   const url =
     `${API_ROOT}/search/repositories?per_page=7&q=${encodeURIComponent(query)}` +
-    (repoPart ? '' : '&sort=updated')
+    (repoPart ? "" : "&sort=updated");
 
   try {
     const response = await (options.fetchImpl ?? fetch)(url, {
       signal: options.signal,
       headers: headersFor(options),
-    })
-    if (!response.ok) return []
-    const body = (await response.json()) as { items?: { full_name?: string }[] }
+    });
+    if (!response.ok) return [];
+    const body = (await response.json()) as {
+      items?: { full_name?: string }[];
+    };
     return (body.items ?? [])
       .map((item) => item.full_name)
-      .filter((name): name is string => typeof name === 'string')
+      .filter((name): name is string => typeof name === "string");
   } catch {
-    return []
+    return [];
   }
 }

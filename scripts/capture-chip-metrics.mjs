@@ -14,38 +14,47 @@
  * Rerun this after upgrading `@fontsource/figtree`, changing the chip's font family or weight, or
  * changing the chip font size.
  */
-import { writeFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import * as fontkit from 'fontkit'
+import { writeFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import * as fontkit from "fontkit";
 
 /**
  * Must stay the file named by the `@font-face` in `src/styles.css` for the weight `.chip` draws at:
  * the chip sets no `font-weight`, so it inherits the body's 400.
  */
 const FONT = fileURLToPath(
-  new URL('../node_modules/@fontsource/figtree/files/figtree-latin-400-normal.woff2', import.meta.url),
-)
-const OUT = fileURLToPath(new URL('../src/chipMetrics.ts', import.meta.url))
+  new URL(
+    "../node_modules/@fontsource/figtree/files/figtree-latin-400-normal.woff2",
+    import.meta.url,
+  ),
+);
+const OUT = fileURLToPath(new URL("../src/chipMetrics.ts", import.meta.url));
 
 /** `.chip` in `src/styles.css`: 10px, and the weight it inherits from `body`. */
-const FONT_SIZE = 10
+const FONT_SIZE = 10;
 
 /**
  * Printable ASCII, which is every character GitHub label names use in practice. Anything outside it
  * falls back to the widest advance captured here, which can only over-reserve.
  */
-const CHARACTERS = Array.from({ length: 0x7e - 0x20 + 1 }, (_, i) => String.fromCodePoint(0x20 + i))
+const CHARACTERS = Array.from({ length: 0x7e - 0x20 + 1 }, (_, i) =>
+  String.fromCodePoint(0x20 + i),
+);
 
-const font = await fontkit.openSync(FONT)
-const advance = (text) => (font.layout(text).advanceWidth / font.unitsPerEm) * FONT_SIZE
-const round = (value) => Math.round(value * 1000) / 1000
+const font = await fontkit.openSync(FONT);
+const advance = (text) =>
+  (font.layout(text).advanceWidth / font.unitsPerEm) * FONT_SIZE;
+const round = (value) => Math.round(value * 1000) / 1000;
 
-const widths = CHARACTERS.map((character) => [character, round(advance(character))])
-const fallback = round(Math.max(...widths.map(([, width]) => width)))
+const widths = CHARACTERS.map((character) => [
+  character,
+  round(advance(character)),
+]);
+const fallback = round(Math.max(...widths.map(([, width]) => width)));
 
 const entries = widths
   .map(([character, width]) => `  ${JSON.stringify(character)}: ${width},`)
-  .join('\n')
+  .join("\n");
 
 writeFileSync(
   OUT,
@@ -62,6 +71,8 @@ export const CHIP_CHAR_WIDTHS: Readonly<Record<string, number>> = {
 ${entries}
 }
 `,
-)
+);
 
-console.log(`Wrote ${OUT} (${widths.length} characters, fallback ${fallback}).`)
+console.log(
+  `Wrote ${OUT} (${widths.length} characters, fallback ${fallback}).`,
+);

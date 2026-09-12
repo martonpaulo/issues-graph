@@ -20,32 +20,38 @@
  * stack, which is exactly what the captured-metrics fallback width assumes.
  */
 @font-face {
-  font-family: 'Figtree';
+  font-family: "Figtree";
   font-style: normal;
   font-display: swap;
   font-weight: 400;
-  src: url('@fontsource/figtree/files/figtree-latin-400-normal.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+  src: url("@fontsource/figtree/files/figtree-latin-400-normal.woff2")
+    format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
     U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Figtree';
+  font-family: "Figtree";
   font-style: normal;
   font-display: swap;
   font-weight: 600;
-  src: url('@fontsource/figtree/files/figtree-latin-600-normal.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+  src: url("@fontsource/figtree/files/figtree-latin-600-normal.woff2")
+    format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
     U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
 @font-face {
-  font-family: 'Gabarito';
+  font-family: "Gabarito";
   font-style: normal;
   font-display: swap;
   font-weight: 700;
-  src: url('@fontsource/gabarito/files/gabarito-latin-700-normal.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+  src: url("@fontsource/gabarito/files/gabarito-latin-700-normal.woff2")
+    format("woff2");
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
     U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
 
@@ -57,8 +63,8 @@
  * fallback drawn at a different width would shift every chip for the length of the swap.
  */
 @font-face {
-  font-family: 'Figtree Fallback';
-  src: local('Arial');
+  font-family: "Figtree Fallback";
+  src: local("Arial");
   font-display: swap;
   font-weight: 400;
   font-style: normal;
@@ -69,8 +75,8 @@
 }
 
 @font-face {
-  font-family: 'Gabarito Fallback';
-  src: local('Arial Bold');
+  font-family: "Gabarito Fallback";
+  src: local("Arial Bold");
   font-display: swap;
   font-weight: 700;
   font-style: normal;
@@ -133,9 +139,14 @@
    */
   /* The standard's three family stacks, with the metric-matched fallback declared above inserted
      after each webfont so the pre-swap paint occupies the same box. */
-  --font-display: "Gabarito", "Gabarito Fallback", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Figtree", "Figtree Fallback", "Avenir Next", "Segoe UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  --font-display:
+    "Gabarito", "Gabarito Fallback", "Avenir Next", "Segoe UI", system-ui,
+    sans-serif;
+  --font-body:
+    "Figtree", "Figtree Fallback", "Avenir Next", "Segoe UI", system-ui,
+    sans-serif;
+  --font-mono:
+    ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-md: 1.125rem;
@@ -343,6 +354,7 @@ code {
    inline style is why this needs `!important`. */
 .react-flow__node-issue:hover,
 .react-flow__node-issue:focus-within {
+  /* biome-ignore lint/complexity/noImportantStyles: beats React Flow's inline z-index. */
   z-index: 100 !important;
 }
 
@@ -635,6 +647,7 @@ code {
 
 .react-flow__pane.dragging,
 .react-flow__pane.dragging * {
+  /* biome-ignore lint/complexity/noImportantStyles: beats every cursor drawn over the pane. */
   cursor: grabbing !important;
 }
 
@@ -755,7 +768,9 @@ code {
    dashed edge and leading bar identify it without projecting this repository's workflow state. */
 .card--external {
   border-style: dashed;
-  box-shadow: inset 6px 0 0 color-mix(in srgb, var(--muted) 40%, transparent), var(--shadow);
+  box-shadow:
+    inset 6px 0 0 color-mix(in srgb, var(--muted) 40%, transparent),
+    var(--shadow);
 }
 
 /* A label the reader picked out. Amber, so it never reads as selection. */
@@ -1099,7 +1114,7 @@ code {
 }
 
 .stage__note--busy::after {
-  content: '';
+  content: "";
   display: inline-block;
   width: 7px;
   height: 7px;
@@ -1453,7 +1468,7 @@ code {
 }
 
 .token__summary::before {
-  content: '›';
+  content: "›";
   display: inline-block;
   width: 12px;
   transition: transform 0.15s ease;

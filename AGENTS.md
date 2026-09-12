@@ -72,8 +72,9 @@ label — and inventing a second name for any of it would be the drift a glossar
 Rules for any executor working from a clone of this repository, including cloud executors that
 read only committed files.
 
-- Run the full gate with `npm run validate` (`typecheck`, `lint`, `test`, `build`); during iteration
-  run the smallest relevant piece, `npm test` or `npm run lint`. A change is not done while the gate
+- Run the full gate with `npm run validate` (`typecheck`, `lint`, `test`, `build`); `lint` is Biome,
+  which checks formatting and import order alongside the rules, and `npm run format` applies what it
+  can fix. During iteration run the smallest relevant piece, `npm test` or `npm run lint`. A change is not done while the gate
   fails on the exact current head.
 - Branch as `<type>/<agent>/issue-<n>/<short-slug>`; commit with Conventional Commits, subject
   ending in `(#<n>)`.

@@ -6,12 +6,12 @@
  * makes them work it out, and is ambiguous across a device whose clock or timezone differs.
  */
 
-const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-const DAY = 24 * HOUR
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 
 function plural(count: number, unit: string): string {
-  return `${count} ${unit}${count === 1 ? '' : 's'}`
+  return `${count} ${unit}${count === 1 ? "" : "s"}`;
 }
 
 /**
@@ -23,25 +23,28 @@ function plural(count: number, unit: string): string {
  * again there. Choosing the unit before rounding is what produced "60 minutes" and "24 hours".
  */
 function describeSpan(span: number): string {
-  const minutes = Math.round(span / MINUTE)
-  if (minutes < 60) return plural(minutes, 'minute')
-  const hours = Math.round(span / HOUR)
-  if (hours < 24) return plural(hours, 'hour')
-  return plural(Math.round(span / DAY), 'day')
+  const minutes = Math.round(span / MINUTE);
+  if (minutes < 60) return plural(minutes, "minute");
+  const hours = Math.round(span / HOUR);
+  if (hours < 24) return plural(hours, "hour");
+  return plural(Math.round(span / DAY), "day");
 }
 
 /** How long ago something happened: "just now", "4 minutes ago", "2 days ago". */
 export function describeAge(moment: Date, now: Date = new Date()): string {
-  const elapsed = Math.max(0, now.getTime() - moment.getTime())
-  if (elapsed < MINUTE) return 'just now'
-  return `${describeSpan(elapsed)} ago`
+  const elapsed = Math.max(0, now.getTime() - moment.getTime());
+  if (elapsed < MINUTE) return "just now";
+  return `${describeSpan(elapsed)} ago`;
 }
 
 /** How long until something happens: "in 23 minutes". Null when the moment is unknown. */
-export function describeUntil(moment: Date | null, now: Date = new Date()): string {
-  if (!moment) return 'shortly'
-  const remaining = moment.getTime() - now.getTime()
-  if (remaining <= 0) return 'now'
-  if (remaining < MINUTE) return 'in under a minute'
-  return `in ${describeSpan(remaining)}`
+export function describeUntil(
+  moment: Date | null,
+  now: Date = new Date(),
+): string {
+  if (!moment) return "shortly";
+  const remaining = moment.getTime() - now.getTime();
+  if (remaining <= 0) return "now";
+  if (remaining < MINUTE) return "in under a minute";
+  return `in ${describeSpan(remaining)}`;
 }

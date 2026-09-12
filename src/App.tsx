@@ -8,38 +8,37 @@
  * from here or from `Shell.tsx` folds it back into the landing chunk.
  */
 import {
+  type ComponentType,
   lazy,
   Suspense,
   useCallback,
   useEffect,
   useMemo,
   useState,
-  type ComponentType,
-} from 'react'
-
+} from "react";
+import {
+  parseRoute,
+  pathForTarget,
+  type RepoTarget,
+  slugOf,
+  titleForRoute,
+} from "./route";
 import {
   BASE,
   ExternalConfirm,
   OpenExternalContext,
+  type PendingLink,
   Start,
   TokenContext,
-  type PendingLink,
-} from './Shell'
-import {
-  parseRoute,
-  pathForTarget,
-  slugOf,
-  titleForRoute,
-  type RepoTarget,
-} from './route'
-import { readToken, writeToken } from './token'
+} from "./Shell";
+import { readToken, writeToken } from "./token";
 
 interface RouteProps {
-  target: RepoTarget
-  onOpen: (target: RepoTarget) => void
+  target: RepoTarget;
+  onOpen: (target: RepoTarget) => void;
 }
 
-type GraphModule = { default: ComponentType<RouteProps> }
+type GraphModule = { default: ComponentType<RouteProps> };
 
 /**
  * Answers a chunk that never arrived with the page that says so, and nothing else.
@@ -50,15 +49,17 @@ type GraphModule = { default: ComponentType<RouteProps> }
  * would relabel a real bug as a network problem and promise no GitHub budget was spent when some
  * already had been.
  */
-export async function chunkOrUnavailable(chunk: Promise<GraphModule>): Promise<GraphModule> {
+export async function chunkOrUnavailable(
+  chunk: Promise<GraphModule>,
+): Promise<GraphModule> {
   try {
-    return await chunk
+    return await chunk;
   } catch {
-    return { default: GraphUnavailable }
+    return { default: GraphUnavailable };
   }
 }
 
-const GraphView = lazy(() => chunkOrUnavailable(import('./GraphView')))
+const GraphView = lazy(() => chunkOrUnavailable(import("./GraphView")));
 
 /**
  * What stands in while the graph chunk is fetched. It is the same shell the repository route
@@ -73,7 +74,7 @@ function GraphPending({ target, onOpen }: RouteProps) {
         Loading the graph…
       </p>
     </Start>
-  )
+  );
 }
 
 /**
@@ -92,9 +93,9 @@ export function GraphUnavailable({ target, onOpen }: RouteProps) {
   return (
     <Start initial={slugOf(target)} onOpen={onOpen}>
       <p className="notice notice--error" role="alert">
-        The graph could not be loaded. The page may have been open while a new version was
-        deployed, or the request failed on the way. Nothing was read from GitHub, so no budget was
-        spent.
+        The graph could not be loaded. The page may have been open while a new
+        version was deployed, or the request failed on the way. Nothing was read
+        from GitHub, so no budget was spent.
       </p>
       <div className="stage__actions">
         <button
@@ -106,19 +107,21 @@ export function GraphUnavailable({ target, onOpen }: RouteProps) {
         </button>
       </div>
     </Start>
-  )
+  );
 }
 
-
 export function App() {
-  const [pathname, setPathname] = useState(() => window.location.pathname)
-  const [pending, setPending] = useState<PendingLink | null>(null)
-  const [token, setStoredToken] = useState(() => readToken())
+  const [pathname, setPathname] = useState(() => window.location.pathname);
+  const [pending, setPending] = useState<PendingLink | null>(null);
+  const [token, setStoredToken] = useState(() => readToken());
 
   // writeToken returns what was actually stored, so the state and the store cannot disagree about
   // a trimmed or blanked value.
-  const setToken = useCallback((value: string) => setStoredToken(writeToken(value)), [])
-  const tokenState = useMemo(() => ({ token, setToken }), [token, setToken])
+  const setToken = useCallback(
+    (value: string) => setStoredToken(writeToken(value)),
+    [],
+  );
+  const tokenState = useMemo(() => ({ token, setToken }), [token, setToken]);
 
   /**
    * Arriving at a shared link for the repository already on screen changes only the fragment, and
@@ -127,43 +130,50 @@ export function App() {
    * honest — `replaceState`, which is how the page clears a fragment it has finished with, fires
    * no event, so only a real navigation remounts.
    */
-  const [hashNav, setHashNav] = useState(0)
+  const [hashNav, setHashNav] = useState(0);
 
   useEffect(() => {
-    const onPopState = () => setPathname(window.location.pathname)
-    const onHashChange = () => setHashNav((count) => count + 1)
-    window.addEventListener('popstate', onPopState)
-    window.addEventListener('hashchange', onHashChange)
+    const onPopState = () => setPathname(window.location.pathname);
+    const onHashChange = () => setHashNav((count) => count + 1);
+    window.addEventListener("popstate", onPopState);
+    window.addEventListener("hashchange", onHashChange);
     return () => {
-      window.removeEventListener('popstate', onPopState)
-      window.removeEventListener('hashchange', onHashChange)
-    }
-  }, [])
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("hashchange", onHashChange);
+    };
+  }, []);
 
   const navigate = useCallback((next: string) => {
-    window.history.pushState(null, '', next)
-    setPathname(next)
-  }, [])
+    window.history.pushState(null, "", next);
+    setPathname(next);
+  }, []);
 
-  const route = useMemo(() => parseRoute(pathname, BASE), [pathname])
+  const route = useMemo(() => parseRoute(pathname, BASE), [pathname]);
 
   // `pathname` is updated by both `navigate` and the `popstate` listener above, so this one effect
   // covers in-app navigation, Back and Forward without a second subscription.
   useEffect(() => {
-    document.title = titleForRoute(route)
-  }, [route])
+    document.title = titleForRoute(route);
+  }, [route]);
 
   const openTarget = useCallback(
     (target: RepoTarget) => navigate(pathForTarget(target, BASE)),
     [navigate],
-  )
-  const openExternal = useCallback((url: string, label: string) => setPending({ url, label }), [])
+  );
+  const openExternal = useCallback(
+    (url: string, label: string) => setPending({ url, label }),
+    [],
+  );
 
   return (
     <TokenContext.Provider value={tokenState}>
       <OpenExternalContext.Provider value={openExternal}>
-        {route.kind === 'graph' ? (
-          <Suspense fallback={<GraphPending target={route.target} onOpen={openTarget} />}>
+        {route.kind === "graph" ? (
+          <Suspense
+            fallback={
+              <GraphPending target={route.target} onOpen={openTarget} />
+            }
+          >
             <GraphView
               key={`${slugOf(route.target)}:${hashNav}`}
               target={route.target}
@@ -171,10 +181,15 @@ export function App() {
             />
           </Suspense>
         ) : (
-          <Start onOpen={openTarget} message={route.kind === 'invalid' ? route.reason : undefined} />
+          <Start
+            onOpen={openTarget}
+            message={route.kind === "invalid" ? route.reason : undefined}
+          />
         )}
-        {pending && <ExternalConfirm pending={pending} onClose={() => setPending(null)} />}
+        {pending && (
+          <ExternalConfirm pending={pending} onClose={() => setPending(null)} />
+        )}
       </OpenExternalContext.Provider>
     </TokenContext.Provider>
-  )
+  );
 }

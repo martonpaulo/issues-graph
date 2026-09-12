@@ -10,7 +10,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint .",
+    "lint": "biome check .",
+    "format": "biome check --write .",
     "test": "vitest run",
     "validate": "npm run typecheck && npm run lint && npm test && npm run build",
     "social-card": "npx --yes playwright@1.63.0 screenshot --viewport-size=1200,630 \"file://$PWD/design/social-card/social-card.html\" \"${TMPDIR:-/tmp}/issues-card.png\" && magick \"${TMPDIR:-/tmp}/issues-card.png\" -strip -quality 92 -sampling-factor 4:4:4 -interlace Plane public/social-card.jpg"
@@ -24,17 +25,13 @@
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
+    "@biomejs/biome": "2.5.12",
     "@types/node": "^26.3.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react": "^6.1.0",
-    "eslint": "^10.9.1",
-    "eslint-plugin-react-hooks": "^7.1.1",
     "fontkit": "^2.0.4",
-    "globals": "^17.11.0",
     "typescript": "^6.0.3",
-    "typescript-eslint": "^8.68.0",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }

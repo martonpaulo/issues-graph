@@ -1,15 +1,15 @@
-import { canonicalSlug } from './route'
+import { canonicalSlug } from "./route";
 import {
   asStringArray,
   clearStored,
   hasStored,
   readStored,
   readStoredText,
+  type StorageWriteResult,
   storedKeys,
   writeStored,
   writeStoredText,
-  type StorageWriteResult,
-} from './storage'
+} from "./storage";
 
 /**
  * Which repositories this browser keeps data for, and for how long.
@@ -30,29 +30,29 @@ import {
  * Recency is the only ordering, and both a read and a write count as a use.
  */
 
-const INDEX_KEY = 'issue-graph:retention'
+const INDEX_KEY = "issue-graph:retention";
 
 /**
  * The list of names written before this index existed. It is read once, when no index is present,
  * so a reader's recent repositories survive the change; it is never written again. The key itself
  * is left in place rather than removed, because a build without this module still reads it.
  */
-const LEGACY_RECENT_KEY = 'issue-graph:recent'
+const LEGACY_RECENT_KEY = "issue-graph:recent";
 
-const CACHE_PREFIX = 'issue-graph:cache:'
+const CACHE_PREFIX = "issue-graph:cache:";
 // The stored key still says "hidden": it predates the rename to dimming, and the copy change is
 // not worth stranding every reader's saved set. The value is a list of node IDs either way.
-const DIMMED_PREFIX = 'issue-graph:hidden:'
+const DIMMED_PREFIX = "issue-graph:hidden:";
 
 /** Every key one repository owns. Eviction and clearing both remove exactly this set. */
-export const cacheKey = (identity: string) => `${CACHE_PREFIX}${identity}`
-export const dimmedKey = (identity: string) => `${DIMMED_PREFIX}${identity}`
+export const cacheKey = (identity: string) => `${CACHE_PREFIX}${identity}`;
+export const dimmedKey = (identity: string) => `${DIMMED_PREFIX}${identity}`;
 
 /**
  * As many repositories as the input field can usefully offer back. The suggestion list was the
  * first thing to need a limit and it is still the tightest one, so it sets the count.
  */
-export const MAX_ENTRIES = 6
+export const MAX_ENTRIES = 6;
 
 /**
  * The size budget, in the UTF-16 code units `JSON.stringify` produces and browsers measure
@@ -61,15 +61,15 @@ export const MAX_ENTRIES = 6
  * backlogs of the size this viewer is meant for.
  * https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API#storage_quotas_and_eviction_criteria
  */
-export const MAX_CHARS = 1_000_000
+export const MAX_CHARS = 1_000_000;
 
 export interface RetentionEntry {
   /** The spelling to show the reader, which is the one they last opened the repository with. */
-  slug: string
+  slug: string;
   /** When the repository was last read or written, as a millisecond timestamp. */
-  usedAt: number
+  usedAt: number;
   /** How much the saved graph occupies, or 0 when none is held. */
-  chars: number
+  chars: number;
   /**
    * Whether the reader opened this repository themselves.
    *
@@ -79,34 +79,35 @@ export interface RetentionEntry {
    * repository still has to be counted and still has to be clearable, so it belongs in this list
    * — just not in the suggestions.
    */
-  opened: boolean
+  opened: boolean;
 }
 
 interface RetentionIndex {
-  version: 1
-  entries: RetentionEntry[]
+  version: 1;
+  entries: RetentionEntry[];
 }
 
 function isEntry(value: unknown): value is RetentionEntry {
-  if (typeof value !== 'object' || value === null) return false
-  const entry = value as Record<string, unknown>
+  if (typeof value !== "object" || value === null) return false;
+  const entry = value as Record<string, unknown>;
   return (
-    typeof entry.slug === 'string' &&
-    typeof entry.usedAt === 'number' &&
+    typeof entry.slug === "string" &&
+    typeof entry.usedAt === "number" &&
     Number.isFinite(entry.usedAt) &&
-    typeof entry.chars === 'number' &&
+    typeof entry.chars === "number" &&
     Number.isFinite(entry.chars) &&
     entry.chars >= 0 &&
-    typeof entry.opened === 'boolean'
-  )
+    typeof entry.opened === "boolean"
+  );
 }
 
 function decodeIndex(value: unknown): RetentionIndex | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const index = value as Record<string, unknown>
-  if (index.version !== 1) return undefined
-  if (!Array.isArray(index.entries) || !index.entries.every(isEntry)) return undefined
-  return { version: 1, entries: index.entries }
+  if (typeof value !== "object" || value === null) return undefined;
+  const index = value as Record<string, unknown>;
+  if (index.version !== 1) return undefined;
+  if (!Array.isArray(index.entries) || !index.entries.every(isEntry))
+    return undefined;
+  return { version: 1, entries: index.entries };
 }
 
 /**
@@ -128,50 +129,64 @@ function decodeIndex(value: unknown): RetentionIndex | undefined {
  * rather than trusting a record earlier builds never kept.
  */
 function unindexedEntries(): RetentionEntry[] {
-  const chosen = readStored(LEGACY_RECENT_KEY, asStringArray, []).slice(0, MAX_ENTRIES)
+  const chosen = readStored(LEGACY_RECENT_KEY, asStringArray, []).slice(
+    0,
+    MAX_ENTRIES,
+  );
   const entries: RetentionEntry[] = chosen.map((slug) => ({
     slug,
     usedAt: 0,
     chars: heldChars(canonicalSlug(slug)),
     opened: true,
-  }))
+  }));
 
-  const seen = new Set(entries.map((entry) => canonicalSlug(entry.slug)))
+  const seen = new Set(entries.map((entry) => canonicalSlug(entry.slug)));
   for (const identity of ownedIdentities()) {
-    if (seen.has(identity)) continue
-    seen.add(identity)
-    entries.push({ slug: identity, usedAt: 0, chars: heldChars(identity), opened: false })
+    if (seen.has(identity)) continue;
+    seen.add(identity);
+    entries.push({
+      slug: identity,
+      usedAt: 0,
+      chars: heldChars(identity),
+      opened: false,
+    });
   }
 
-  return entries
+  return entries;
 }
 
 /** Every repository this browser holds a key for, discovered from storage rather than a list. */
 function ownedIdentities(): string[] {
-  const identities = new Set<string>()
+  const identities = new Set<string>();
   for (const key of storedKeys()) {
-    if (key.startsWith(CACHE_PREFIX)) identities.add(key.slice(CACHE_PREFIX.length))
-    else if (key.startsWith(DIMMED_PREFIX)) identities.add(key.slice(DIMMED_PREFIX.length))
+    if (key.startsWith(CACHE_PREFIX))
+      identities.add(key.slice(CACHE_PREFIX.length));
+    else if (key.startsWith(DIMMED_PREFIX))
+      identities.add(key.slice(DIMMED_PREFIX.length));
   }
-  return [...identities]
+  return [...identities];
 }
 
 /** How much the saved graph under this identity actually occupies right now. */
 function heldChars(identity: string): number {
-  return readStored(cacheKey(identity), (value) => JSON.stringify(value).length, 0)
+  return readStored(
+    cacheKey(identity),
+    (value) => JSON.stringify(value).length,
+    0,
+  );
 }
 
 /** The retained repositories, most recently used first. */
 export function retained(): RetentionEntry[] {
-  const index = readStored<RetentionIndex | null>(INDEX_KEY, decodeIndex, null)
-  return index === null ? unindexedEntries() : index.entries
+  const index = readStored<RetentionIndex | null>(INDEX_KEY, decodeIndex, null);
+  return index === null ? unindexedEntries() : index.entries;
 }
 
 /** The repositories to offer back: the ones the reader chose, in most-recently-used order. */
 export function openedSlugs(): string[] {
   return retained()
     .filter((entry) => entry.opened)
-    .map((entry) => entry.slug)
+    .map((entry) => entry.slug);
 }
 
 /**
@@ -180,21 +195,27 @@ export function openedSlugs(): string[] {
  * caught up with is still the reader's data and still theirs to remove.
  */
 export function holdsData(slug: string): boolean {
-  const identity = canonicalSlug(slug)
-  if (retained().some((entry) => canonicalSlug(entry.slug) === identity)) return true
-  return storedKeys().some((key) => key === cacheKey(identity) || key === dimmedKey(identity))
+  const identity = canonicalSlug(slug);
+  if (retained().some((entry) => canonicalSlug(entry.slug) === identity))
+    return true;
+  return storedKeys().some(
+    (key) => key === cacheKey(identity) || key === dimmedKey(identity),
+  );
 }
 
 function save(entries: RetentionEntry[]): StorageWriteResult {
-  return writeStored(INDEX_KEY, { version: 1, entries } satisfies RetentionIndex)
+  return writeStored(INDEX_KEY, {
+    version: 1,
+    entries,
+  } satisfies RetentionIndex);
 }
 
 /** Removes every key the repository owns, and nothing else. */
 function dropKeys(slug: string): StorageWriteResult {
-  const identity = canonicalSlug(slug)
-  const graph = clearStored(cacheKey(identity))
-  const dimmed = clearStored(dimmedKey(identity))
-  return graph.ok ? dimmed : graph
+  const identity = canonicalSlug(slug);
+  const graph = clearStored(cacheKey(identity));
+  const dimmed = clearStored(dimmedKey(identity));
+  return graph.ok ? dimmed : graph;
 }
 
 /**
@@ -209,19 +230,22 @@ function dropKeys(slug: string): StorageWriteResult {
  * and evicting it would mean a large backlog never gets saved at all — every visit paying GitHub
  * requests to produce a copy that is thrown away as it is written.
  */
-function enforce(entries: RetentionEntry[]): { kept: RetentionEntry[]; evicted: RetentionEntry[] } {
-  let cut = entries.length
-  let total = 0
+function enforce(entries: RetentionEntry[]): {
+  kept: RetentionEntry[];
+  evicted: RetentionEntry[];
+} {
+  let cut = entries.length;
+  let total = 0;
 
   for (let index = 0; index < entries.length; index += 1) {
-    total += entries[index].chars
+    total += entries[index].chars;
     if (index > 0 && (index >= MAX_ENTRIES || total > MAX_CHARS)) {
-      cut = index
-      break
+      cut = index;
+      break;
     }
   }
 
-  return { kept: entries.slice(0, cut), evicted: entries.slice(cut) }
+  return { kept: entries.slice(0, cut), evicted: entries.slice(cut) };
 }
 
 /**
@@ -251,16 +275,17 @@ function saveWithinQuota(
   kept: RetentionEntry[],
   evicted: RetentionEntry[],
 ): StorageWriteResult {
-  let saved = save(kept)
-  if (saved.ok || saved.reason !== 'quota' || hasStored(INDEX_KEY)) return saved
+  let saved = save(kept);
+  if (saved.ok || saved.reason !== "quota" || hasStored(INDEX_KEY))
+    return saved;
 
   for (const entry of evicted) {
-    dropKeys(entry.slug)
-    saved = save(kept)
-    if (saved.ok) return saved
+    dropKeys(entry.slug);
+    saved = save(kept);
+    if (saved.ok) return saved;
   }
 
-  return saved
+  return saved;
 }
 
 /**
@@ -271,17 +296,21 @@ function promote(
   slug: string,
   next: (existing: RetentionEntry | undefined) => RetentionEntry,
 ): StorageWriteResult {
-  const identity = canonicalSlug(slug)
-  const entries = retained()
-  const existing = entries.find((entry) => canonicalSlug(entry.slug) === identity)
-  const rest = entries.filter((entry) => canonicalSlug(entry.slug) !== identity)
-  const { kept, evicted } = enforce([next(existing), ...rest])
+  const identity = canonicalSlug(slug);
+  const entries = retained();
+  const existing = entries.find(
+    (entry) => canonicalSlug(entry.slug) === identity,
+  );
+  const rest = entries.filter(
+    (entry) => canonicalSlug(entry.slug) !== identity,
+  );
+  const { kept, evicted } = enforce([next(existing), ...rest]);
 
-  const saved = saveWithinQuota(kept, evicted)
-  if (!saved.ok) return saved
+  const saved = saveWithinQuota(kept, evicted);
+  if (!saved.ok) return saved;
 
-  for (const entry of evicted) dropKeys(entry.slug)
-  return saved
+  for (const entry of evicted) dropKeys(entry.slug);
+  return saved;
 }
 
 /**
@@ -296,7 +325,7 @@ export function rememberRepository(slug: string): void {
     usedAt: Date.now(),
     chars: existing?.chars ?? 0,
     opened: true,
-  }))
+  }));
 }
 
 /** Records that a saved graph of this size is now held for the repository. */
@@ -310,13 +339,16 @@ export function rememberRepository(slug: string): void {
  * as long as the index stays readable — the unbounded growth this module exists to end, returning
  * through the one door it left open.
  */
-export function recordCacheSize(identity: string, chars: number): StorageWriteResult {
+export function recordCacheSize(
+  identity: string,
+  chars: number,
+): StorageWriteResult {
   return promote(identity, (existing) => ({
     slug: existing?.slug ?? identity,
     usedAt: Date.now(),
     chars,
     opened: existing?.opened ?? true,
-  }))
+  }));
 }
 
 /**
@@ -330,7 +362,7 @@ export function touchRepository(identity: string): void {
     usedAt: Date.now(),
     chars: existing?.chars ?? 0,
     opened: existing?.opened ?? true,
-  }))
+  }));
 }
 
 /**
@@ -359,13 +391,13 @@ export function touchRepository(identity: string): void {
  * back would restore dimming the reader had just cleared.
  */
 export function releaseDimmed(identity: string): void {
-  const key = canonicalSlug(identity)
-  clearStored(dimmedKey(key))
-  if (hasStored(cacheKey(key))) return
+  const key = canonicalSlug(identity);
+  clearStored(dimmedKey(key));
+  if (hasStored(cacheKey(key))) return;
 
-  const entries = retained()
-  const kept = entries.filter((entry) => canonicalSlug(entry.slug) !== key)
-  if (kept.length !== entries.length) save(kept)
+  const entries = retained();
+  const kept = entries.filter((entry) => canonicalSlug(entry.slug) !== key);
+  if (kept.length !== entries.length) save(kept);
 }
 
 function registerDimmed(identity: string): StorageWriteResult {
@@ -374,13 +406,13 @@ function registerDimmed(identity: string): StorageWriteResult {
     usedAt: Date.now(),
     chars: existing?.chars ?? 0,
     opened: existing?.opened ?? false,
-  }))
+  }));
 }
 
 /** Puts a value back exactly as it was, including having been absent. */
 function restore(key: string, previous: string | null): void {
-  if (previous === null) clearStored(key)
-  else writeStoredText(key, previous)
+  if (previous === null) clearStored(key);
+  else writeStoredText(key, previous);
 }
 
 /**
@@ -399,19 +431,24 @@ function restore(key: string, previous: string | null): void {
  * repair something nothing depends on. Only a repository the index does not yet know about can be
  * left in the state this guards against.
  */
-export function saveDimmed(identity: string, dimmed: string[]): StorageWriteResult {
-  const key = canonicalSlug(identity)
-  const alreadyIndexed = retained().some((entry) => canonicalSlug(entry.slug) === key)
-  const previous = readStoredText(dimmedKey(key))
+export function saveDimmed(
+  identity: string,
+  dimmed: string[],
+): StorageWriteResult {
+  const key = canonicalSlug(identity);
+  const alreadyIndexed = retained().some(
+    (entry) => canonicalSlug(entry.slug) === key,
+  );
+  const previous = readStoredText(dimmedKey(key));
 
-  const written = writeStored(dimmedKey(key), dimmed)
-  if (!written.ok) return written
+  const written = writeStored(dimmedKey(key), dimmed);
+  if (!written.ok) return written;
 
-  const registered = registerDimmed(key)
-  if (registered.ok || alreadyIndexed) return written
+  const registered = registerDimmed(key);
+  if (registered.ok || alreadyIndexed) return written;
 
-  restore(dimmedKey(key), previous)
-  return registered
+  restore(dimmedKey(key), previous);
+  return registered;
 }
 
 /**
@@ -421,11 +458,11 @@ export function saveDimmed(identity: string, dimmed: string[]): StorageWriteResu
  * origin, so the browser's own refusal is the only accurate signal.
  */
 export function evictLeastRecent(keep: string): boolean {
-  const identity = canonicalSlug(keep)
-  const entries = retained()
+  const identity = canonicalSlug(keep);
+  const entries = retained();
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
-    if (canonicalSlug(entries[index].slug) === identity) continue
+    if (canonicalSlug(entries[index].slug) === identity) continue;
     // Recorded first, then removed, for the same reason as `promote`: a refused index write must
     // not have cost anybody their saved graph. `saveWithinQuota` carries the one exception, for
     // the browser whose index does not exist yet.
@@ -434,18 +471,18 @@ export function evictLeastRecent(keep: string): boolean {
     // yes, and an index that did not take the removal reads back unchanged: the same entry is
     // chosen again and the loop never ends. Reporting the failed write is what makes the retry
     // terminate — on a page where the alternative is a synchronous spin with the tab frozen.
-    const victim = entries[index]
+    const victim = entries[index];
     const saved = saveWithinQuota(
       [...entries.slice(0, index), ...entries.slice(index + 1)],
       [victim],
-    )
-    if (!saved.ok) return false
+    );
+    if (!saved.ok) return false;
 
-    dropKeys(victim.slug)
-    return true
+    dropKeys(victim.slug);
+    return true;
   }
 
-  return false
+  return false;
 }
 
 /**
@@ -461,8 +498,8 @@ export function evictLeastRecent(keep: string): boolean {
  * the next successful write, and about this repository only.
  */
 export function clearRepositoryData(slug: string): StorageWriteResult {
-  const identity = canonicalSlug(slug)
-  const result = dropKeys(slug)
-  save(retained().filter((entry) => canonicalSlug(entry.slug) !== identity))
-  return result
+  const identity = canonicalSlug(slug);
+  const result = dropKeys(slug);
+  save(retained().filter((entry) => canonicalSlug(entry.slug) !== identity));
+  return result;
 }

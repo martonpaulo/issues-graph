@@ -1,12 +1,17 @@
-import type { IssuePayload, RepositoryGraphData } from './github'
+import type { IssuePayload, RepositoryGraphData } from "./github";
 import {
   cacheKey,
   evictLeastRecent,
   recordCacheSize,
   retained,
   touchRepository,
-} from './retention'
-import { clearStored, readStored, writeStoredText, type StorageWriteResult } from './storage'
+} from "./retention";
+import {
+  clearStored,
+  readStored,
+  type StorageWriteResult,
+  writeStoredText,
+} from "./storage";
 
 /**
  * A saved copy of one repository's graph data.
@@ -25,33 +30,33 @@ import { clearStored, readStored, writeStoredText, type StorageWriteResult } fro
  * superset, and an older copy simply derives the states it used to derive.
  */
 export interface StoredIssue {
-  number: number
-  title: string
-  state: string
-  state_reason: string | null
-  html_url: string
-  repository_url: string
-  labels: { name: string; color: string }[]
-  issue_dependencies_summary?: IssuePayload['issue_dependencies_summary']
-  assignees?: IssuePayload['assignees']
-  sub_issues_summary?: IssuePayload['sub_issues_summary']
-  parent_issue_url?: IssuePayload['parent_issue_url']
+  number: number;
+  title: string;
+  state: string;
+  state_reason: string | null;
+  html_url: string;
+  repository_url: string;
+  labels: { name: string; color: string }[];
+  issue_dependencies_summary?: IssuePayload["issue_dependencies_summary"];
+  assignees?: IssuePayload["assignees"];
+  sub_issues_summary?: IssuePayload["sub_issues_summary"];
+  parent_issue_url?: IssuePayload["parent_issue_url"];
 }
 
 export interface StoredGraph {
-  version: 1
-  savedAt: number
-  issues: StoredIssue[]
-  blockers: [number, StoredIssue[]][]
-  complete: boolean
-  unresolved: RepositoryGraphData['unresolved']
-  includedClosed: boolean
-  requestCount: number
+  version: 1;
+  savedAt: number;
+  issues: StoredIssue[];
+  blockers: [number, StoredIssue[]][];
+  complete: boolean;
+  unresolved: RepositoryGraphData["unresolved"];
+  includedClosed: boolean;
+  requestCount: number;
 }
 
 export interface CachedGraph {
-  savedAt: Date
-  data: RepositoryGraphData
+  savedAt: Date;
+  data: RepositoryGraphData;
 }
 
 function project(issue: IssuePayload): StoredIssue {
@@ -62,14 +67,17 @@ function project(issue: IssuePayload): StoredIssue {
     state_reason: issue.state_reason,
     html_url: issue.html_url,
     repository_url: issue.repository_url,
-    labels: issue.labels.map((label) => ({ name: label.name, color: label.color })),
+    labels: issue.labels.map((label) => ({
+      name: label.name,
+      color: label.color,
+    })),
     issue_dependencies_summary: issue.issue_dependencies_summary,
     // Only the login: the rest of GitHub's user object is several hundred bytes per issue that
     // nothing reads, and this projection exists to stay inside a storage quota and a URL length.
     assignees: issue.assignees?.map((assignee) => ({ login: assignee.login })),
     sub_issues_summary: issue.sub_issues_summary,
     parent_issue_url: issue.parent_issue_url,
-  }
+  };
 }
 
 /**
@@ -77,17 +85,23 @@ function project(issue: IssuePayload): StoredIssue {
  * constraint this cache was written for: only the fields the graph consumes are small enough to
  * carry. One projection keeps the two from drifting apart.
  */
-export function toStored(data: RepositoryGraphData, savedAt: number): StoredGraph {
+export function toStored(
+  data: RepositoryGraphData,
+  savedAt: number,
+): StoredGraph {
   return {
     version: 1,
     savedAt,
     issues: data.issues.map(project),
-    blockers: [...data.blockers].map(([number, list]) => [number, list.map(project)]),
+    blockers: [...data.blockers].map(([number, list]) => [
+      number,
+      list.map(project),
+    ]),
     complete: data.complete,
     unresolved: data.unresolved,
     includedClosed: data.includedClosed,
     requestCount: data.requestCount,
-  }
+  };
 }
 
 export function fromStored(stored: StoredGraph): RepositoryGraphData {
@@ -103,9 +117,8 @@ export function fromStored(stored: StoredGraph): RepositoryGraphData {
     rateLimited: false,
     rateLimitReset: null,
     rateLimit: null,
-  }
+  };
 }
-
 
 /* Validating a stored graph ----------------------------------------------
    Local storage is hand-editable and outlives the build that wrote it, so a saved copy is
@@ -120,16 +133,20 @@ export function fromStored(stored: StoredGraph): RepositoryGraphData {
    than two free to drift apart. */
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return typeof value === "object" && value !== null;
 }
 
 function isLabel(value: unknown): boolean {
-  return isRecord(value) && typeof value.name === 'string' && typeof value.color === 'string'
+  return (
+    isRecord(value) &&
+    typeof value.name === "string" &&
+    typeof value.color === "string"
+  );
 }
 
 /** A count GitHub reports: a whole number of blockers, never negative and never fractional. */
 function isCount(value: unknown): boolean {
-  return Number.isInteger(value) && (value as number) >= 0
+  return Number.isInteger(value) && (value as number) >= 0;
 }
 
 /**
@@ -149,23 +166,25 @@ function isDependencySummary(value: unknown): boolean {
     isCount(value.total_blocked_by) &&
     isCount(value.blocking) &&
     isCount(value.total_blocking)
-  )
+  );
 }
 
 /** Every field `buildGraph` and the cards read off an issue, and nothing more. */
 function isIssue(value: unknown): boolean {
-  if (!isRecord(value)) return false
-  if (!Number.isInteger(value.number)) return false
-  if (typeof value.title !== 'string') return false
-  if (typeof value.state !== 'string') return false
-  if (value.state_reason !== null && typeof value.state_reason !== 'string') return false
-  if (typeof value.html_url !== 'string') return false
-  if (typeof value.repository_url !== 'string') return false
-  if (!Array.isArray(value.labels) || !value.labels.every(isLabel)) return false
+  if (!isRecord(value)) return false;
+  if (!Number.isInteger(value.number)) return false;
+  if (typeof value.title !== "string") return false;
+  if (typeof value.state !== "string") return false;
+  if (value.state_reason !== null && typeof value.state_reason !== "string")
+    return false;
+  if (typeof value.html_url !== "string") return false;
+  if (typeof value.repository_url !== "string") return false;
+  if (!Array.isArray(value.labels) || !value.labels.every(isLabel))
+    return false;
 
-  const summary = value.issue_dependencies_summary
-  if (summary !== undefined && !isDependencySummary(summary)) return false
-  return true
+  const summary = value.issue_dependencies_summary;
+  if (summary !== undefined && !isDependencySummary(summary)) return false;
+  return true;
 }
 
 function isBlockerEntry(value: unknown): boolean {
@@ -175,11 +194,15 @@ function isBlockerEntry(value: unknown): boolean {
     Number.isInteger(value[0]) &&
     Array.isArray(value[1]) &&
     value[1].every(isIssue)
-  )
+  );
 }
 
 function isUnresolved(value: unknown): boolean {
-  return isRecord(value) && Number.isInteger(value.number) && typeof value.reason === 'string'
+  return (
+    isRecord(value) &&
+    Number.isInteger(value.number) &&
+    typeof value.reason === "string"
+  );
 }
 
 /**
@@ -191,21 +214,28 @@ function isUnresolved(value: unknown): boolean {
  * https://tc39.es/ecma262/#sec-time-values-and-time-range
  */
 function isTimestamp(value: unknown): boolean {
-  return typeof value === 'number' && !Number.isNaN(new Date(value).getTime())
+  return typeof value === "number" && !Number.isNaN(new Date(value).getTime());
 }
 
 /** Whether the stored graph is whole enough to draw. */
 export function isStoredGraph(value: unknown): value is StoredGraph {
-  if (!isRecord(value)) return false
-  if (value.version !== 1) return false
-  if (!isTimestamp(value.savedAt)) return false
-  if (!Array.isArray(value.issues) || !value.issues.every(isIssue)) return false
-  if (!Array.isArray(value.blockers) || !value.blockers.every(isBlockerEntry)) return false
-  if (typeof value.complete !== 'boolean') return false
-  if (!Array.isArray(value.unresolved) || !value.unresolved.every(isUnresolved)) return false
-  if (typeof value.includedClosed !== 'boolean') return false
-  if (typeof value.requestCount !== 'number' || !Number.isFinite(value.requestCount)) return false
-  return true
+  if (!isRecord(value)) return false;
+  if (value.version !== 1) return false;
+  if (!isTimestamp(value.savedAt)) return false;
+  if (!Array.isArray(value.issues) || !value.issues.every(isIssue))
+    return false;
+  if (!Array.isArray(value.blockers) || !value.blockers.every(isBlockerEntry))
+    return false;
+  if (typeof value.complete !== "boolean") return false;
+  if (!Array.isArray(value.unresolved) || !value.unresolved.every(isUnresolved))
+    return false;
+  if (typeof value.includedClosed !== "boolean") return false;
+  if (
+    typeof value.requestCount !== "number" ||
+    !Number.isFinite(value.requestCount)
+  )
+    return false;
+  return true;
 }
 
 /**
@@ -215,18 +245,18 @@ export function isStoredGraph(value: unknown): value is StoredGraph {
  * destroy one an older or newer build still reads.
  */
 export function decodeStoredGraph(value: unknown): StoredGraph | undefined {
-  return isStoredGraph(value) ? value : undefined
+  return isStoredGraph(value) ? value : undefined;
 }
 
 export function readCache(slug: string): CachedGraph | null {
-  const stored = readStored(cacheKey(slug), decodeStoredGraph, null)
-  if (stored === null) return null
+  const stored = readStored(cacheKey(slug), decodeStoredGraph, null);
+  if (stored === null) return null;
 
   // Reading a copy is using the repository, and the budgets evict on recency: without this, a
   // repository the reader opens from its saved copy every day still ages out behind ones they
   // read from GitHub once.
-  touchRepository(slug)
-  return { savedAt: new Date(stored.savedAt), data: fromStored(stored) }
+  touchRepository(slug);
+  return { savedAt: new Date(stored.savedAt), data: fromStored(stored) };
 }
 
 /**
@@ -238,24 +268,32 @@ export function readCache(slug: string): CachedGraph | null {
  * reader just paid for. The loop ends when the write succeeds or when there is nothing left to
  * surrender, and the caller is told either way.
  */
-export function writeCache(slug: string, data: RepositoryGraphData): StorageWriteResult {
-  const payload = JSON.stringify(toStored(data, Date.now()))
-  const key = cacheKey(slug)
+export function writeCache(
+  slug: string,
+  data: RepositoryGraphData,
+): StorageWriteResult {
+  const payload = JSON.stringify(toStored(data, Date.now()));
+  const key = cacheKey(slug);
 
   // One attempt per repository that could be surrendered, counted before any of them is. Each
   // recorded eviction strictly shortens the list, so this bound is never reached in practice; it
   // is here because the cost of being wrong about that is a frozen tab rather than a failed
   // write, and a loop whose termination depends on storage agreeing to record something should
   // not be the only thing standing between the reader and a hung page.
-  let attemptsLeft = retained().length
+  let attemptsLeft = retained().length;
 
-  let result = writeStoredText(key, payload)
-  while (!result.ok && result.reason === 'quota' && attemptsLeft > 0 && evictLeastRecent(slug)) {
-    attemptsLeft -= 1
-    result = writeStoredText(key, payload)
+  let result = writeStoredText(key, payload);
+  while (
+    !result.ok &&
+    result.reason === "quota" &&
+    attemptsLeft > 0 &&
+    evictLeastRecent(slug)
+  ) {
+    attemptsLeft -= 1;
+    result = writeStoredText(key, payload);
   }
 
-  if (!result.ok) return result
+  if (!result.ok) return result;
 
   // The write is not finished until the index knows about it. A graph key the index never
   // recorded is invisible to every budget — `retained()` falls back to reading the keys only when
@@ -263,11 +301,11 @@ export function writeCache(slug: string, data: RepositoryGraphData): StorageWrit
   // this reported success. Rather than leave that, the key is taken back out and the failure is
   // reported, which is what puts the sentence about it on screen. Losing a copy that can be read
   // again from GitHub is the cheaper half of that trade.
-  const indexed = recordCacheSize(slug, payload.length)
+  const indexed = recordCacheSize(slug, payload.length);
   if (!indexed.ok) {
-    clearStored(key)
-    return indexed
+    clearStored(key);
+    return indexed;
   }
 
-  return result
+  return result;
 }

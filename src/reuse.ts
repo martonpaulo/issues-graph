@@ -8,40 +8,43 @@
  */
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  if (typeof value !== 'object' || value === null) return false
-  const prototype = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
+  if (typeof value !== "object" || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
-function reuseArray(previous: readonly unknown[], next: readonly unknown[]): readonly unknown[] {
-  let unchanged = previous.length === next.length
+function reuseArray(
+  previous: readonly unknown[],
+  next: readonly unknown[],
+): readonly unknown[] {
+  let unchanged = previous.length === next.length;
   const merged = next.map((value, index) => {
-    if (index >= previous.length) return value
-    const kept = reuse(previous[index], value)
-    if (!Object.is(kept, previous[index])) unchanged = false
-    return kept
-  })
-  return unchanged ? previous : merged
+    if (index >= previous.length) return value;
+    const kept = reuse(previous[index], value);
+    if (!Object.is(kept, previous[index])) unchanged = false;
+    return kept;
+  });
+  return unchanged ? previous : merged;
 }
 
 function reuseObject(
   previous: Record<string, unknown>,
   next: Record<string, unknown>,
 ): Record<string, unknown> {
-  const keys = Object.keys(next)
-  let unchanged = keys.length === Object.keys(previous).length
-  const merged: Record<string, unknown> = {}
+  const keys = Object.keys(next);
+  let unchanged = keys.length === Object.keys(previous).length;
+  const merged: Record<string, unknown> = {};
   for (const key of keys) {
     if (!Object.hasOwn(previous, key)) {
-      unchanged = false
-      merged[key] = next[key]
-      continue
+      unchanged = false;
+      merged[key] = next[key];
+      continue;
     }
-    const kept = reuse(previous[key], next[key])
-    if (!Object.is(kept, previous[key])) unchanged = false
-    merged[key] = kept
+    const kept = reuse(previous[key], next[key]);
+    if (!Object.is(kept, previous[key])) unchanged = false;
+    merged[key] = kept;
   }
-  return unchanged ? previous : merged
+  return unchanged ? previous : merged;
 }
 
 /**
@@ -58,8 +61,10 @@ function reuseObject(
  * to apply during a render that React may run twice.
  */
 export function reuse<T>(previous: unknown, next: T): T {
-  if (Object.is(previous, next)) return next
-  if (Array.isArray(previous) && Array.isArray(next)) return reuseArray(previous, next) as T
-  if (isPlainObject(previous) && isPlainObject(next)) return reuseObject(previous, next) as T
-  return next
+  if (Object.is(previous, next)) return next;
+  if (Array.isArray(previous) && Array.isArray(next))
+    return reuseArray(previous, next) as T;
+  if (isPlainObject(previous) && isPlainObject(next))
+    return reuseObject(previous, next) as T;
+  return next;
 }

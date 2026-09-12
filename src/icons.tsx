@@ -5,19 +5,19 @@
  * Every icon is decorative: each control that uses one also carries its own accessible name.
  */
 export type IconName =
-  | 'graph'
-  | 'external'
-  | 'fit'
-  | 'reload'
-  | 'eye'
-  | 'eye-off'
-  | 'close'
-  | 'search'
-  | 'tag'
-  | 'clock'
-  | 'link'
-  | 'list'
-  | 'trash'
+  | "graph"
+  | "external"
+  | "fit"
+  | "reload"
+  | "eye"
+  | "eye-off"
+  | "close"
+  | "search"
+  | "tag"
+  | "clock"
+  | "link"
+  | "list"
+  | "trash";
 
 const PATHS: Record<IconName, React.ReactNode> = {
   graph: (
@@ -61,7 +61,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="8" cy="8" r="1.9" />
     </>
   ),
-  'eye-off': (
+  "eye-off": (
     <>
       <path d="M6.3 4.1A6.4 6.4 0 0 1 8 3.8c4 0 6.4 4.2 6.4 4.2a12 12 0 0 1-2.2 2.7" />
       <path d="M9.9 9.9a2 2 0 0 1-2.8-2.8" />
@@ -102,7 +102,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M6.8 7v4M9.2 7v4" />
     </>
   ),
-}
+};
 
 export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {
   return (
@@ -121,5 +121,5 @@ export function Icon({ name, size = 14 }: { name: IconName; size?: number }) {
     >
       {PATHS[name]}
     </svg>
-  )
+  );
 }

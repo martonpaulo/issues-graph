@@ -53,7 +53,8 @@ No credential is needed to run the page or to read a repository: a GitHub token 
 | `npm run build` | Builds production output into `dist/`. |
 | `npm run preview` | Serves the built `dist/` the way the deployed site is served. |
 | `npm run typecheck` | Type-checks the repository with `tsc --noEmit`. |
-| `npm run lint` | Runs ESLint over the whole repository. |
+| `npm run lint` | Runs Biome over the whole repository: lint rules, formatting and import order. |
+| `npm run format` | Applies what `npm run lint` reports and can fix safely. |
 | `npm test` | Runs Vitest against the captured API fixtures. |
 | `npm run social-card` | Renders `design/social-card/social-card.html` into `public/social-card.jpg`. Mac only. |
 

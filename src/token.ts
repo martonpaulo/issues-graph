@@ -1,4 +1,4 @@
-import { asString, clearStored, readStored, writeStored } from './storage'
+import { asString, clearStored, readStored, writeStored } from "./storage";
 
 /**
  * The viewer's own GitHub token.
@@ -14,11 +14,11 @@ import { asString, clearStored, readStored, writeStored } from './storage'
  * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
  */
 
-const TOKEN_KEY = 'issue-graph:token'
+const TOKEN_KEY = "issue-graph:token";
 
 /** The stored token, or an empty string when none is set or storage cannot be read. */
 export function readToken(): string {
-  return readStored(TOKEN_KEY, asString, '').trim()
+  return readStored(TOKEN_KEY, asString, "").trim();
 }
 
 /**
@@ -26,15 +26,15 @@ export function readToken(): string {
  * takes their credential off the device, so it must not leave an empty one behind.
  */
 export function writeToken(value: string): string {
-  const trimmed = value.trim()
+  const trimmed = value.trim();
   if (trimmed.length === 0) {
-    clearStored(TOKEN_KEY)
-    return ''
+    clearStored(TOKEN_KEY);
+    return "";
   }
-  writeStored(TOKEN_KEY, trimmed)
-  return trimmed
+  writeStored(TOKEN_KEY, trimmed);
+  return trimmed;
 }
 
 export function clearToken(): void {
-  clearStored(TOKEN_KEY)
+  clearStored(TOKEN_KEY);
 }

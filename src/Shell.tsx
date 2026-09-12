@@ -18,45 +18,53 @@ import {
   useId,
   useRef,
   useState,
-} from 'react'
+} from "react";
 
-import { AUTHENTICATED_HOURLY_LIMIT, UNAUTHENTICATED_HOURLY_LIMIT } from './github'
-import { Icon } from './icons'
-import { RepoInput } from './RepoInput'
-import { PRODUCT, type RepoTarget } from './route'
+import {
+  AUTHENTICATED_HOURLY_LIMIT,
+  UNAUTHENTICATED_HOURLY_LIMIT,
+} from "./github";
+import { Icon } from "./icons";
+import { RepoInput } from "./RepoInput";
+import { PRODUCT, type RepoTarget } from "./route";
 
 /** Project sites are served from `/<repository>/`, so every in-app path carries that prefix. */
-export const BASE = import.meta.env.BASE_URL
+export const BASE = import.meta.env.BASE_URL;
 
 /* External navigation ------------------------------------------------------
    Every link out of the viewer is confirmed, so a click on a card never moves
    the page somewhere the reader did not choose to go. */
 
 export interface PendingLink {
-  url: string
-  label: string
+  url: string;
+  label: string;
 }
 
-export const OpenExternalContext = createContext<(url: string, label: string) => void>(() => {})
+export const OpenExternalContext = createContext<
+  (url: string, label: string) => void
+>(() => {});
 
 /* The viewer's token ------------------------------------------------------
    Shared the same way, because the shell, the repository field and the load
    all need it and none of them owns it. */
 
 export interface TokenState {
-  token: string
+  token: string;
   /** Stores and applies the value; blank removes it. Takes effect on the next request. */
-  setToken: (value: string) => void
+  setToken: (value: string) => void;
 }
 
-export const TokenContext = createContext<TokenState>({ token: '', setToken: () => {} })
+export const TokenContext = createContext<TokenState>({
+  token: "",
+  setToken: () => {},
+});
 
 export function useTokenState(): TokenState {
-  return useContext(TokenContext)
+  return useContext(TokenContext);
 }
 
 export function useOpenExternal(): (url: string, label: string) => void {
-  return useContext(OpenExternalContext)
+  return useContext(OpenExternalContext);
 }
 
 /* Overlay keyboard lifecycle ----------------------------------------------
@@ -67,7 +75,7 @@ export function useOpenExternal(): (url: string, label: string) => void {
    effects below only carry the answer out. */
 
 /** What a key press asks of an open overlay. */
-export type OverlayAction = 'close' | 'focus-next' | 'focus-previous'
+export type OverlayAction = "close" | "focus-next" | "focus-previous";
 
 /**
  * What a key press asks of an open overlay: dismiss it, or move to the control before or after
@@ -79,12 +87,16 @@ export type OverlayAction = 'close' | 'focus-next' | 'focus-previous'
  * https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
  */
 export function overlayKeyAction(
-  event: Pick<KeyboardEvent, 'key' | 'altKey' | 'ctrlKey' | 'metaKey' | 'shiftKey'>,
+  event: Pick<
+    KeyboardEvent,
+    "key" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
+  >,
 ): OverlayAction | null {
-  if (event.altKey || event.ctrlKey || event.metaKey) return null
-  if (event.key === 'Escape') return 'close'
-  if (event.key === 'Tab') return event.shiftKey ? 'focus-previous' : 'focus-next'
-  return null
+  if (event.altKey || event.ctrlKey || event.metaKey) return null;
+  if (event.key === "Escape") return "close";
+  if (event.key === "Tab")
+    return event.shiftKey ? "focus-previous" : "focus-next";
+  return null;
 }
 
 /**
@@ -94,10 +106,14 @@ export function overlayKeyAction(
  * wherever it comes from — including from outside the trap, which is what a `current` of `-1`
  * means and what the browser reports while the focus is still on `<body>`.
  */
-export function nextTrapIndex(count: number, current: number, backwards: boolean): number {
-  if (count <= 0) return -1
-  if (current < 0 || current >= count) return backwards ? count - 1 : 0
-  return (current + (backwards ? -1 : 1) + count) % count
+export function nextTrapIndex(
+  count: number,
+  current: number,
+  backwards: boolean,
+): number {
+  if (count <= 0) return -1;
+  if (current < 0 || current >= count) return backwards ? count - 1 : 0;
+  return (current + (backwards ? -1 : 1) + count) % count;
 }
 
 /**
@@ -109,10 +125,10 @@ export function nextTrapIndex(count: number, current: number, backwards: boolean
  */
 export function popupTriggerProps(open: boolean, panelId: string) {
   return {
-    'aria-haspopup': 'dialog' as const,
-    'aria-expanded': open,
-    'aria-controls': open ? panelId : undefined,
-  }
+    "aria-haspopup": "dialog" as const,
+    "aria-expanded": open,
+    "aria-controls": open ? panelId : undefined,
+  };
 }
 
 /**
@@ -129,7 +145,7 @@ export function restoresTriggerAfterOutsidePress(
   focusWasInsidePanel: boolean,
   focusLandedOnAControl: boolean,
 ): boolean {
-  return focusWasInsidePanel && !focusLandedOnAControl
+  return focusWasInsidePanel && !focusLandedOnAControl;
 }
 
 /**
@@ -141,31 +157,31 @@ export function restoresTriggerAfterOutsidePress(
  * happening; owning it here means only `cancel` stops it, and only the hook unmounting calls that.
  */
 export function createSettler() {
-  let pending: ReturnType<typeof setTimeout> | null = null
+  let pending: ReturnType<typeof setTimeout> | null = null;
   return {
     /** Runs `task` once the current turn is over, replacing any call still waiting. */
     after(task: () => void) {
-      if (pending !== null) clearTimeout(pending)
+      if (pending !== null) clearTimeout(pending);
       pending = setTimeout(() => {
-        pending = null
-        task()
-      })
+        pending = null;
+        task();
+      });
     },
     cancel() {
-      if (pending !== null) clearTimeout(pending)
-      pending = null
+      if (pending !== null) clearTimeout(pending);
+      pending = null;
     },
-  }
+  };
 }
 
 /** The controls a reader can reach with Tab, in the order Tab reaches them. */
 const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]'
+  "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]";
 
 function focusableWithin(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
     (element) => element.tabIndex >= 0,
-  )
+  );
 }
 
 /**
@@ -179,17 +195,26 @@ function focusableWithin(root: HTMLElement): HTMLElement[] {
  * https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/inert
  */
 function inertOutside(element: HTMLElement): () => void {
-  const inerted: HTMLElement[] = []
-  for (let node = element; node !== document.body && node.parentElement; node = node.parentElement) {
+  const inerted: HTMLElement[] = [];
+  for (
+    let node = element;
+    node !== document.body && node.parentElement;
+    node = node.parentElement
+  ) {
     for (const sibling of node.parentElement.children) {
-      if (sibling === node || !(sibling instanceof HTMLElement) || sibling.inert) continue
-      sibling.inert = true
-      inerted.push(sibling)
+      if (
+        sibling === node ||
+        !(sibling instanceof HTMLElement) ||
+        sibling.inert
+      )
+        continue;
+      sibling.inert = true;
+      inerted.push(sibling);
     }
   }
   return () => {
-    for (const node of inerted) node.inert = false
-  }
+    for (const node of inerted) node.inert = false;
+  };
 }
 
 /**
@@ -200,51 +225,57 @@ function inertOutside(element: HTMLElement): () => void {
  * `initialRef` is the caller's choice of first control, so the dialog names it rather than
  * inheriting whatever happens to be first in the markup.
  */
-export function useModalDialog<Initial extends HTMLElement>(onClose: () => void) {
-  const dialogRef = useRef<HTMLDivElement>(null)
-  const initialRef = useRef<Initial>(null)
+export function useModalDialog<Initial extends HTMLElement>(
+  onClose: () => void,
+) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const initialRef = useRef<Initial>(null);
 
   // The handler is read as an effect event so the effect below runs once per opening. It moves the
   // focus and inerts the page, and a caller passing a fresh closure on every render would
   // otherwise have all of that torn down and redone under the reader's hands.
   // https://react.dev/reference/react/useEffectEvent
-  const close = useEffectEvent(onClose)
+  const close = useEffectEvent(onClose);
 
   useEffect(() => {
-    const dialog = dialogRef.current
-    if (!dialog) return
+    const dialog = dialogRef.current;
+    if (!dialog) return;
 
-    const opener = document.activeElement as HTMLElement | null
-    ;(initialRef.current ?? focusableWithin(dialog)[0])?.focus()
-    const restoreBackground = inertOutside(dialog)
+    const opener = document.activeElement as HTMLElement | null;
+    (initialRef.current ?? focusableWithin(dialog)[0])?.focus();
+    const restoreBackground = inertOutside(dialog);
 
     const onKey = (event: KeyboardEvent) => {
-      const action = overlayKeyAction(event)
-      if (action === null) return
-      if (action === 'close') {
-        event.preventDefault()
-        close()
-        return
+      const action = overlayKeyAction(event);
+      if (action === null) return;
+      if (action === "close") {
+        event.preventDefault();
+        close();
+        return;
       }
-      const controls = focusableWithin(dialog)
-      const from = controls.indexOf(document.activeElement as HTMLElement)
-      const next = nextTrapIndex(controls.length, from, action === 'focus-previous')
-      if (next < 0) return
-      event.preventDefault()
-      controls[next].focus()
-    }
+      const controls = focusableWithin(dialog);
+      const from = controls.indexOf(document.activeElement as HTMLElement);
+      const next = nextTrapIndex(
+        controls.length,
+        from,
+        action === "focus-previous",
+      );
+      if (next < 0) return;
+      event.preventDefault();
+      controls[next].focus();
+    };
 
-    window.addEventListener('keydown', onKey)
+    window.addEventListener("keydown", onKey);
     return () => {
-      window.removeEventListener('keydown', onKey)
-      restoreBackground()
+      window.removeEventListener("keydown", onKey);
+      restoreBackground();
       // Back where the reader was standing. The opener can be gone by now — a card is removed
       // when the graph is reloaded under the dialog — and `isConnected` is what says so.
-      if (opener?.isConnected) opener.focus()
-    }
-  }, [])
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
 
-  return { dialogRef, initialRef }
+  return { dialogRef, initialRef };
 }
 
 /**
@@ -256,46 +287,52 @@ export function useModalDialog<Initial extends HTMLElement>(onClose: () => void)
  * already walks into it, and forcing the focus would change what a pointer does as well.
  */
 export function usePopover(open: boolean, onClose: () => void) {
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   // One settler for the life of the picker, through `useState`'s lazy initializer so it is built
   // once rather than on every render.
-  const [settling] = useState(createSettler)
+  const [settling] = useState(createSettler);
 
   /**
    * Closing from a key: the reader is inside the panel, or on `<body>` because something already
    * took the panel away, and either way the trigger is where they came from.
    */
   const restoreTrigger = useCallback(() => {
-    const active = document.activeElement
-    if (active === document.body || panelRef.current?.contains(active)) triggerRef.current?.focus()
-  }, [])
+    const active = document.activeElement;
+    if (active === document.body || panelRef.current?.contains(active))
+      triggerRef.current?.focus();
+  }, []);
 
   /** Closing from inside the panel — its own close button, or Escape. */
   const dismiss = useCallback(() => {
-    onClose()
-    restoreTrigger()
-  }, [onClose, restoreTrigger])
+    onClose();
+    restoreTrigger();
+  }, [onClose, restoreTrigger]);
 
   // The two handlers below are read as effect events, so the listeners are subscribed once per
   // opening rather than resubscribed on every render.
-  const dismissEvent = useEffectEvent(dismiss)
-  const closeEvent = useEffectEvent(onClose)
+  const dismissEvent = useEffectEvent(dismiss);
+  const closeEvent = useEffectEvent(onClose);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
 
     const onKey = (event: KeyboardEvent) => {
-      if (overlayKeyAction(event) !== 'close') return
-      event.preventDefault()
-      dismissEvent()
-    }
+      if (overlayKeyAction(event) !== "close") return;
+      event.preventDefault();
+      dismissEvent();
+    };
     const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as globalThis.Node | null
-      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return
+      const target = event.target as globalThis.Node | null;
+      if (
+        panelRef.current?.contains(target) ||
+        triggerRef.current?.contains(target)
+      )
+        return;
 
-      const wasInside = panelRef.current?.contains(document.activeElement) ?? false
-      closeEvent()
+      const wasInside =
+        panelRef.current?.contains(document.activeElement) ?? false;
+      closeEvent();
 
       // Where the focus ends up is the browser's answer rather than this handler's, so the rule is
       // read once the press has finished being one: `mousedown` focuses the pressed control after
@@ -303,30 +340,47 @@ export function usePopover(open: boolean, onClose: () => void) {
       // rather than by this effect, whose whole lifetime is `open === true` — the close above ends
       // it, and a wait cancelled by the transition that scheduled it never reads anything.
       settling.after(() => {
-        const landed = document.activeElement !== null && document.activeElement !== document.body
-        if (restoresTriggerAfterOutsidePress(wasInside, landed)) triggerRef.current?.focus()
-      })
-    }
+        const landed =
+          document.activeElement !== null &&
+          document.activeElement !== document.body;
+        if (restoresTriggerAfterOutsidePress(wasInside, landed))
+          triggerRef.current?.focus();
+      });
+    };
 
-    window.addEventListener('keydown', onKey)
-    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onPointerDown);
     return () => {
-      window.removeEventListener('keydown', onKey)
-      window.removeEventListener('pointerdown', onPointerDown)
-    }
-  }, [open, settling])
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open, settling]);
 
   // The one cancellation. A picker that has gone has no trigger to give the focus back to.
-  useEffect(() => () => settling.cancel(), [settling])
+  useEffect(() => () => settling.cancel(), [settling]);
 
-  return { triggerRef, panelRef, dismiss }
+  return { triggerRef, panelRef, dismiss };
 }
 
-export function ExternalConfirm({ pending, onClose }: { pending: PendingLink; onClose: () => void }) {
-  const { dialogRef, initialRef } = useModalDialog<HTMLButtonElement>(onClose)
+export function ExternalConfirm({
+  pending,
+  onClose,
+}: {
+  pending: PendingLink;
+  onClose: () => void;
+}) {
+  const { dialogRef, initialRef } = useModalDialog<HTMLButtonElement>(onClose);
 
   return (
+    // The backdrop is a mouse convenience on top of the keyboard path, not the
+    // only way out: `useModalDialog` closes the dialog on Escape, which is the
+    // lifecycle `overlayKeyAction` owns and `Shell.test.ts` exercises.
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Escape closes it.
+    // biome-ignore lint/a11y/noStaticElementInteractions: a backdrop has no role.
     <div className="overlay" onClick={onClose}>
+      {/* Containment, not an action: the click is swallowed so it does not
+          reach the backdrop behind. */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: stops propagation only. */}
       <div
         className="dialog"
         role="dialog"
@@ -343,11 +397,7 @@ export function ExternalConfirm({ pending, onClose }: { pending: PendingLink; on
           <code>{pending.url}</code>
         </p>
         <div className="dialog__actions">
-          <button
-            className="button"
-            type="button"
-            onClick={onClose}
-          >
+          <button className="button" type="button" onClick={onClose}>
             Stay here
           </button>
           <button
@@ -355,8 +405,8 @@ export function ExternalConfirm({ pending, onClose }: { pending: PendingLink; on
             type="button"
             ref={initialRef}
             onClick={() => {
-              window.open(pending.url, '_blank', 'noopener,noreferrer')
-              onClose()
+              window.open(pending.url, "_blank", "noopener,noreferrer");
+              onClose();
             }}
           >
             <Icon name="external" /> Open in a new tab
@@ -364,7 +414,7 @@ export function ExternalConfirm({ pending, onClose }: { pending: PendingLink; on
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -375,20 +425,24 @@ export function ExternalConfirm({ pending, onClose }: { pending: PendingLink; on
  * api.github.com, and is never shown in plain text.
  */
 function TokenField() {
-  const { token, setToken } = useTokenState()
-  const [draft, setDraft] = useState(token)
-  const [said, setSaid] = useState<string | null>(null)
-  const fieldId = useId()
+  const { token, setToken } = useTokenState();
+  const [draft, setDraft] = useState(token);
+  const [said, setSaid] = useState<string | null>(null);
+  const fieldId = useId();
 
   return (
     <details className="token">
       <summary className="token__summary">
-        GitHub token · {token ? 'set' : `raises the limit from ${UNAUTHENTICATED_HOURLY_LIMIT} to ${AUTHENTICATED_HOURLY_LIMIT} an hour`}
+        GitHub token ·{" "}
+        {token
+          ? "set"
+          : `raises the limit from ${UNAUTHENTICATED_HOURLY_LIMIT} to ${AUTHENTICATED_HOURLY_LIMIT} an hour`}
       </summary>
       <div className="token__body">
         <p className="token__note">
-          A fine-grained token with read access to public repositories is enough. It is kept in this
-          browser only, sent only to api.github.com, and never leaves with anything else.
+          A fine-grained token with read access to public repositories is
+          enough. It is kept in this browser only, sent only to api.github.com,
+          and never leaves with anything else.
         </p>
         <div className="token__row">
           <label className="token__label" htmlFor={fieldId}>
@@ -399,12 +453,12 @@ function TokenField() {
             id={fieldId}
             type="password"
             value={draft}
-            placeholder={token ? '••••••••' : 'github_pat_…'}
+            placeholder={token ? "••••••••" : "github_pat_…"}
             autoComplete="off"
             spellCheck={false}
             onChange={(event) => {
-              setDraft(event.target.value)
-              setSaid(null)
+              setDraft(event.target.value);
+              setSaid(null);
             }}
           />
         </div>
@@ -414,11 +468,15 @@ function TokenField() {
             type="button"
             disabled={draft.trim() === token}
             onClick={() => {
-              const stored = draft.trim()
-              setToken(stored)
+              const stored = draft.trim();
+              setToken(stored);
               // The field shows what was actually stored, which is the trimmed value.
-              setDraft(stored)
-              setSaid(stored ? 'Token saved. Requests from now on use it.' : 'Token removed.')
+              setDraft(stored);
+              setSaid(
+                stored
+                  ? "Token saved. Requests from now on use it."
+                  : "Token removed.",
+              );
             }}
           >
             Save
@@ -428,9 +486,9 @@ function TokenField() {
               className="button"
               type="button"
               onClick={() => {
-                setToken('')
-                setDraft('')
-                setSaid('Token removed. Requests are unauthenticated again.')
+                setToken("");
+                setDraft("");
+                setSaid("Token removed. Requests are unauthenticated again.");
               }}
             >
               Remove
@@ -444,7 +502,7 @@ function TokenField() {
         )}
       </div>
     </details>
-  )
+  );
 }
 
 /* Shared shell -------------------------------------------------------------
@@ -459,12 +517,12 @@ export function Start({
   message,
   children,
 }: {
-  initial?: string
-  onOpen: (target: RepoTarget) => void
-  message?: string
-  children?: React.ReactNode
+  initial?: string;
+  onOpen: (target: RepoTarget) => void;
+  message?: string;
+  children?: React.ReactNode;
 }) {
-  const { token } = useTokenState()
+  const { token } = useTokenState();
 
   return (
     <div className="centre">
@@ -473,7 +531,8 @@ export function Start({
           <Icon name="graph" size={20} /> {PRODUCT}
         </h1>
         <p className="start__lead">
-          Any public repository, from native GitHub issue relationships. Nothing is installed.
+          Any public repository, from native GitHub issue relationships. Nothing
+          is installed.
         </p>
 
         {message && <p className="notice notice--error">{message}</p>}
@@ -498,5 +557,5 @@ export function Start({
         )}
       </div>
     </div>
-  )
+  );
 }

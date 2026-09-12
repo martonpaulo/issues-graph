@@ -1,4 +1,4 @@
-import type { GraphNode, IssueGraph } from './graph'
+import type { GraphNode, IssueGraph } from "./graph";
 
 /**
  * The dependency relationships, said in words.
@@ -12,9 +12,9 @@ import type { GraphNode, IssueGraph } from './graph'
 
 export interface Adjacency {
   /** Issues that have to land before this one. */
-  blockedBy: GraphNode[]
+  blockedBy: GraphNode[];
   /** Issues waiting on this one. */
-  blocks: GraphNode[]
+  blocks: GraphNode[];
   /**
    * Issues this one is part of, and issues this one is made of.
    *
@@ -23,8 +23,8 @@ export interface Adjacency {
    * that by drawing the line without an arrowhead, which is exactly the distinction a reader of
    * this model cannot see, so it is carried here by being a different field entirely.
    */
-  parents: GraphNode[]
-  children: GraphNode[]
+  parents: GraphNode[];
+  children: GraphNode[];
 }
 
 /**
@@ -35,12 +35,12 @@ export interface Adjacency {
  * lives here so both surfaces read the same.
  */
 export function issueRef(node: GraphNode): string {
-  return node.external ? `${node.repo}#${node.number}` : `#${node.number}`
+  return node.external ? `${node.repo}#${node.number}` : `#${node.number}`;
 }
 
 /** Repository first, then number, so a reading order does not depend on edge order. */
 function byRef(a: GraphNode, b: GraphNode): number {
-  return a.repo === b.repo ? a.number - b.number : a.repo.localeCompare(b.repo)
+  return a.repo === b.repo ? a.number - b.number : a.repo.localeCompare(b.repo);
 }
 
 /**
@@ -57,40 +57,43 @@ function byRef(a: GraphNode, b: GraphNode): number {
  * missing — but leaving it out entirely hides a line the picture draws from the same reader.
  */
 export function adjacencyOf(graph: IssueGraph): Map<string, Adjacency> {
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
   const adjacency = new Map<string, Adjacency>(
-    graph.nodes.map((node) => [node.id, { blockedBy: [], blocks: [], parents: [], children: [] }]),
-  )
+    graph.nodes.map((node) => [
+      node.id,
+      { blockedBy: [], blocks: [], parents: [], children: [] },
+    ]),
+  );
 
   for (const edge of graph.edges) {
-    const source = byId.get(edge.source)
-    const target = byId.get(edge.target)
-    if (!source || !target) continue
-    if (edge.kind === 'dependency') {
-      adjacency.get(target.id)?.blockedBy.push(source)
-      adjacency.get(source.id)?.blocks.push(target)
+    const source = byId.get(edge.source);
+    const target = byId.get(edge.target);
+    if (!source || !target) continue;
+    if (edge.kind === "dependency") {
+      adjacency.get(target.id)?.blockedBy.push(source);
+      adjacency.get(source.id)?.blocks.push(target);
     } else {
       // The source of a hierarchy edge is the parent, so the target is what it is part of.
-      adjacency.get(target.id)?.parents.push(source)
-      adjacency.get(source.id)?.children.push(target)
+      adjacency.get(target.id)?.parents.push(source);
+      adjacency.get(source.id)?.children.push(target);
     }
   }
 
   for (const entry of adjacency.values()) {
-    entry.blockedBy.sort(byRef)
-    entry.blocks.sort(byRef)
-    entry.parents.sort(byRef)
-    entry.children.sort(byRef)
+    entry.blockedBy.sort(byRef);
+    entry.blocks.sort(byRef);
+    entry.parents.sort(byRef);
+    entry.children.sort(byRef);
   }
 
-  return adjacency
+  return adjacency;
 }
 
 /** `#23 and #24`, `#23, #24 and other/lib#7`. */
 function listRefs(nodes: GraphNode[]): string {
-  const refs = nodes.map(issueRef)
-  if (refs.length <= 1) return refs.join('')
-  return `${refs.slice(0, -1).join(', ')} and ${refs[refs.length - 1]}`
+  const refs = nodes.map(issueRef);
+  if (refs.length <= 1) return refs.join("");
+  return `${refs.slice(0, -1).join(", ")} and ${refs[refs.length - 1]}`;
 }
 
 /**
@@ -108,28 +111,33 @@ function listRefs(nodes: GraphNode[]): string {
  * would pay for an announcement nobody is waiting to hear. Every drawn edge is still said — an
  * absent clause means no such edge exists, not that one was left out.
  */
-export function describeNode(node: GraphNode, adjacency: Adjacency | undefined): string {
-  const blockedBy = adjacency?.blockedBy ?? []
-  const blocks = adjacency?.blocks ?? []
-  const parents = adjacency?.parents ?? []
-  const children = adjacency?.children ?? []
+export function describeNode(
+  node: GraphNode,
+  adjacency: Adjacency | undefined,
+): string {
+  const blockedBy = adjacency?.blockedBy ?? [];
+  const blocks = adjacency?.blocks ?? [];
+  const parents = adjacency?.parents ?? [];
+  const children = adjacency?.children ?? [];
 
   return [
     `Issue ${issueRef(node)}.`,
-    blockedBy.length > 0 ? `Blocked by ${listRefs(blockedBy)}.` : 'Blocked by nothing.',
-    blocks.length > 0 ? `Blocks ${listRefs(blocks)}.` : 'Blocks nothing.',
+    blockedBy.length > 0
+      ? `Blocked by ${listRefs(blockedBy)}.`
+      : "Blocked by nothing.",
+    blocks.length > 0 ? `Blocks ${listRefs(blocks)}.` : "Blocks nothing.",
     parents.length > 0 ? `Part of ${listRefs(parents)}.` : null,
     children.length > 0 ? `Contains ${listRefs(children)}.` : null,
   ]
     .filter((clause): clause is string => clause !== null)
-    .join(' ')
+    .join(" ");
 }
 
 /** One drawn edge, named on both ends. */
 export interface DependencyRow {
-  id: string
-  blocker: GraphNode
-  dependent: GraphNode
+  id: string;
+  blocker: GraphNode;
+  dependent: GraphNode;
 }
 
 /**
@@ -142,27 +150,27 @@ export interface DependencyRow {
  * one run of rows rather than as entries scattered through the list.
  */
 export function dependencyRows(graph: IssueGraph): DependencyRow[] {
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-  const rows: DependencyRow[] = []
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const rows: DependencyRow[] = [];
 
   for (const edge of graph.edges) {
-    if (edge.kind !== 'dependency') continue
-    const blocker = byId.get(edge.source)
-    const dependent = byId.get(edge.target)
-    if (!blocker || !dependent) continue
-    rows.push({ id: edge.id, blocker, dependent })
+    if (edge.kind !== "dependency") continue;
+    const blocker = byId.get(edge.source);
+    const dependent = byId.get(edge.target);
+    if (!blocker || !dependent) continue;
+    rows.push({ id: edge.id, blocker, dependent });
   }
 
   return rows.sort(
     (a, b) => byRef(a.blocker, b.blocker) || byRef(a.dependent, b.dependent),
-  )
+  );
 }
 
 /** One drawn hierarchy edge, named on both ends. */
 export interface ContainmentRow {
-  id: string
-  parent: GraphNode
-  child: GraphNode
+  id: string;
+  parent: GraphNode;
+  child: GraphNode;
 }
 
 /**
@@ -177,16 +185,18 @@ export interface ContainmentRow {
  * run of rows.
  */
 export function containmentRows(graph: IssueGraph): ContainmentRow[] {
-  const byId = new Map(graph.nodes.map((node) => [node.id, node]))
-  const rows: ContainmentRow[] = []
+  const byId = new Map(graph.nodes.map((node) => [node.id, node]));
+  const rows: ContainmentRow[] = [];
 
   for (const edge of graph.edges) {
-    if (edge.kind !== 'hierarchy') continue
-    const parent = byId.get(edge.source)
-    const child = byId.get(edge.target)
-    if (!parent || !child) continue
-    rows.push({ id: edge.id, parent, child })
+    if (edge.kind !== "hierarchy") continue;
+    const parent = byId.get(edge.source);
+    const child = byId.get(edge.target);
+    if (!parent || !child) continue;
+    rows.push({ id: edge.id, parent, child });
   }
 
-  return rows.sort((a, b) => byRef(a.parent, b.parent) || byRef(a.child, b.child))
+  return rows.sort(
+    (a, b) => byRef(a.parent, b.parent) || byRef(a.child, b.child),
+  );
 }

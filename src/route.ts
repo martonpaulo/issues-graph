@@ -9,24 +9,24 @@
  */
 
 export interface RepoTarget {
-  owner: string
-  repo: string
+  owner: string;
+  repo: string;
 }
 
 export type Route =
-  | { kind: 'index' }
-  | { kind: 'graph'; target: RepoTarget }
-  | { kind: 'invalid'; reason: string }
+  | { kind: "index" }
+  | { kind: "graph"; target: RepoTarget }
+  | { kind: "invalid"; reason: string };
 
 /**
  * GitHub owner and repository names are ASCII, start alphanumeric, and allow `-`, `_` and `.`
  * afterwards. Validating before building a request URL keeps a hand-edited path from reaching
  * api.github.com as something other than a repository lookup.
  */
-const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/
+const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
 function isName(value: string): boolean {
-  return NAME.test(value) && value !== '.' && value !== '..'
+  return NAME.test(value) && value !== "." && value !== "..";
 }
 
 /**
@@ -36,9 +36,9 @@ function isName(value: string): boolean {
  */
 function decodeSegment(segment: string): string | null {
   try {
-    return decodeURIComponent(segment)
+    return decodeURIComponent(segment);
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -47,53 +47,67 @@ function decodeSegment(segment: string): string | null {
  * when any segment carries a malformed percent escape, which no path this app builds ever does.
  */
 export function segmentsOf(pathname: string, base: string): string[] | null {
-  const normalisedBase = base.endsWith('/') ? base : `${base}/`
+  const normalisedBase = base.endsWith("/") ? base : `${base}/`;
   const withoutBase = pathname.startsWith(normalisedBase)
     ? pathname.slice(normalisedBase.length)
-    : pathname.replace(/^\//, '')
+    : pathname.replace(/^\//, "");
 
-  const segments: string[] = []
-  for (const segment of withoutBase.split('/')) {
-    if (segment.length === 0) continue
-    const decoded = decodeSegment(segment)
-    if (decoded === null) return null
-    segments.push(decoded)
+  const segments: string[] = [];
+  for (const segment of withoutBase.split("/")) {
+    if (segment.length === 0) continue;
+    const decoded = decodeSegment(segment);
+    if (decoded === null) return null;
+    segments.push(decoded);
   }
-  return segments
+  return segments;
 }
 
 export function parseRoute(pathname: string, base: string): Route {
-  const segments = segmentsOf(pathname, base)
+  const segments = segmentsOf(pathname, base);
   if (segments === null) {
-    return { kind: 'invalid', reason: 'This URL is malformed. Enter a repository as owner/repo.' }
+    return {
+      kind: "invalid",
+      reason: "This URL is malformed. Enter a repository as owner/repo.",
+    };
   }
 
-  if (segments.length === 0) return { kind: 'index' }
-  if (segments[0] !== 'dependencies') {
-    return { kind: 'invalid', reason: `Unknown path "/${segments.join('/')}".` }
+  if (segments.length === 0) return { kind: "index" };
+  if (segments[0] !== "dependencies") {
+    return {
+      kind: "invalid",
+      reason: `Unknown path "/${segments.join("/")}".`,
+    };
   }
 
-  const rest = segments.slice(1)
-  if (rest.length === 0) return { kind: 'index' }
+  const rest = segments.slice(1);
+  if (rest.length === 0) return { kind: "index" };
   if (rest.length !== 2) {
-    return { kind: 'invalid', reason: 'A dependency URL names an owner and a repository.' }
+    return {
+      kind: "invalid",
+      reason: "A dependency URL names an owner and a repository.",
+    };
   }
 
-  const [owner, repo] = rest
-  if (!isName(owner)) return { kind: 'invalid', reason: `"${owner}" is not a valid owner name.` }
-  if (!isName(repo)) return { kind: 'invalid', reason: `"${repo}" is not a valid repository name.` }
+  const [owner, repo] = rest;
+  if (!isName(owner))
+    return { kind: "invalid", reason: `"${owner}" is not a valid owner name.` };
+  if (!isName(repo))
+    return {
+      kind: "invalid",
+      reason: `"${repo}" is not a valid repository name.`,
+    };
 
-  return { kind: 'graph', target: { owner, repo } }
+  return { kind: "graph", target: { owner, repo } };
 }
 
 /** Builds the canonical path for a target. */
 export function pathForTarget(target: RepoTarget, base: string): string {
-  const normalisedBase = base.endsWith('/') ? base : `${base}/`
-  return `${normalisedBase}dependencies/${target.owner}/${target.repo}`
+  const normalisedBase = base.endsWith("/") ? base : `${base}/`;
+  return `${normalisedBase}dependencies/${target.owner}/${target.repo}`;
 }
 
 export function slugOf(target: RepoTarget): string {
-  return `${target.owner}/${target.repo}`
+  return `${target.owner}/${target.repo}`;
 }
 
 /**
@@ -108,23 +122,23 @@ export function slugOf(target: RepoTarget): string {
  * https://docs.github.com/en/rest/issues/issue-dependencies
  */
 export function canonicalSlug(slug: string): string {
-  return slug.toLowerCase()
+  return slug.toLowerCase();
 }
 
 /** The canonical identity of a route target: a storage key, never a label. */
 export function canonicalSlugOf(target: RepoTarget): string {
-  return canonicalSlug(slugOf(target))
+  return canonicalSlug(slugOf(target));
 }
 
 /** The product's name. It leads the index title and trails a repository's own. */
-export const PRODUCT = 'Issues Graph'
+export const PRODUCT = "Issues Graph";
 
 /**
  * The title of the index route. It repeats the one in `index.html` on purpose: the static head
  * is what a crawler and a link preview read, and this is what replaces it once the app mounts.
  * Two different strings there would advertise two different pages for one URL.
  */
-export const TITLE = `${PRODUCT} · GitHub issue dependency graph in your browser`
+export const TITLE = `${PRODUCT} · GitHub issue dependency graph in your browser`;
 
 /**
  * The document title for a route. Repository identity leads, because that is the half that
@@ -136,19 +150,24 @@ export const TITLE = `${PRODUCT} · GitHub issue dependency graph in your browse
  * never parsed as markup, so no name here reaches an HTML sink.
  */
 export function titleForRoute(route: Route): string {
-  return route.kind === 'graph' ? `${slugOf(route.target)} · ${PRODUCT}` : TITLE
+  return route.kind === "graph"
+    ? `${slugOf(route.target)} · ${PRODUCT}`
+    : TITLE;
 }
 
 /** Accepts `owner/repo`, or the same thing pasted as a github.com URL. */
 export function parseTargetInput(input: string): RepoTarget | null {
-  const trimmed = input.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\/+$/, '')
-  if (trimmed.length === 0) return null
+  const trimmed = input
+    .trim()
+    .replace(/^https?:\/\/github\.com\//i, "")
+    .replace(/\/+$/, "");
+  if (trimmed.length === 0) return null;
 
-  const parts = trimmed.split('/')
-  if (parts.length !== 2) return null
+  const parts = trimmed.split("/");
+  if (parts.length !== 2) return null;
 
-  const [owner, repo] = parts
-  if (!isName(owner) || !isName(repo)) return null
+  const [owner, repo] = parts;
+  if (!isName(owner) || !isName(repo)) return null;
 
-  return { owner, repo }
+  return { owner, repo };
 }

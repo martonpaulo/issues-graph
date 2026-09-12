@@ -1,8 +1,13 @@
-import { openedSlugs, rememberRepository } from './retention'
-import { canonicalSlug, parseTargetInput, slugOf, type RepoTarget } from './route'
+import { openedSlugs, rememberRepository } from "./retention";
+import {
+  canonicalSlug,
+  parseTargetInput,
+  type RepoTarget,
+  slugOf,
+} from "./route";
 
 /** As many options as fit under the field without the list becoming a page of its own. */
-const SUGGESTION_LIMIT = 8
+const SUGGESTION_LIMIT = 8;
 
 /**
  * One repository occupies one slot, whatever casing it was opened with. The earliest spelling in
@@ -10,13 +15,13 @@ const SUGGESTION_LIMIT = 8
  * spelling they just used.
  */
 function dedupeByCanonical(slugs: string[]): string[] {
-  const seen = new Set<string>()
+  const seen = new Set<string>();
   return slugs.filter((slug) => {
-    const key = canonicalSlug(slug)
-    if (seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
+    const key = canonicalSlug(slug);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
@@ -32,11 +37,13 @@ function dedupeByCanonical(slugs: string[]): string[] {
  * identity was canonical, without the reader having to clear anything.
  */
 export function recentTargets(): string[] {
-  return dedupeByCanonical(openedSlugs()).filter((slug) => parseTargetInput(slug) !== null)
+  return dedupeByCanonical(openedSlugs()).filter(
+    (slug) => parseTargetInput(slug) !== null,
+  );
 }
 
 export function rememberTarget(target: RepoTarget): void {
-  rememberRepository(slugOf(target))
+  rememberRepository(slugOf(target));
 }
 
 /**
@@ -46,9 +53,9 @@ export function rememberTarget(target: RepoTarget): void {
  * result spells it in.
  */
 export function mergeSuggestions(typed: string, found: string[]): string[] {
-  const needle = typed.toLowerCase()
+  const needle = typed.toLowerCase();
   const recents = recentTargets().filter(
     (slug) => needle.length === 0 || slug.toLowerCase().includes(needle),
-  )
-  return dedupeByCanonical([...recents, ...found]).slice(0, SUGGESTION_LIMIT)
+  );
+  return dedupeByCanonical([...recents, ...found]).slice(0, SUGGESTION_LIMIT);
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from "vitest";
 
 import {
   canonicalSlug,
@@ -9,194 +9,223 @@ import {
   segmentsOf,
   slugOf,
   titleForRoute,
-} from './route'
+} from "./route";
 
-const BASE = '/issues-graph/'
+const BASE = "/issues-graph/";
 /** The base the site is deployed with: its own host, no repository prefix. */
-const ROOT = '/'
+const ROOT = "/";
 
-describe('parseRoute', () => {
-  it('reads owner and repository from the canonical path', () => {
+describe("parseRoute", () => {
+  it("reads owner and repository from the canonical path", () => {
     expect(parseRoute(`${BASE}dependencies/acme/app`, BASE)).toEqual({
-      kind: 'graph',
-      target: { owner: 'acme', repo: 'app' },
-    })
-  })
+      kind: "graph",
+      target: { owner: "acme", repo: "app" },
+    });
+  });
 
-  it('reads owner and repository when the base is the root', () => {
-    expect(parseRoute('/dependencies/acme/app', ROOT)).toEqual({
-      kind: 'graph',
-      target: { owner: 'acme', repo: 'app' },
-    })
-    expect(parseRoute('/dependencies/acme/app/', ROOT)).toEqual({
-      kind: 'graph',
-      target: { owner: 'acme', repo: 'app' },
-    })
-  })
+  it("reads owner and repository when the base is the root", () => {
+    expect(parseRoute("/dependencies/acme/app", ROOT)).toEqual({
+      kind: "graph",
+      target: { owner: "acme", repo: "app" },
+    });
+    expect(parseRoute("/dependencies/acme/app/", ROOT)).toEqual({
+      kind: "graph",
+      target: { owner: "acme", repo: "app" },
+    });
+  });
 
-  it('treats the bare root as the index when the base is the root', () => {
-    expect(parseRoute('/', ROOT)).toEqual({ kind: 'index' })
-    expect(parseRoute('/dependencies', ROOT)).toEqual({ kind: 'index' })
-  })
+  it("treats the bare root as the index when the base is the root", () => {
+    expect(parseRoute("/", ROOT)).toEqual({ kind: "index" });
+    expect(parseRoute("/dependencies", ROOT)).toEqual({ kind: "index" });
+  });
 
-  it('does not strip a repository prefix that is not part of a root base', () => {
-    expect(parseRoute('/issues-graph/dependencies/acme/app', ROOT)).toEqual({
-      kind: 'invalid',
+  it("does not strip a repository prefix that is not part of a root base", () => {
+    expect(parseRoute("/issues-graph/dependencies/acme/app", ROOT)).toEqual({
+      kind: "invalid",
       reason: 'Unknown path "/issues-graph/dependencies/acme/app".',
-    })
-  })
+    });
+  });
 
-  it('rejects a bare repository, because the owner is never assumed', () => {
+  it("rejects a bare repository, because the owner is never assumed", () => {
     expect(parseRoute(`${BASE}dependencies/tabelo`, BASE)).toEqual({
-      kind: 'invalid',
-      reason: 'A dependency URL names an owner and a repository.',
-    })
-  })
+      kind: "invalid",
+      reason: "A dependency URL names an owner and a repository.",
+    });
+  });
 
-  it('treats the site root and a bare /dependencies as the index', () => {
-    expect(parseRoute(BASE, BASE).kind).toBe('index')
-    expect(parseRoute(`${BASE}dependencies`, BASE).kind).toBe('index')
-  })
+  it("treats the site root and a bare /dependencies as the index", () => {
+    expect(parseRoute(BASE, BASE).kind).toBe("index");
+    expect(parseRoute(`${BASE}dependencies`, BASE).kind).toBe("index");
+  });
 
-  it('rejects a path with more segments than owner and repository', () => {
-    expect(parseRoute(`${BASE}dependencies/a/b/c`, BASE).kind).toBe('invalid')
-  })
+  it("rejects a path with more segments than owner and repository", () => {
+    expect(parseRoute(`${BASE}dependencies/a/b/c`, BASE).kind).toBe("invalid");
+  });
 
-  it('rejects names outside GitHub character set before they reach a request URL', () => {
-    for (const bad of ['..', 'a/b', 'has space', '-leading', '~']) {
-      expect(parseRoute(`${BASE}dependencies/acme/${encodeURIComponent(bad)}`, BASE).kind).toBe(
-        'invalid',
-      )
+  it("rejects names outside GitHub character set before they reach a request URL", () => {
+    for (const bad of ["..", "a/b", "has space", "-leading", "~"]) {
+      expect(
+        parseRoute(`${BASE}dependencies/acme/${encodeURIComponent(bad)}`, BASE)
+          .kind,
+      ).toBe("invalid");
     }
-  })
+  });
 
-  it('tolerates a trailing slash', () => {
+  it("tolerates a trailing slash", () => {
     expect(parseRoute(`${BASE}dependencies/acme/app/`, BASE)).toEqual({
-      kind: 'graph',
-      target: { owner: 'acme', repo: 'app' },
-    })
-  })
+      kind: "graph",
+      target: { owner: "acme", repo: "app" },
+    });
+  });
 
-  it('rejects an unknown top-level path', () => {
-    expect(parseRoute(`${BASE}something-else`, BASE).kind).toBe('invalid')
-  })
+  it("rejects an unknown top-level path", () => {
+    expect(parseRoute(`${BASE}something-else`, BASE).kind).toBe("invalid");
+  });
 
-  it('works when the base prefix is missing from the pathname', () => {
-    expect(parseRoute('/dependencies/acme/app', BASE)).toEqual({
-      kind: 'graph',
-      target: { owner: 'acme', repo: 'app' },
-    })
-  })
+  it("works when the base prefix is missing from the pathname", () => {
+    expect(parseRoute("/dependencies/acme/app", BASE)).toEqual({
+      kind: "graph",
+      target: { owner: "acme", repo: "app" },
+    });
+  });
 
-  it('reports a malformed escape as an invalid route instead of throwing', () => {
-    for (const bad of ['%', '%E0%A4%A', '%z', 'a%2']) {
+  it("reports a malformed escape as an invalid route instead of throwing", () => {
+    for (const bad of ["%", "%E0%A4%A", "%z", "a%2"]) {
       expect(parseRoute(`${BASE}dependencies/acme/${bad}`, BASE)).toEqual({
-        kind: 'invalid',
-        reason: 'This URL is malformed. Enter a repository as owner/repo.',
-      })
+        kind: "invalid",
+        reason: "This URL is malformed. Enter a repository as owner/repo.",
+      });
     }
-  })
+  });
 
-  it('reports a malformed escape wherever it sits in the path', () => {
-    expect(parseRoute(`${BASE}%/acme/app`, BASE).kind).toBe('invalid')
-    expect(parseRoute(`${BASE}dependencies/%E0%A4%A/app/`, BASE).kind).toBe('invalid')
-    expect(parseRoute('/dependencies/acme/%', BASE).kind).toBe('invalid')
-  })
+  it("reports a malformed escape wherever it sits in the path", () => {
+    expect(parseRoute(`${BASE}%/acme/app`, BASE).kind).toBe("invalid");
+    expect(parseRoute(`${BASE}dependencies/%E0%A4%A/app/`, BASE).kind).toBe(
+      "invalid",
+    );
+    expect(parseRoute("/dependencies/acme/%", BASE).kind).toBe("invalid");
+  });
 
-  it('still reads a name written with valid percent encoding', () => {
+  it("still reads a name written with valid percent encoding", () => {
     expect(parseRoute(`${BASE}dependencies/%61cme/a%70p`, BASE)).toEqual({
-      kind: 'graph',
-      target: { owner: 'acme', repo: 'app' },
-    })
-  })
-})
+      kind: "graph",
+      target: { owner: "acme", repo: "app" },
+    });
+  });
+});
 
-describe('segmentsOf', () => {
-  it('drops the base and empty segments', () => {
+describe("segmentsOf", () => {
+  it("drops the base and empty segments", () => {
     expect(segmentsOf(`${BASE}dependencies//acme/app/`, BASE)).toEqual([
-      'dependencies',
-      'acme',
-      'app',
-    ])
-  })
+      "dependencies",
+      "acme",
+      "app",
+    ]);
+  });
 
-  it('decodes valid escapes', () => {
+  it("decodes valid escapes", () => {
     expect(segmentsOf(`${BASE}dependencies/%61cme/my%2Erepo`, BASE)).toEqual([
-      'dependencies',
-      'acme',
-      'my.repo',
-    ])
-  })
+      "dependencies",
+      "acme",
+      "my.repo",
+    ]);
+  });
 
-  it('returns null rather than throwing on a malformed escape', () => {
-    for (const bad of ['%', '%E0%A4%A', '%z', 'a%2']) {
-      expect(segmentsOf(`${BASE}dependencies/acme/${bad}`, BASE)).toBeNull()
-      expect(segmentsOf(`/dependencies/acme/${bad}/`, BASE)).toBeNull()
+  it("returns null rather than throwing on a malformed escape", () => {
+    for (const bad of ["%", "%E0%A4%A", "%z", "a%2"]) {
+      expect(segmentsOf(`${BASE}dependencies/acme/${bad}`, BASE)).toBeNull();
+      expect(segmentsOf(`/dependencies/acme/${bad}/`, BASE)).toBeNull();
     }
-  })
-})
+  });
+});
 
-describe('pathForTarget', () => {
-  it('writes owner and repository', () => {
-    expect(pathForTarget({ owner: 'acme', repo: 'app' }, BASE)).toBe(
-      '/issues-graph/dependencies/acme/app',
-    )
-  })
+describe("pathForTarget", () => {
+  it("writes owner and repository", () => {
+    expect(pathForTarget({ owner: "acme", repo: "app" }, BASE)).toBe(
+      "/issues-graph/dependencies/acme/app",
+    );
+  });
 
-  it('round-trips through parseRoute', () => {
-    const target = { owner: 'acme', repo: 'app' }
-    expect(parseRoute(pathForTarget(target, BASE), BASE)).toEqual({ kind: 'graph', target })
-  })
+  it("round-trips through parseRoute", () => {
+    const target = { owner: "acme", repo: "app" };
+    expect(parseRoute(pathForTarget(target, BASE), BASE)).toEqual({
+      kind: "graph",
+      target,
+    });
+  });
 
-  it('writes a single leading slash when the base is the root', () => {
-    expect(pathForTarget({ owner: 'acme', repo: 'app' }, ROOT)).toBe('/dependencies/acme/app')
-  })
+  it("writes a single leading slash when the base is the root", () => {
+    expect(pathForTarget({ owner: "acme", repo: "app" }, ROOT)).toBe(
+      "/dependencies/acme/app",
+    );
+  });
 
-  it('round-trips through parseRoute when the base is the root', () => {
-    const target = { owner: 'acme', repo: 'app' }
-    expect(parseRoute(pathForTarget(target, ROOT), ROOT)).toEqual({ kind: 'graph', target })
-  })
-})
+  it("round-trips through parseRoute when the base is the root", () => {
+    const target = { owner: "acme", repo: "app" };
+    expect(parseRoute(pathForTarget(target, ROOT), ROOT)).toEqual({
+      kind: "graph",
+      target,
+    });
+  });
+});
 
-describe('slugOf', () => {
-  it('joins the target the way GitHub writes it', () => {
-    expect(slugOf({ owner: 'acme', repo: 'app' })).toBe('acme/app')
-  })
-})
+describe("slugOf", () => {
+  it("joins the target the way GitHub writes it", () => {
+    expect(slugOf({ owner: "acme", repo: "app" })).toBe("acme/app");
+  });
+});
 
-describe('parseTargetInput', () => {
-  it('accepts owner/repo and a pasted GitHub URL', () => {
-    expect(parseTargetInput('acme/app')).toEqual({ owner: 'acme', repo: 'app' })
-    expect(parseTargetInput('  acme/app ')).toEqual({ owner: 'acme', repo: 'app' })
-    expect(parseTargetInput('https://github.com/acme/app/')).toEqual({ owner: 'acme', repo: 'app' })
-  })
+describe("parseTargetInput", () => {
+  it("accepts owner/repo and a pasted GitHub URL", () => {
+    expect(parseTargetInput("acme/app")).toEqual({
+      owner: "acme",
+      repo: "app",
+    });
+    expect(parseTargetInput("  acme/app ")).toEqual({
+      owner: "acme",
+      repo: "app",
+    });
+    expect(parseTargetInput("https://github.com/acme/app/")).toEqual({
+      owner: "acme",
+      repo: "app",
+    });
+  });
 
-  it('rejects empty, malformed, and owner-less input', () => {
-    expect(parseTargetInput('')).toBeNull()
-    expect(parseTargetInput('a/b/c')).toBeNull()
-    expect(parseTargetInput('bad name')).toBeNull()
-    expect(parseTargetInput('tabelo')).toBeNull()
-  })
-})
+  it("rejects empty, malformed, and owner-less input", () => {
+    expect(parseTargetInput("")).toBeNull();
+    expect(parseTargetInput("a/b/c")).toBeNull();
+    expect(parseTargetInput("bad name")).toBeNull();
+    expect(parseTargetInput("tabelo")).toBeNull();
+  });
+});
 
-describe('titleForRoute', () => {
-  const titleAt = (pathname: string) => titleForRoute(parseRoute(pathname, BASE))
+describe("titleForRoute", () => {
+  const titleAt = (pathname: string) =>
+    titleForRoute(parseRoute(pathname, BASE));
 
-  it('names the product on the index', () => {
-    expect(titleAt(BASE)).toBe('Issues Graph · GitHub issue dependency graph in your browser')
-  })
+  it("names the product on the index", () => {
+    expect(titleAt(BASE)).toBe(
+      "Issues Graph · GitHub issue dependency graph in your browser",
+    );
+  });
 
-  it('leads with the repository on a graph route', () => {
-    expect(titleAt(`${BASE}dependencies/acme/app`)).toBe('acme/app · Issues Graph')
-  })
+  it("leads with the repository on a graph route", () => {
+    expect(titleAt(`${BASE}dependencies/acme/app`)).toBe(
+      "acme/app · Issues Graph",
+    );
+  });
 
-  it('falls back to the index title without echoing a rejected path', () => {
-    const title = titleAt(`${BASE}dependencies/acme/${encodeURIComponent('<img src=x>')}`)
-    expect(title).toBe('Issues Graph · GitHub issue dependency graph in your browser')
-    expect(title).not.toContain('<')
-  })
+  it("falls back to the index title without echoing a rejected path", () => {
+    const title = titleAt(
+      `${BASE}dependencies/acme/${encodeURIComponent("<img src=x>")}`,
+    );
+    expect(title).toBe(
+      "Issues Graph · GitHub issue dependency graph in your browser",
+    );
+    expect(title).not.toContain("<");
+  });
 
-  it('changes across a navigation sequence, including going back', () => {
+  it("changes across a navigation sequence, including going back", () => {
     // The history stack a viewer builds, then walks back through: App derives the route from
     // `pathname`, which Back and Forward update the same way an in-app link does.
     const visited = [
@@ -205,35 +234,38 @@ describe('titleForRoute', () => {
       `${BASE}dependencies/other/repo`,
       `${BASE}nope`,
       `${BASE}dependencies/acme/app`,
-    ]
+    ];
 
-    const index = 'Issues Graph · GitHub issue dependency graph in your browser'
+    const index =
+      "Issues Graph · GitHub issue dependency graph in your browser";
     expect(visited.map(titleAt)).toEqual([
       index,
-      'acme/app · Issues Graph',
-      'other/repo · Issues Graph',
+      "acme/app · Issues Graph",
+      "other/repo · Issues Graph",
       index,
-      'acme/app · Issues Graph',
-    ])
-  })
-})
+      "acme/app · Issues Graph",
+    ]);
+  });
+});
 
-describe('canonicalSlug', () => {
-  it('folds the spellings GitHub treats as one repository', () => {
-    const spellings = ['Acme/App', 'acme/app', 'ACME/APP', 'aCmE/aPp']
-    expect(new Set(spellings.map(canonicalSlug)).size).toBe(1)
-    expect(canonicalSlug('Acme/App')).toBe('acme/app')
-  })
+describe("canonicalSlug", () => {
+  it("folds the spellings GitHub treats as one repository", () => {
+    const spellings = ["Acme/App", "acme/app", "ACME/APP", "aCmE/aPp"];
+    expect(new Set(spellings.map(canonicalSlug)).size).toBe(1);
+    expect(canonicalSlug("Acme/App")).toBe("acme/app");
+  });
 
-  it('keeps genuinely different repositories apart', () => {
-    expect(canonicalSlug('acme/app')).not.toBe(canonicalSlug('acme/app-two'))
-    expect(canonicalSlug('acme/app')).not.toBe(canonicalSlug('other/app'))
-    expect(canonicalSlug('acme/app_two')).not.toBe(canonicalSlug('acme/app-two'))
-  })
+  it("keeps genuinely different repositories apart", () => {
+    expect(canonicalSlug("acme/app")).not.toBe(canonicalSlug("acme/app-two"));
+    expect(canonicalSlug("acme/app")).not.toBe(canonicalSlug("other/app"));
+    expect(canonicalSlug("acme/app_two")).not.toBe(
+      canonicalSlug("acme/app-two"),
+    );
+  });
 
-  it('canonicalizes a target without changing what the route displays', () => {
-    const target = { owner: 'Acme', repo: 'App' }
-    expect(canonicalSlugOf(target)).toBe('acme/app')
-    expect(slugOf(target)).toBe('Acme/App')
-  })
-})
+  it("canonicalizes a target without changing what the route displays", () => {
+    const target = { owner: "Acme", repo: "App" };
+    expect(canonicalSlugOf(target)).toBe("acme/app");
+    expect(slugOf(target)).toBe("Acme/App");
+  });
+});

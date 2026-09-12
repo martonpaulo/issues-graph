@@ -1,5 +1,5 @@
-import ELK from 'elkjs/lib/elk-api.js'
-import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url'
+import ELK from "elkjs/lib/elk-api.js";
+import elkWorkerUrl from "elkjs/lib/elk-worker.min.js?url";
 
 /**
  * ELK in a real Web Worker.
@@ -21,15 +21,17 @@ import elkWorkerUrl from 'elkjs/lib/elk-worker.min.js?url'
  * https://developer.mozilla.org/en-US/docs/Web/API/PerformanceLongTaskTiming
  */
 export interface WorkerEngine {
-  layout(graph: Parameters<InstanceType<typeof ELK>['layout']>[0]): Promise<unknown>
+  layout(
+    graph: Parameters<InstanceType<typeof ELK>["layout"]>[0],
+  ): Promise<unknown>;
   /** Stops a layout the page has moved on from, which is the only way to stop one at all. */
-  terminate(): void
+  terminate(): void;
 }
 
 export function workerEngine(): WorkerEngine {
   // Vite emits the worker script as its own asset and hands back its URL; the file is a classic
   // script, so the worker is constructed without `type: 'module'`.
-  const worker = new Worker(elkWorkerUrl)
+  const worker = new Worker(elkWorkerUrl);
 
   // `new Worker(url)` succeeds whatever the URL says: the fetch happens afterwards, and a script
   // that 404s or throws while loading reports itself through an `error` event instead. `elk-api`
@@ -39,27 +41,27 @@ export function workerEngine(): WorkerEngine {
   // settle, and the page would sit on "Laying out the graph…" exactly as it did before #16.
   //
   // So the worker's death is turned into a rejection of its own, and every layout races against it.
-  let died: (error: Error) => void = () => {}
+  let died: (error: Error) => void = () => {};
   const death = new Promise<never>((_, reject) => {
-    died = reject
-  })
+    died = reject;
+  });
   // A death nobody is waiting on is not an unhandled rejection; it is a worker that failed while
   // the page happened to be idle, and the next layout is what needs to hear about it.
-  death.catch(() => {})
+  death.catch(() => {});
 
   const fail = (message: string) => {
-    died(new Error(message))
-  }
-  worker.addEventListener('error', (event: ErrorEvent) => {
+    died(new Error(message));
+  };
+  worker.addEventListener("error", (event: ErrorEvent) => {
     // A cross-origin or load failure arrives with no message, so the fallback names what happened
     // rather than reporting an empty one.
-    fail(event.message || 'The layout engine could not be loaded.')
-  })
-  worker.addEventListener('messageerror', () => {
-    fail('The layout engine sent a reply that could not be read.')
-  })
+    fail(event.message || "The layout engine could not be loaded.");
+  });
+  worker.addEventListener("messageerror", () => {
+    fail("The layout engine sent a reply that could not be read.");
+  });
 
-  const elk = new ELK({ workerFactory: () => worker })
+  const elk = new ELK({ workerFactory: () => worker });
 
   return {
     layout: (graph) => Promise.race([elk.layout(graph), death]),
@@ -72,8 +74,8 @@ export function workerEngine(): WorkerEngine {
       //
       // Rejecting first means the race is already settled when the thread goes away, so a
       // terminated engine reports a stopped layout rather than a silent one.
-      fail('The layout was stopped.')
-      elk.terminateWorker()
+      fail("The layout was stopped.");
+      elk.terminateWorker();
     },
-  }
+  };
 }

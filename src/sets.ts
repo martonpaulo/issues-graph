@@ -13,16 +13,19 @@
 
 /** Everything in `base`, plus everything in `additions`. */
 export function union<T>(base: ReadonlySet<T>, additions: Iterable<T>): Set<T> {
-  const next = new Set(base)
-  for (const value of additions) next.add(value)
-  return next
+  const next = new Set(base);
+  for (const value of additions) next.add(value);
+  return next;
 }
 
 /** Everything in `base` that `removals` does not hold. */
-export function difference<T>(base: ReadonlySet<T>, removals: ReadonlySet<T>): Set<T> {
-  const next = new Set<T>()
+export function difference<T>(
+  base: ReadonlySet<T>,
+  removals: ReadonlySet<T>,
+): Set<T> {
+  const next = new Set<T>();
   for (const value of base) {
-    if (!removals.has(value)) next.add(value)
+    if (!removals.has(value)) next.add(value);
   }
-  return next
+  return next;
 }

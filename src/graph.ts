@@ -1,7 +1,11 @@
-import type { IssuePayload, RepositoryGraphData, UnresolvedDependency } from './github'
-import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from './chipMetrics'
-import { cardLabels, needsAttention, type CardChip } from './labels'
-import { canonicalSlug, slugOf, type RepoTarget } from './route'
+import { CHIP_CHAR_WIDTHS, CHIP_FALLBACK_CHAR_WIDTH } from "./chipMetrics";
+import type {
+  IssuePayload,
+  RepositoryGraphData,
+  UnresolvedDependency,
+} from "./github";
+import { type CardChip, cardLabels, needsAttention } from "./labels";
+import { canonicalSlug, type RepoTarget, slugOf } from "./route";
 
 /**
  * Turns GitHub's payloads into a laid-out graph. Pure: no network, no React, no DOM. Every
@@ -11,7 +15,7 @@ import { canonicalSlug, slugOf, type RepoTarget } from './route'
  */
 
 /** Every card is the same width; the height follows its title. */
-export const NODE_WIDTH = 232
+export const NODE_WIDTH = 232;
 
 /**
  * A card is as tall as its title needs, between one line and five, and no taller.
@@ -21,35 +25,35 @@ export const NODE_WIDTH = 232
  * has to produce the same layout in a test as in a browser; the estimate is deliberately generous,
  * since a line too many only adds slack while a line too few would clip the title.
  */
-export const MAX_TITLE_LINES = 5
-const TITLE_LINE_HEIGHT = 17
+export const MAX_TITLE_LINES = 5;
+const TITLE_LINE_HEIGHT = 17;
 /**
  * Width available to a title, expressed in quarter-character units. Most glyphs cost four; the
  * narrow glyphs below cost three. This keeps the old conservative 33-character bound for wide
  * text without reserving a second line for narrow text that Figtree renders on one.
  */
-const TITLE_UNITS_PER_LINE = 33 * 4
-const TITLE_CHAR_UNITS = 4
-const NARROW_TITLE_CHAR_UNITS = 3
-const NARROW_TITLE_CHARS = new Set("fijltI1.,':;|!")
+const TITLE_UNITS_PER_LINE = 33 * 4;
+const TITLE_CHAR_UNITS = 4;
+const NARROW_TITLE_CHAR_UNITS = 3;
+const NARROW_TITLE_CHARS = new Set("fijltI1.,':;|!");
 /** Border, padding, the number/state row, and the gap under it. Mirrors `.card` in styles.css. */
-const CARD_CHROME = 38
+const CARD_CHROME = 38;
 /** Comfortable gap between the title and the chips under it. */
-const LABELS_GAP = 11
+const LABELS_GAP = 11;
 /** One row of label chips, and the space between two rows. */
-const CHIP_ROW_HEIGHT = 17
-const CHIP_GAP = 4
+const CHIP_ROW_HEIGHT = 17;
+const CHIP_GAP = 4;
 /** A chip's own horizontal padding and border. Mirrors `.chip` in styles.css. */
-const CHIP_PADDING = 12
+const CHIP_PADDING = 12;
 /** The width the chips wrap inside: the card minus its padding. */
-const CHIP_ROW_WIDTH = 210
+const CHIP_ROW_WIDTH = 210;
 /**
  * Held back from the row so a chip run that ends within a pixel of the edge is treated as wrapping.
  * Real combinations land within a pixel of the 210px row — `type: documentation`, `priority: P1`
  * and `effort: M` is one — so the boundary is genuinely decided by fractions of a pixel; this also
  * covers the metric-matched fallback the browser draws with while Figtree is still loading.
  */
-const CHIP_ROW_SLACK = 1
+const CHIP_ROW_SLACK = 1;
 
 /**
  * What one emoji costs.
@@ -62,7 +66,7 @@ const CHIP_ROW_SLACK = 1
  * repositories to matter, and under-reserving is the direction that pushes chips out of the card.
  * A cluster spelled with several code points over-reserves, which only leaves slack.
  */
-const CHIP_EMOJI_CHAR_WIDTH = 13
+const CHIP_EMOJI_CHAR_WIDTH = 13;
 
 /** Symbol and pictographic blocks the shipped Figtree face does not cover. */
 function isEmoji(codePoint: number): boolean {
@@ -70,7 +74,7 @@ function isEmoji(codePoint: number): boolean {
     (codePoint >= 0x2600 && codePoint <= 0x27bf) ||
     (codePoint >= 0x2b00 && codePoint <= 0x2bff) ||
     codePoint >= 0x1f000
-  )
+  );
 }
 
 /**
@@ -84,49 +88,62 @@ function isEmoji(codePoint: number): boolean {
  * while a row too few pushes the chips out of the card.
  */
 function chipWidth(text: string): number {
-  let width = CHIP_PADDING
+  let width = CHIP_PADDING;
   for (const character of text) {
-    const captured = CHIP_CHAR_WIDTHS[character]
+    const captured = CHIP_CHAR_WIDTHS[character];
     if (captured !== undefined) {
-      width += captured
-      continue
+      width += captured;
+      continue;
     }
-    width += isEmoji(character.codePointAt(0)!) ? CHIP_EMOJI_CHAR_WIDTH : CHIP_FALLBACK_CHAR_WIDTH
+    // `for...of` iterates whole code points, so the character is never empty.
+    const codePoint = character.codePointAt(0) ?? 0;
+    width += isEmoji(codePoint)
+      ? CHIP_EMOJI_CHAR_WIDTH
+      : CHIP_FALLBACK_CHAR_WIDTH;
   }
-  return width
+  return width;
 }
 
 function titleUnits(text: string): number {
   return [...text].reduce(
     (total, character) =>
-      total + (NARROW_TITLE_CHARS.has(character) ? NARROW_TITLE_CHAR_UNITS : TITLE_CHAR_UNITS),
+      total +
+      (NARROW_TITLE_CHARS.has(character)
+        ? NARROW_TITLE_CHAR_UNITS
+        : TITLE_CHAR_UNITS),
     0,
-  )
+  );
 }
 
-export function titleLineCount(title: string, perLine = TITLE_UNITS_PER_LINE): number {
-  const words = title.trim().split(/\s+/).filter((word) => word.length > 0)
-  if (words.length === 0) return 1
+export function titleLineCount(
+  title: string,
+  perLine = TITLE_UNITS_PER_LINE,
+): number {
+  const words = title
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word.length > 0);
+  if (words.length === 0) return 1;
 
-  let lines = 1
-  let used = 0
+  let lines = 1;
+  let used = 0;
   for (const word of words) {
-    const wordWidth = titleUnits(word)
-    const needed = used === 0 ? wordWidth : used + TITLE_CHAR_UNITS + wordWidth
+    const wordWidth = titleUnits(word);
+    const needed = used === 0 ? wordWidth : used + TITLE_CHAR_UNITS + wordWidth;
     if (used > 0 && needed > perLine) {
-      lines += 1
-      used = wordWidth
+      lines += 1;
+      used = wordWidth;
     } else {
-      used = needed
+      used = needed;
     }
     // A single word longer than the line wraps inside itself.
     while (used > perLine) {
-      lines += 1
-      used -= perLine
+      lines += 1;
+      used -= perLine;
     }
   }
 
-  return Math.min(MAX_TITLE_LINES, Math.max(1, lines))
+  return Math.min(MAX_TITLE_LINES, Math.max(1, lines));
 }
 
 /**
@@ -134,47 +151,48 @@ export function titleLineCount(title: string, perLine = TITLE_UNITS_PER_LINE): n
  * lines are: this module is pure, and the layout has to agree with what the browser will draw.
  */
 export function chipRows(texts: string[], width = CHIP_ROW_WIDTH): number {
-  if (texts.length === 0) return 0
+  if (texts.length === 0) return 0;
 
-  const available = width - CHIP_ROW_SLACK
-  let rows = 1
-  let used = 0
+  const available = width - CHIP_ROW_SLACK;
+  let rows = 1;
+  let used = 0;
   for (const text of texts) {
-    const chip = Math.min(available, chipWidth(text))
-    const needed = used === 0 ? chip : used + CHIP_GAP + chip
+    const chip = Math.min(available, chipWidth(text));
+    const needed = used === 0 ? chip : used + CHIP_GAP + chip;
     if (used > 0 && needed > available) {
-      rows += 1
-      used = chip
+      rows += 1;
+      used = chip;
     } else {
-      used = needed
+      used = needed;
     }
   }
-  return rows
+  return rows;
 }
 
 export function cardHeight(titleLines: number, rows: number): number {
-  const chips = rows > 0 ? LABELS_GAP + rows * CHIP_ROW_HEIGHT + (rows - 1) * CHIP_GAP : 0
-  return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + chips
+  const chips =
+    rows > 0 ? LABELS_GAP + rows * CHIP_ROW_HEIGHT + (rows - 1) * CHIP_GAP : 0;
+  return CARD_CHROME + titleLines * TITLE_LINE_HEIGHT + chips;
 }
 
 export type IssueState =
-  | 'ready'
-  | 'unassigned'
-  | 'blocked'
-  | 'in-progress'
-  | 'attention'
-  | 'in-review'
-  | 'completed'
-  | 'not-planned'
+  | "ready"
+  | "unassigned"
+  | "blocked"
+  | "in-progress"
+  | "attention"
+  | "in-review"
+  | "completed"
+  | "not-planned";
 
 export interface GraphNode {
-  id: string
-  number: number
-  title: string
-  url: string
-  repo: string
+  id: string;
+  number: number;
+  title: string;
+  url: string;
+  repo: string;
   /** Local workflow presentation state. External repositories do not share this convention. */
-  state: IssueState | null
+  state: IssueState | null;
   /**
    * Whether GitHub still has the issue open.
    *
@@ -184,55 +202,55 @@ export interface GraphNode {
    * and means the same everywhere, and it is the one thing that has to be said about a blocker:
    * a closed one is no longer in the way.
    */
-  open: boolean
+  open: boolean;
   /** True when the issue lives in another repository and was reached as a blocker. */
-  external: boolean
+  external: boolean;
   /**
    * How that other repository is named on the card: the bare repository when the owner is the one
    * being viewed, the full `owner/repo` when it is somebody else's. Empty for a local issue.
    */
-  repoLabel: string
+  repoLabel: string;
   /** The chips the card draws, canonical slots first. External cards draw none. */
-  labels: CardChip[]
+  labels: CardChip[];
   /** Every label on the issue, which is what the highlight picker offers. */
-  allLabels: string[]
+  allLabels: string[];
   /**
    * How far this issue's native sub-issues have got, or null when it has none. Null is also what
    * an external card carries: the count belongs to a repository this view is not reading.
    */
-  subIssues: SubIssuesProgress | null
+  subIssues: SubIssuesProgress | null;
   /** Lines the title is allowed, and the height that leaves the card. */
-  titleLines: number
-  height: number
-  position: { x: number; y: number }
+  titleLines: number;
+  height: number;
+  position: { x: number; y: number };
 }
 
 /** What one edge asserts. The two are different relations and are drawn differently. */
-export type EdgeKind = 'dependency' | 'hierarchy'
+export type EdgeKind = "dependency" | "hierarchy";
 
 export interface SubIssuesProgress {
-  completed: number
-  total: number
+  completed: number;
+  total: number;
 }
 
 export interface GraphEdge {
-  id: string
+  id: string;
   /**
    * `dependency`: the source has to land first. `hierarchy`: the source contains the target.
    * Containment carries no ordering, which is why it never shares a style with a dependency.
    */
-  kind: EdgeKind
+  kind: EdgeKind;
   /** The blocker for a dependency, the parent for a hierarchy edge. */
-  source: string
-  target: string
+  source: string;
+  target: string;
   /** The orthogonal route the layout reserved for this edge, in canvas coordinates. */
-  points?: Point[]
+  points?: Point[];
   /**
    * True when this edge runs against the canvas's top-to-bottom order, so its direction cannot be
    * read from position and has to be stated. Only ever set on a hierarchy edge; see
    * {@link invertedEdges}.
    */
-  inverted?: boolean
+  inverted?: boolean;
 }
 
 /**
@@ -244,19 +262,19 @@ export interface GraphEdge {
  * all, which can be picked up in any order.
  */
 export interface GraphGroup {
-  id: string
-  kind: 'chain' | 'breakdown' | 'free'
-  label: string
-  members: string[]
-  position: { x: number; y: number }
-  width: number
-  height: number
+  id: string;
+  kind: "chain" | "breakdown" | "free";
+  label: string;
+  members: string[];
+  position: { x: number; y: number };
+  width: number;
+  height: number;
 }
 
 export interface IssueGraph {
-  nodes: GraphNode[]
-  edges: GraphEdge[]
-  groups: GraphGroup[]
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  groups: GraphGroup[];
   /**
    * The repository this drawing is of, canonically, and the repository every node ID is qualified
    * with. It is not always the address the reader is on: a rename redirect serves one repository
@@ -267,19 +285,19 @@ export interface IssueGraph {
    * — the recipient does not trust the payload to name its own repository, and rightly — so the
    * link would draw every card as external and join no edges at all.
    */
-  identity: string
+  identity: string;
   /** False when any dependency could not be read. The canvas must say so rather than imply whole. */
-  complete: boolean
-  unresolved: UnresolvedDependency[]
-  rateLimited: boolean
-  rateLimitReset: Date | null
-  requestCount: number
+  complete: boolean;
+  unresolved: UnresolvedDependency[];
+  rateLimited: boolean;
+  rateLimitReset: Date | null;
+  requestCount: number;
 }
 
 /** `https://api.github.com/repos/owner/name` -> `owner/name`. */
 export function repoOf(repositoryUrl: string): string {
-  const match = /\/repos\/([^/]+\/[^/]+)$/.exec(repositoryUrl)
-  return match ? match[1] : 'unknown/unknown'
+  const match = /\/repos\/([^/]+\/[^/]+)$/.exec(repositoryUrl);
+  return match ? match[1] : "unknown/unknown";
 }
 
 /**
@@ -288,11 +306,11 @@ export function repoOf(repositoryUrl: string): string {
  * payloads spell the repository.
  */
 export function nodeId(repo: string, number: number): string {
-  return `${canonicalSlug(repo)}#${number}`
+  return `${canonicalSlug(repo)}#${number}`;
 }
 
 export function isOpen(issue: IssuePayload): boolean {
-  return issue.state !== 'closed'
+  return issue.state !== "closed";
 }
 
 /**
@@ -301,11 +319,11 @@ export function isOpen(issue: IssuePayload): boolean {
  * for a namespace.
  * https://github.com/martonpaulo/skills — `.ao/worker-rules.md` documents both.
  */
-const IN_PROGRESS_LABEL = 'in-progress'
-const IN_REVIEW_LABEL = 'in-review'
+const IN_PROGRESS_LABEL = "in-progress";
+const IN_REVIEW_LABEL = "in-review";
 
 function hasLabel(issue: IssuePayload, name: string): boolean {
-  return issue.labels.some((label) => label.name.trim().toLowerCase() === name)
+  return issue.labels.some((label) => label.name.trim().toLowerCase() === name);
 }
 
 /**
@@ -333,22 +351,22 @@ function hasLabel(issue: IssuePayload, name: string): boolean {
  * Each label is read on its own terms, so removing one leaves the other correct.
  */
 export function deriveState(issue: IssuePayload): IssueState {
-  if (issue.state === 'closed') {
-    return issue.state_reason === 'not_planned' ? 'not-planned' : 'completed'
+  if (issue.state === "closed") {
+    return issue.state_reason === "not_planned" ? "not-planned" : "completed";
   }
-  if (hasLabel(issue, IN_REVIEW_LABEL)) return 'in-review'
-  if (needsAttention(issue.labels)) return 'attention'
-  if (hasLabel(issue, IN_PROGRESS_LABEL)) return 'in-progress'
-  if ((issue.issue_dependencies_summary?.blocked_by ?? 0) > 0) return 'blocked'
-  if (issue.assignees?.length === 0) return 'unassigned'
-  return 'ready'
+  if (hasLabel(issue, IN_REVIEW_LABEL)) return "in-review";
+  if (needsAttention(issue.labels)) return "attention";
+  if (hasLabel(issue, IN_PROGRESS_LABEL)) return "in-progress";
+  if ((issue.issue_dependencies_summary?.blocked_by ?? 0) > 0) return "blocked";
+  if (issue.assignees?.length === 0) return "unassigned";
+  return "ready";
 }
 
 /** A parent's progress, or null when the issue is not a parent. */
 export function subIssuesOf(issue: IssuePayload): SubIssuesProgress | null {
-  const summary = issue.sub_issues_summary
-  if (!summary || summary.total <= 0) return null
-  return { completed: summary.completed, total: summary.total }
+  const summary = issue.sub_issues_summary;
+  if (!summary || summary.total <= 0) return null;
+  return { completed: summary.completed, total: summary.total };
 }
 
 /**
@@ -359,22 +377,25 @@ export function subIssuesOf(issue: IssuePayload): SubIssuesProgress | null {
  * id simply matches no node, which is exactly the outcome wanted: the edge is dropped rather than
  * paid for with a request into a repository this view is not reading.
  */
-export function parentNodeId(parentIssueUrl: string | null | undefined): string | null {
-  if (!parentIssueUrl) return null
-  const match = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(parentIssueUrl)
-  return match ? nodeId(match[1], Number(match[2])) : null
+export function parentNodeId(
+  parentIssueUrl: string | null | undefined,
+): string | null {
+  if (!parentIssueUrl) return null;
+  const match = /\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)$/.exec(parentIssueUrl);
+  return match ? nodeId(match[1], Number(match[2])) : null;
 }
 
 function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
-  const repo = repoOf(issue.repository_url)
-  const external = canonicalSlug(repo) !== canonicalSlug(targetSlug)
-  const [owner, name] = repo.split('/')
-  const sameOwner = canonicalSlug(owner) === canonicalSlug(targetSlug.split('/')[0])
-  const repoLabel = external ? (sameOwner ? name : repo) : ''
-  const state = external ? null : deriveState(issue)
-  const labels = external ? [] : cardLabels(issue.labels)
-  const titleLines = titleLineCount(issue.title)
-  const rows = chipRows(labels.map((chip) => chip.text))
+  const repo = repoOf(issue.repository_url);
+  const external = canonicalSlug(repo) !== canonicalSlug(targetSlug);
+  const [owner, name] = repo.split("/");
+  const sameOwner =
+    canonicalSlug(owner) === canonicalSlug(targetSlug.split("/")[0]);
+  const repoLabel = external ? (sameOwner ? name : repo) : "";
+  const state = external ? null : deriveState(issue);
+  const labels = external ? [] : cardLabels(issue.labels);
+  const titleLines = titleLineCount(issue.title);
+  const rows = chipRows(labels.map((chip) => chip.text));
   return {
     id: nodeId(repo, issue.number),
     number: issue.number,
@@ -391,24 +412,24 @@ function toNode(issue: IssuePayload, targetSlug: string): GraphNode {
     titleLines,
     height: cardHeight(titleLines, rows),
     position: { x: 0, y: 0 },
-  }
+  };
 }
 
 /** Space between cards in the block of issues that depend on nothing. */
-const GRID_GAP = 20
+const GRID_GAP = 20;
 /** Space between that block and the drawn dependencies above it. */
-const BLOCK_GAP = 80
+const BLOCK_GAP = 80;
 
 /** Breathing room inside a group frame, and the strip its label sits in above the cards. */
-export const GROUP_PADDING = 14
-export const GROUP_LABEL_HEIGHT = 24
+export const GROUP_PADDING = 14;
+export const GROUP_LABEL_HEIGHT = 24;
 
 /** Roughly 16:9, so a whole graph lands on a screen after fit-to-view. */
-const TARGET_ASPECT = 1.9
+const TARGET_ASPECT = 1.9;
 
 export interface Point {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
 /**
@@ -423,55 +444,55 @@ export interface Point {
  * https://eclipse.dev/elk/reference/options.html
  */
 const ELK_OPTIONS: Record<string, string> = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'DOWN',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
-  'elk.layered.crossingMinimization.strategy': 'LAYER_SWEEP',
-  'elk.spacing.nodeNode': '28',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '76',
-  'elk.spacing.edgeNode': '20',
-  'elk.spacing.edgeEdge': '16',
-  'elk.layered.spacing.edgeNodeBetweenLayers': '20',
-  'elk.layered.spacing.edgeEdgeBetweenLayers': '16',
+  "elk.algorithm": "layered",
+  "elk.direction": "DOWN",
+  "elk.edgeRouting": "ORTHOGONAL",
+  "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+  "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+  "elk.spacing.nodeNode": "28",
+  "elk.layered.spacing.nodeNodeBetweenLayers": "76",
+  "elk.spacing.edgeNode": "20",
+  "elk.spacing.edgeEdge": "16",
+  "elk.layered.spacing.edgeNodeBetweenLayers": "20",
+  "elk.layered.spacing.edgeEdgeBetweenLayers": "16",
   // Each connected piece of work is laid out on its own and the pieces are packed to a screen
   // shape, so a backlog of small chains does not open as one enormous row.
-  'elk.separateConnectedComponents': 'true',
-  'elk.spacing.componentComponent': '76',
-  'elk.aspectRatio': String(TARGET_ASPECT),
-}
+  "elk.separateConnectedComponents": "true",
+  "elk.spacing.componentComponent": "76",
+  "elk.aspectRatio": String(TARGET_ASPECT),
+};
 
 interface ElkNode {
-  id: string
-  width?: number
-  height?: number
-  x?: number
-  y?: number
-  children?: ElkNode[]
-  edges?: ElkEdge[]
-  layoutOptions?: Record<string, string>
+  id: string;
+  width?: number;
+  height?: number;
+  x?: number;
+  y?: number;
+  children?: ElkNode[];
+  edges?: ElkEdge[];
+  layoutOptions?: Record<string, string>;
 }
 
 interface ElkEdge {
-  id: string
-  sources: string[]
-  targets: string[]
-  sections?: { startPoint: Point; bendPoints?: Point[]; endPoint: Point }[]
+  id: string;
+  sources: string[];
+  targets: string[];
+  sections?: { startPoint: Point; bendPoints?: Point[]; endPoint: Point }[];
 }
 
 interface ElkEngine {
-  layout(graph: ElkNode): Promise<ElkNode>
+  layout(graph: ElkNode): Promise<ElkNode>;
   /** Present only for the worker engine; the bundled one runs on the thread that called it. */
-  terminate?(): void
+  terminate?(): void;
 }
 
-let engine: Promise<ElkEngine> | null = null
+let engine: Promise<ElkEngine> | null = null;
 /**
  * What `engine` resolved to, kept beside it so a discard can decide *and* detach without awaiting.
  * Reading the engine out of its own promise is a turn too late: the memo would still be handing the
  * doomed engine to anything that asked in between.
  */
-let ready: ElkEngine | null = null
+let ready: ElkEngine | null = null;
 
 /**
  * A real worker where the platform has one, and the bundled engine where it does not.
@@ -488,12 +509,12 @@ let ready: ElkEngine | null = null
  * exist, and the layout they assert on is the same algorithm either way.
  */
 async function createEngine(): Promise<ElkEngine> {
-  if (typeof Worker !== 'undefined') {
-    const { workerEngine } = await import('./layoutWorker')
-    return workerEngine() as ElkEngine
+  if (typeof Worker !== "undefined") {
+    const { workerEngine } = await import("./layoutWorker");
+    return workerEngine() as ElkEngine;
   }
-  const module = await import('elkjs/lib/elk.bundled.js')
-  return new (module.default as unknown as new () => ElkEngine)()
+  const module = await import("elkjs/lib/elk.bundled.js");
+  return new (module.default as unknown as new () => ElkEngine)();
 }
 
 /**
@@ -510,21 +531,21 @@ async function elk(): Promise<ElkEngine> {
   if (!engine) {
     const attempt: Promise<ElkEngine> = createEngine()
       .then((created) => {
-        if (engine === attempt) ready = created
-        return created
+        if (engine === attempt) ready = created;
+        return created;
       })
       .catch((error: unknown) => {
         // Cleared only while this attempt is still the one on record, so a later attempt that has
         // already replaced it — and may well have succeeded — is not discarded by an older failure.
         if (engine === attempt) {
-          engine = null
-          ready = null
+          engine = null;
+          ready = null;
         }
-        throw error
-      })
-    engine = attempt
+        throw error;
+      });
+    engine = attempt;
   }
-  return engine
+  return engine;
 }
 
 /**
@@ -535,23 +556,23 @@ async function elk(): Promise<ElkEngine> {
  * is perfectly healthy, and taking that one down would turn one failed draw into two.
  */
 function discard(used: ElkEngine | null): void {
-  const held = engine
-  if (!held) return
+  const held = engine;
+  if (!held) return;
   // Whether this discard applies is decided here rather than inside the callback below, because
   // `ready` already knows what the memo holds.
-  if (used && ready !== used) return
+  if (used && ready !== used) return;
   // Detached before anything is awaited. Resolving the engine first to identify it left the memo
   // pointing at it for a further turn, so a draw beginning in that window — a close and an
   // immediate remount is exactly that — was handed an engine on its way to being terminated.
-  engine = null
-  ready = null
+  engine = null;
+  ready = null;
   void held.then(
     (current) => current.terminate?.(),
     () => {
       // An attempt that never produced an engine has nothing to terminate, and its rejection
       // belongs to whoever asked for it.
     },
-  )
+  );
 }
 
 /**
@@ -565,38 +586,47 @@ function discard(used: ElkEngine | null): void {
  * terminating it takes the current one down too.
  */
 export function discardLayoutEngine(): void {
-  discard(null)
+  discard(null);
 }
 
 /** Weakly-connected components: edge direction does not matter for grouping. */
 function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
-  const parent = new Map<string, string>(nodes.map((node) => [node.id, node.id]))
+  const parent = new Map<string, string>(
+    nodes.map((node) => [node.id, node.id]),
+  );
 
   const find = (id: string): string => {
-    let root = id
-    while (parent.get(root) !== root) root = parent.get(root)!
-    while (parent.get(id) !== root) {
-      const next = parent.get(id)!
-      parent.set(id, root)
-      id = next
+    let root = id;
+    let ahead = parent.get(root);
+    while (ahead !== undefined && ahead !== root) {
+      root = ahead;
+      ahead = parent.get(root);
     }
-    return root
-  }
+    // Second pass: point everything on the way to the root straight at it.
+    let current = id;
+    while (current !== root) {
+      const next = parent.get(current);
+      parent.set(current, root);
+      if (next === undefined) break;
+      current = next;
+    }
+    return root;
+  };
 
   for (const edge of edges) {
-    const a = find(edge.source)
-    const b = find(edge.target)
-    if (a !== b) parent.set(a, b)
+    const a = find(edge.source);
+    const b = find(edge.target);
+    if (a !== b) parent.set(a, b);
   }
 
-  const groups = new Map<string, GraphNode[]>()
+  const groups = new Map<string, GraphNode[]>();
   for (const node of nodes) {
-    const root = find(node.id)
-    const group = groups.get(root)
-    if (group) group.push(node)
-    else groups.set(root, [node])
+    const root = find(node.id);
+    const group = groups.get(root);
+    if (group) group.push(node);
+    else groups.set(root, [node]);
   }
-  return [...groups.values()]
+  return [...groups.values()];
 }
 
 /**
@@ -621,56 +651,59 @@ function componentsOf(nodes: GraphNode[], edges: GraphEdge[]): GraphNode[][] {
  * edges between two versions of it.
  */
 export function invertedEdges(edges: GraphEdge[]): Set<string> {
-  const blocks = new Set<string>()
+  const blocks = new Set<string>();
   for (const edge of edges) {
-    if (edge.kind === 'dependency') blocks.add(`${edge.source} ${edge.target}`)
+    if (edge.kind === "dependency") blocks.add(`${edge.source} ${edge.target}`);
   }
 
-  const inverted = new Set<string>()
+  const inverted = new Set<string>();
   for (const edge of edges) {
-    if (edge.kind !== 'hierarchy') continue
-    if (blocks.has(`${edge.target} ${edge.source}`)) inverted.add(edge.id)
+    if (edge.kind !== "hierarchy") continue;
+    if (blocks.has(`${edge.target} ${edge.source}`)) inverted.add(edge.id);
   }
-  return inverted
+  return inverted;
 }
 
-const GROUP_WORD: Record<GraphGroup['kind'], string> = {
-  chain: 'Chain',
-  breakdown: 'Breakdown',
-  free: 'Independent',
-}
+const GROUP_WORD: Record<GraphGroup["kind"], string> = {
+  chain: "Chain",
+  breakdown: "Breakdown",
+  free: "Independent",
+};
 
-function groupLabel(kind: GraphGroup['kind'], count: number): string {
-  const issues = `${count} issue${count === 1 ? '' : 's'}`
+function groupLabel(kind: GraphGroup["kind"], count: number): string {
+  const issues = `${count} issue${count === 1 ? "" : "s"}`;
   // The frames mean different things, so each says which it is rather than leaving the reader to
   // infer it from a border style. A breakdown is emphatically not a chain: its members contain one
   // another and can be picked up in any order.
-  return `${GROUP_WORD[kind]} · ${issues}`
+  return `${GROUP_WORD[kind]} · ${issues}`;
 }
 
 /** Frames a set of cards from where they actually landed. */
-function frameOf(members: GraphNode[], kind: GraphGroup['kind']): GraphGroup {
-  let left = Infinity
-  let top = Infinity
-  let right = -Infinity
-  let bottom = -Infinity
+function frameOf(members: GraphNode[], kind: GraphGroup["kind"]): GraphGroup {
+  let left = Number.POSITIVE_INFINITY;
+  let top = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
   for (const node of members) {
-    left = Math.min(left, node.position.x)
-    top = Math.min(top, node.position.y)
-    right = Math.max(right, node.position.x + NODE_WIDTH)
-    bottom = Math.max(bottom, node.position.y + node.height)
+    left = Math.min(left, node.position.x);
+    top = Math.min(top, node.position.y);
+    right = Math.max(right, node.position.x + NODE_WIDTH);
+    bottom = Math.max(bottom, node.position.y + node.height);
   }
 
-  const ids = members.map((node) => node.id).sort()
+  const ids = members.map((node) => node.id).sort();
   return {
     id: `group:${ids[0]}`,
     kind,
     label: groupLabel(kind, members.length),
     members: ids,
-    position: { x: left - GROUP_PADDING, y: top - GROUP_PADDING - GROUP_LABEL_HEIGHT },
+    position: {
+      x: left - GROUP_PADDING,
+      y: top - GROUP_PADDING - GROUP_LABEL_HEIGHT,
+    },
     width: right - left + GROUP_PADDING * 2,
     height: bottom - top + GROUP_PADDING * 2 + GROUP_LABEL_HEIGHT,
-  }
+  };
 }
 
 /**
@@ -681,24 +714,24 @@ function frameOf(members: GraphNode[], kind: GraphGroup['kind']): GraphGroup {
  * the cards differ in height.
  */
 function packLoose(nodes: GraphNode[], columns: number, originY: number): void {
-  const used = Math.max(1, Math.min(columns, nodes.length))
-  const heights = new Array<number>(used).fill(originY)
+  const used = Math.max(1, Math.min(columns, nodes.length));
+  const heights = new Array<number>(used).fill(originY);
 
   for (const node of nodes) {
-    let column = 0
+    let column = 0;
     for (let index = 1; index < used; index += 1) {
-      if (heights[index] < heights[column]) column = index
+      if (heights[index] < heights[column]) column = index;
     }
-    node.position = { x: column * (NODE_WIDTH + GRID_GAP), y: heights[column] }
-    heights[column] += node.height + GRID_GAP
+    node.position = { x: column * (NODE_WIDTH + GRID_GAP), y: heights[column] };
+    heights[column] += node.height + GRID_GAP;
   }
 }
 
 export interface Layout {
-  nodes: GraphNode[]
-  groups: GraphGroup[]
+  nodes: GraphNode[];
+  groups: GraphGroup[];
   /** Edge id to the orthogonal route ELK reserved for it. */
-  routes: Map<string, Point[]>
+  routes: Map<string, Point[]>;
 }
 
 /**
@@ -706,42 +739,54 @@ export interface Layout {
  * it as one block, because an issue that blocks nothing and waits for nothing has no place in a
  * layered drawing beyond taking up room in it.
  */
-export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<Layout> {
-  if (nodes.length === 0) return { nodes, groups: [], routes: new Map() }
+export async function layout(
+  nodes: GraphNode[],
+  edges: GraphEdge[],
+): Promise<Layout> {
+  if (nodes.length === 0) return { nodes, groups: [], routes: new Map() };
 
-  const components = componentsOf(nodes, edges)
+  const components = componentsOf(nodes, edges);
   // Handed to ELK the other way round, so the engine never sees the two-node cycle a parent blocked
   // by its own sub-issues makes, and every dependency edge comes back pointing down the canvas.
-  const inverted = invertedEdges(edges)
-  const connected = components.filter((group) => group.length > 1)
-  const loose = components.filter((group) => group.length === 1).flat()
+  const inverted = invertedEdges(edges);
+  const connected = components.filter((group) => group.length > 1);
+  const loose = components.filter((group) => group.length === 1).flat();
   const placed = new Map<string, GraphNode>(
     nodes.map((node) => [node.id, { ...node, position: { x: 0, y: 0 } }]),
-  )
-  const routes = new Map<string, Point[]>()
-  const groups: GraphGroup[] = []
-  let drawnHeight = 0
-  let drawnWidth = NODE_WIDTH * 4
+  );
+  // `placed` is built from `nodes`, and every list below is drawn from the same
+  // array, so a miss is a layout bug rather than a case to handle.
+  const placedNode = (node: GraphNode): GraphNode => {
+    const positioned = placed.get(node.id);
+    if (positioned === undefined) {
+      throw new Error(`the layout lost node ${node.id}`);
+    }
+    return positioned;
+  };
+  const routes = new Map<string, Point[]>();
+  const groups: GraphGroup[] = [];
+  let drawnHeight = 0;
+  let drawnWidth = NODE_WIDTH * 4;
 
   // A component held together only by containment is not a chain, and saying so is the whole point
   // of drawing the two relations differently in the first place.
-  const ordered = new Set<string>()
+  const ordered = new Set<string>();
   for (const edge of edges) {
-    if (edge.kind !== 'dependency') continue
-    ordered.add(edge.source)
-    ordered.add(edge.target)
+    if (edge.kind !== "dependency") continue;
+    ordered.add(edge.source);
+    ordered.add(edge.target);
   }
-  const kindOf = (component: GraphNode[]): GraphGroup['kind'] =>
-    component.some((node) => ordered.has(node.id)) ? 'chain' : 'breakdown'
+  const kindOf = (component: GraphNode[]): GraphGroup["kind"] =>
+    component.some((node) => ordered.has(node.id)) ? "chain" : "breakdown";
 
   if (connected.length > 0) {
-    const members = connected.flat()
-    const ids = new Set(members.map((node) => node.id))
-    const engineUsed = await elk()
-    let result: ElkNode
+    const members = connected.flat();
+    const ids = new Set(members.map((node) => node.id));
+    const engineUsed = await elk();
+    let result: ElkNode;
     try {
       result = await engineUsed.layout({
-        id: 'root',
+        id: "root",
         layoutOptions: ELK_OPTIONS,
         children: members.map((node) => ({
           id: node.id,
@@ -755,36 +800,45 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
               ? { id: edge.id, sources: [edge.target], targets: [edge.source] }
               : { id: edge.id, sources: [edge.source], targets: [edge.target] },
           ),
-      })
+      });
     } catch (error) {
       // The engine that just failed is kept for the rest of the session otherwise, so the retry the
       // reader is offered would hand the same draw to the same dead worker and fail identically.
       // Rebuilding one is cheap; retrying against a corpse is not a retry at all.
-      discard(engineUsed)
-      throw error
+      discard(engineUsed);
+      throw error;
     }
 
     for (const child of result.children ?? []) {
-      const node = placed.get(child.id)
-      if (node) node.position = { x: child.x ?? 0, y: child.y ?? 0 }
+      const node = placed.get(child.id);
+      if (node) node.position = { x: child.x ?? 0, y: child.y ?? 0 };
     }
 
     for (const edge of result.edges ?? []) {
-      const section = edge.sections?.[0]
-      if (!section) continue
-      const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint]
+      const section = edge.sections?.[0];
+      if (!section) continue;
+      const points = [
+        section.startPoint,
+        ...(section.bendPoints ?? []),
+        section.endPoint,
+      ];
       // The route ELK drew runs the way it was asked, so a reversed edge gets its route turned back
       // round: the polyline still leaves the parent and arrives at the child, which is where the
       // arrowhead marking the inversion has to land.
-      routes.set(edge.id, inverted.has(edge.id) ? points.reverse() : points)
+      routes.set(edge.id, inverted.has(edge.id) ? points.reverse() : points);
     }
 
     for (const component of connected) {
-      groups.push(frameOf(component.map((node) => placed.get(node.id)!), kindOf(component)))
+      groups.push(frameOf(component.map(placedNode), kindOf(component)));
     }
 
-    drawnWidth = Math.max(drawnWidth, ...groups.map((group) => group.position.x + group.width))
-    drawnHeight = Math.max(...groups.map((group) => group.position.y + group.height))
+    drawnWidth = Math.max(
+      drawnWidth,
+      ...groups.map((group) => group.position.x + group.width),
+    );
+    drawnHeight = Math.max(
+      ...groups.map((group) => group.position.y + group.height),
+    );
   }
 
   if (loose.length > 0) {
@@ -793,15 +847,19 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
     const area = loose.reduce(
       (sum, node) => sum + (NODE_WIDTH + GRID_GAP) * (node.height + GRID_GAP),
       0,
-    )
-    const wanted = Math.max(drawnWidth, Math.sqrt(area * TARGET_ASPECT))
-    const columns = Math.max(1, Math.round(wanted / (NODE_WIDTH + GRID_GAP)))
-    const block = loose.map((node) => placed.get(node.id)!)
-    packLoose(block, columns, connected.length > 0 ? drawnHeight + BLOCK_GAP : 0)
-    groups.push(frameOf(block, 'free'))
+    );
+    const wanted = Math.max(drawnWidth, Math.sqrt(area * TARGET_ASPECT));
+    const columns = Math.max(1, Math.round(wanted / (NODE_WIDTH + GRID_GAP)));
+    const block = loose.map(placedNode);
+    packLoose(
+      block,
+      columns,
+      connected.length > 0 ? drawnHeight + BLOCK_GAP : 0,
+    );
+    groups.push(frameOf(block, "free"));
   }
 
-  return { nodes: nodes.map((node) => placed.get(node.id)!), groups, routes }
+  return { nodes: nodes.map(placedNode), groups, routes };
 }
 
 /**
@@ -810,15 +868,18 @@ export async function layout(nodes: GraphNode[], edges: GraphEdge[]): Promise<La
  * Counted from the dependency edges alone. Containment is not ordering: a parent holds none of its
  * children up and waits on none of them, so a hierarchy edge must reach neither figure.
  */
-export function dependencyCounts(edges: GraphEdge[]): { dependent: number; blocking: number } {
-  const dependent = new Set<string>()
-  const blocking = new Set<string>()
+export function dependencyCounts(edges: GraphEdge[]): {
+  dependent: number;
+  blocking: number;
+} {
+  const dependent = new Set<string>();
+  const blocking = new Set<string>();
   for (const edge of edges) {
-    if (edge.kind !== 'dependency') continue
-    dependent.add(edge.target)
-    blocking.add(edge.source)
+    if (edge.kind !== "dependency") continue;
+    dependent.add(edge.target);
+    blocking.add(edge.source);
   }
-  return { dependent: dependent.size, blocking: blocking.size }
+  return { dependent: dependent.size, blocking: blocking.size };
 }
 
 export interface BuildOptions {
@@ -827,7 +888,7 @@ export interface BuildOptions {
    * blocks, so the issue it used to block belongs with the work that is ready to start, and a
    * backlog reads as what is left to do rather than as what has already happened.
    */
-  showClosed?: boolean
+  showClosed?: boolean;
   /**
    * Lets the payloads name the repository being drawn, rather than the address the reader is on.
    *
@@ -838,7 +899,7 @@ export interface BuildOptions {
    * as local under an address that names a repository they have nothing to do with. Off by
    * default, so a caller that has not thought about provenance gets the address it is on.
    */
-  trustedIdentity?: boolean
+  trustedIdentity?: boolean;
 }
 
 /**
@@ -858,9 +919,13 @@ export interface BuildOptions {
  *
  * https://docs.github.com/en/rest/issues/issue-dependencies
  */
-function resolvedTarget(data: RepositoryGraphData, target: RepoTarget, trusted: boolean): string {
-  const first = trusted ? data.issues[0] : undefined
-  return first ? repoOf(first.repository_url) : slugOf(target)
+function resolvedTarget(
+  data: RepositoryGraphData,
+  target: RepoTarget,
+  trusted: boolean,
+): string {
+  const first = trusted ? data.issues[0] : undefined;
+  return first ? repoOf(first.repository_url) : slugOf(target);
 }
 
 export async function buildGraph(
@@ -868,34 +933,43 @@ export async function buildGraph(
   target: RepoTarget,
   options: BuildOptions = {},
 ): Promise<IssueGraph> {
-  const showClosed = options.showClosed === true
-  const targetSlug = resolvedTarget(data, target, options.trustedIdentity === true)
-  const nodes = new Map<string, GraphNode>()
+  const showClosed = options.showClosed === true;
+  const targetSlug = resolvedTarget(
+    data,
+    target,
+    options.trustedIdentity === true,
+  );
+  const nodes = new Map<string, GraphNode>();
   // The list is of open issues; this guards the invariant rather than expecting to drop anything.
   for (const issue of data.issues) {
-    if (!isOpen(issue)) continue
-    const node = toNode(issue, targetSlug)
-    nodes.set(node.id, node)
+    if (!isOpen(issue)) continue;
+    const node = toNode(issue, targetSlug);
+    nodes.set(node.id, node);
   }
 
-  const edges: GraphEdge[] = []
-  const seen = new Set<string>()
+  const edges: GraphEdge[] = [];
+  const seen = new Set<string>();
 
   for (const [number, blockers] of data.blockers) {
-    const targetId = nodeId(targetSlug, number)
-    if (!nodes.has(targetId)) continue
+    const targetId = nodeId(targetSlug, number);
+    if (!nodes.has(targetId)) continue;
 
     for (const blocker of blockers) {
-      if (!showClosed && !isOpen(blocker)) continue
+      if (!showClosed && !isOpen(blocker)) continue;
 
       // A blocker in another repository is not in the issue list, so it joins the graph here.
-      const blockerNode = toNode(blocker, targetSlug)
-      if (!nodes.has(blockerNode.id)) nodes.set(blockerNode.id, blockerNode)
+      const blockerNode = toNode(blocker, targetSlug);
+      if (!nodes.has(blockerNode.id)) nodes.set(blockerNode.id, blockerNode);
 
-      const id = `${blockerNode.id}->${targetId}`
-      if (seen.has(id)) continue
-      seen.add(id)
-      edges.push({ id, kind: 'dependency', source: blockerNode.id, target: targetId })
+      const id = `${blockerNode.id}->${targetId}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      edges.push({
+        id,
+        kind: "dependency",
+        source: blockerNode.id,
+        target: targetId,
+      });
     }
   }
 
@@ -904,21 +978,21 @@ export async function buildGraph(
   // is named by the child and is deliberately not fetched, exactly as an outbound `blocking` edge
   // is not. Closed parents are absent for the same reason closed blockers are.
   for (const issue of data.issues) {
-    if (!isOpen(issue)) continue
-    const childId = nodeId(repoOf(issue.repository_url), issue.number)
-    if (!nodes.has(childId)) continue
+    if (!isOpen(issue)) continue;
+    const childId = nodeId(repoOf(issue.repository_url), issue.number);
+    if (!nodes.has(childId)) continue;
 
-    const parentId = parentNodeId(issue.parent_issue_url)
-    if (!parentId || parentId === childId || !nodes.has(parentId)) continue
+    const parentId = parentNodeId(issue.parent_issue_url);
+    if (!parentId || parentId === childId || !nodes.has(parentId)) continue;
 
-    const id = `${parentId}=>${childId}`
-    if (seen.has(id)) continue
-    seen.add(id)
-    edges.push({ id, kind: 'hierarchy', source: parentId, target: childId })
+    const id = `${parentId}=>${childId}`;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    edges.push({ id, kind: "hierarchy", source: parentId, target: childId });
   }
 
-  const laid = await layout([...nodes.values()], edges)
-  const inverted = invertedEdges(edges)
+  const laid = await layout([...nodes.values()], edges);
+  const inverted = invertedEdges(edges);
 
   return {
     nodes: laid.nodes,
@@ -934,5 +1008,5 @@ export async function buildGraph(
     rateLimited: data.rateLimited,
     rateLimitReset: data.rateLimitReset,
     requestCount: data.requestCount,
-  }
+  };
 }

@@ -1,0 +1,96 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "ignoreUnknown": false,
+    "includes": ["**", "!**/.ao", "!**/.claude", "!**/dist", "!public/CNAME"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "correctness": {
+        // Was `react-hooks/rules-of-hooks`.
+        "useHookAtTopLevel": "error",
+        // Was `react-hooks/exhaustive-deps`, which ESLint ran at warn.
+        "useExhaustiveDependencies": "warn",
+        // Was `react-hooks/static-components`.
+        "noNestedComponentDefinitions": "error",
+        // Was the prop-assignment half of `react-hooks/immutability`.
+        "noReactPropAssignments": "error"
+      },
+      "nursery": {
+        // Stands in for the rest of the React Compiler family that
+        // `eslint-plugin-react-hooks@7` recommended enables -- purity, refs,
+        // globals, set-state-in-effect, set-state-in-render, use-memo,
+        // preserve-manual-memoization, error-boundaries.
+        "useReactCompiler": "info"
+      },
+      "style": {
+        "noParameterAssign": "error",
+        "useAsConstAssertion": "error",
+        "useDefaultParameterLast": "error",
+        "useEnumInitializers": "error",
+        "useSelfClosingElements": "error",
+        "useSingleVarDeclarator": "error",
+        "noUnusedTemplateLiteral": "error",
+        "useNumberNamespace": "error",
+        "noInferrableTypes": "error",
+        "noUselessElse": "error"
+      }
+    }
+  },
+  "javascript": { "formatter": { "quoteStyle": "double" } },
+  "overrides": [
+    {
+      // The suggestion list is the ARIA 1.2 combobox pattern: the popup is a
+      // `ul` carrying `role="listbox"` whose children carry `role="option"`,
+      // and focus stays in the input while `aria-activedescendant` moves. That
+      // is what the pattern prescribes -- the file cites the APG next to the
+      // markup -- so the options are deliberately not focusable and the rules'
+      // fix (dropping the roles) would leave the combobox without a popup.
+      // `role="search"` sits on the `form` that performs the search; a
+      // `<search>` wrapper would add a layout box for no exposed difference.
+      "includes": ["src/RepoInput.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noNoninteractiveElementToInteractiveRole": "off",
+            "useFocusableInteractive": "off",
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off"
+          }
+        }
+      }
+    },
+    {
+      // Tests assert on fixtures they build themselves, so `!` records an
+      // invariant the test just established; when it does not hold, the test
+      // fails, which is the outcome the rule protects against in source.
+      "includes": ["**/*.test.ts", "**/*.test.tsx"],
+      "linter": { "rules": { "style": { "noNonNullAssertion": "off" } } }
+    },
+    {
+      // `favicon.svg` is a standalone image asset and the social card is a
+      // static rendering skeleton screenshotted into a JPEG. Neither is markup
+      // inside a document anyone navigates.
+      "includes": ["public/favicon.svg", "design/**"],
+      "linter": { "rules": { "a11y": { "noSvgWithoutTitle": "off" } } }
+    },
+    {
+      // The rule assumes source order settles the cascade. This sheet is
+      // ordered by topic, and in every case flagged the specificity difference
+      // decides on its own -- two of them are inside a single comma-separated
+      // selector list. Reordering to satisfy the rule would move rules away
+      // from the component they describe and change nothing that renders.
+      "includes": ["src/styles.css"],
+      "linter": { "rules": { "style": { "noDescendingSpecificity": "off" } } }
+    }
+  ]
+}

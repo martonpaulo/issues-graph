@@ -10,38 +10,38 @@
  */
 
 export interface LabelPayload {
-  name: string
-  color: string
+  name: string;
+  color: string;
 }
 
 /**
  * The three namespaces a card leads with, in this order. They answer what the work is, how urgent
  * it is, and how big it is — the three questions asked of a backlog item at a glance.
  */
-export const CARD_NAMESPACES = ['type', 'priority', 'effort'] as const
+export const CARD_NAMESPACES = ["type", "priority", "effort"] as const;
 
-export type CardNamespace = (typeof CARD_NAMESPACES)[number]
+export type CardNamespace = (typeof CARD_NAMESPACES)[number];
 
 export interface ParsedLabel {
-  raw: string
-  namespace: string | null
-  value: string
-  color: string
+  raw: string;
+  namespace: string | null;
+  value: string;
+  color: string;
 }
 
 /** One chip on a card. */
 export interface CardChip {
   /** Exactly what the chip draws. GitHub's own text for a real label. */
-  text: string
+  text: string;
   /** The canonical namespace this chip fills or marks as missing; null for every other label. */
-  namespace: CardNamespace | null
+  namespace: CardNamespace | null;
   /** A canonical slot the issue carries no label for, drawn as an outlined gap. */
-  empty: boolean
+  empty: boolean;
   /**
    * GitHub's own six-digit hex for the label, which `labelColor.ts` turns into the pair the chip
    * is painted in. Null for an empty slot, which is the card's own colour and not a label's.
    */
-  color: string | null
+  color: string | null;
 }
 
 /**
@@ -53,23 +53,28 @@ export interface CardChip {
  * `type:` and `priority:` but no `effort:` is one this convention has something to say about, and
  * the outlined gap is exactly the thing worth filling in.
  */
-const CONVENTION_THRESHOLD = 2
+const CONVENTION_THRESHOLD = 2;
 
 export function parseLabel(label: LabelPayload): ParsedLabel {
-  const match = /^([a-z][a-z-]*):\s*(.+)$/i.exec(label.name)
+  const match = /^([a-z][a-z-]*):\s*(.+)$/i.exec(label.name);
   if (!match) {
-    return { raw: label.name, namespace: null, value: label.name, color: label.color }
+    return {
+      raw: label.name,
+      namespace: null,
+      value: label.name,
+      color: label.color,
+    };
   }
   return {
     raw: label.name,
     namespace: match[1].toLowerCase(),
     value: match[2].trim(),
     color: label.color,
-  }
+  };
 }
 
 export function parseLabels(labels: LabelPayload[]): ParsedLabel[] {
-  return labels.map(parseLabel)
+  return labels.map(parseLabel);
 }
 
 /**
@@ -84,7 +89,10 @@ export function parseLabels(labels: LabelPayload[]): ParsedLabel[] {
  * none of those is an exception waiting on anybody.
  * https://github.com/martonpaulo/skills — `issue-capture/LABELS.md` defines both values.
  */
-const ATTENTION_STATUSES: ReadonlySet<string> = new Set(['blocked', 'needs-decision'])
+const ATTENTION_STATUSES: ReadonlySet<string> = new Set([
+  "blocked",
+  "needs-decision",
+]);
 
 /**
  * Whether the issue is parked, in the sense this backlog's own convention gives that word: it is
@@ -97,8 +105,9 @@ const ATTENTION_STATUSES: ReadonlySet<string> = new Set(['blocked', 'needs-decis
 export function needsAttention(labels: LabelPayload[]): boolean {
   return parseLabels(labels).some(
     (label) =>
-      label.namespace === 'status' && ATTENTION_STATUSES.has(label.value.trim().toLowerCase()),
-  )
+      label.namespace === "status" &&
+      ATTENTION_STATUSES.has(label.value.trim().toLowerCase()),
+  );
 }
 
 /**
@@ -114,27 +123,38 @@ export function needsAttention(labels: LabelPayload[]): boolean {
  * spelled `Type: Bug` is shown the way its repository spells it.
  */
 export function cardLabels(labels: LabelPayload[]): CardChip[] {
-  const parsed = parseLabels(labels)
+  const parsed = parseLabels(labels);
 
-  const filled = new Map<CardNamespace, ParsedLabel>()
+  const filled = new Map<CardNamespace, ParsedLabel>();
   for (const namespace of CARD_NAMESPACES) {
-    const match = parsed.find((label) => label.namespace === namespace)
-    if (match) filled.set(namespace, match)
+    const match = parsed.find((label) => label.namespace === namespace);
+    if (match) filled.set(namespace, match);
   }
-  const followsConvention = filled.size >= CONVENTION_THRESHOLD
+  const followsConvention = filled.size >= CONVENTION_THRESHOLD;
 
-  const slots: CardChip[] = []
+  const slots: CardChip[] = [];
   for (const namespace of CARD_NAMESPACES) {
-    const match = filled.get(namespace)
-    if (match) slots.push({ text: match.raw, namespace, empty: false, color: match.color })
+    const match = filled.get(namespace);
+    if (match)
+      slots.push({
+        text: match.raw,
+        namespace,
+        empty: false,
+        color: match.color,
+      });
     else if (followsConvention)
-      slots.push({ text: namespace, namespace, empty: true, color: null })
+      slots.push({ text: namespace, namespace, empty: true, color: null });
   }
 
-  const taken = new Set([...filled.values()].map((label) => label.raw))
+  const taken = new Set([...filled.values()].map((label) => label.raw));
   const rest: CardChip[] = parsed
     .filter((label) => !taken.has(label.raw))
-    .map((label) => ({ text: label.raw, namespace: null, empty: false, color: label.color }))
+    .map((label) => ({
+      text: label.raw,
+      namespace: null,
+      empty: false,
+      color: label.color,
+    }));
 
-  return [...slots, ...rest]
+  return [...slots, ...rest];
 }

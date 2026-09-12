@@ -1,69 +1,69 @@
-import { Handle, Position, type Node, type NodeProps } from '@xyflow/react'
-import { memo, useId, useRef } from 'react'
+import { Handle, type Node, type NodeProps, Position } from "@xyflow/react";
+import { memo, useId, useRef } from "react";
 
-import { issueRef } from './dependencies'
-import type { GraphNode, IssueState } from './graph'
-import { Icon } from './icons'
-import { chipPalette } from './labelColor'
+import { issueRef } from "./dependencies";
+import type { GraphNode, IssueState } from "./graph";
+import { Icon } from "./icons";
+import { chipPalette } from "./labelColor";
 
 export interface IssueCardData extends Record<string, unknown> {
-  node: GraphNode
-  selected: boolean
+  node: GraphNode;
+  selected: boolean;
   /** Drained of colour and attention, but still on the canvas and still in the reading order. */
-  dimmed: boolean
+  dimmed: boolean;
   /** Carries a label the reader asked to pick out. */
-  highlighted: boolean
+  highlighted: boolean;
   /** A highlight is on and this card is not part of it. */
-  faded: boolean
+  faded: boolean;
   /**
    * The card's place in the dependency graph, said in words, e.g.
    * `Issue #25. Blocked by #23 and #24. Blocks #31.` Derived from the drawn edges by
    * `dependencies.ts`, and read to anyone who cannot trace the arrows.
    */
-  description: string
-  onSelect: (id: string, additive: boolean) => void
-  onToggleDimmed: (id: string) => void
-  onOpen: (url: string, label: string) => void
+  description: string;
+  onSelect: (id: string, additive: boolean) => void;
+  onToggleDimmed: (id: string) => void;
+  onOpen: (url: string, label: string) => void;
 }
 
 /** Past this, a pointer press was a pan across the canvas rather than a click on the card. */
-const DRAG_SLOP = 4
+const DRAG_SLOP = 4;
 
-export type IssueNode = Node<IssueCardData, 'issue'>
+export type IssueNode = Node<IssueCardData, "issue">;
 
 /**
  * State is written on the card as words, not carried by colour alone, so the graph stays readable
  * for anyone who cannot separate the fills.
  */
 export const STATE_TEXT: Record<IssueState, string> = {
-  ready: 'ready',
+  ready: "ready",
   // Nobody is on it, which is not the same as free to start: it is unqueued.
-  unassigned: 'unassigned',
-  blocked: 'blocked',
-  'in-progress': 'in progress',
-  attention: 'needs attention',
+  unassigned: "unassigned",
+  blocked: "blocked",
+  "in-progress": "in progress",
+  attention: "needs attention",
   // The word is "delivered", not "in review", because the reader is asking what to pick up next
   // and picking this one up implements a change that is already written. It also has to stay short
   // enough to share the head row with a parent's progress count on the widest issue number.
-  'in-review': 'delivered',
-  completed: 'closed',
-  'not-planned': 'not planned',
-}
+  "in-review": "delivered",
+  completed: "closed",
+  "not-planned": "not planned",
+};
 
 function cardClasses(data: IssueCardData): string {
-  const { node, selected, dimmed, highlighted, faded } = data
+  const { node, selected, dimmed, highlighted, faded } = data;
 
   return [
-    'card',
-    node.state ? `card--${node.state}` : '',
-    node.external ? 'card--external' : '',
-    selected ? 'card--selected' : '',
-    dimmed ? 'card--dimmed' : '',
-    highlighted ? 'card--highlight' : '',
-    faded ? 'card--faded' : '',
+    "card",
+    node.state ? `card--${node.state}` : "",
+    node.external ? "card--external" : "",
+    selected ? "card--selected" : "",
+    dimmed ? "card--dimmed" : "",
+    highlighted ? "card--highlight" : "",
+    faded ? "card--faded" : "",
   ]
     .filter(Boolean)
-    .join(' ')
+    .join(" ");
 }
 
 /**
@@ -76,8 +76,10 @@ function CardBody({
   selected,
   descriptionId,
   onSelect,
-}: Pick<IssueCardData, 'node' | 'selected' | 'onSelect'> & { descriptionId: string }) {
-  const pressedAt = useRef<{ x: number; y: number } | null>(null)
+}: Pick<IssueCardData, "node" | "selected" | "onSelect"> & {
+  descriptionId: string;
+}) {
+  const pressedAt = useRef<{ x: number; y: number } | null>(null);
 
   return (
     <button
@@ -86,26 +88,28 @@ function CardBody({
       aria-pressed={selected}
       aria-describedby={descriptionId}
       onPointerDown={(event) => {
-        pressedAt.current = { x: event.clientX, y: event.clientY }
+        pressedAt.current = { x: event.clientX, y: event.clientY };
       }}
       onClick={(event) => {
-        const from = pressedAt.current
-        pressedAt.current = null
+        const from = pressedAt.current;
+        pressedAt.current = null;
         if (
           from &&
           (Math.abs(event.clientX - from.x) > DRAG_SLOP ||
             Math.abs(event.clientY - from.y) > DRAG_SLOP)
         ) {
-          return
+          return;
         }
-        onSelect(node.id, event.metaKey || event.ctrlKey)
+        onSelect(node.id, event.metaKey || event.ctrlKey);
       }}
     >
       <span className="card__head">
         {/* The repository belongs with the number: on its own the number means nothing, since
             it belongs to somebody else's numbering. */}
         <span className="card__id">
-          {node.external && <span className="card__repo">{node.repoLabel}</span>}
+          {node.external && (
+            <span className="card__repo">{node.repoLabel}</span>
+          )}
           <span className="card__number">#{node.number}</span>
         </span>
         {/* A parent's own progress, in words: colour says nothing a count can. */}
@@ -114,7 +118,9 @@ function CardBody({
             {node.subIssues.completed} of {node.subIssues.total} done
           </span>
         )}
-        {node.state && <span className="card__state">{STATE_TEXT[node.state]}</span>}
+        {node.state && (
+          <span className="card__state">{STATE_TEXT[node.state]}</span>
+        )}
       </span>
 
       <span
@@ -132,11 +138,11 @@ function CardBody({
           /* The repository's own colour is what tells one arbitrary label from another, so the
              chip is painted in the pair derived from it. A label whose payload carries no usable
              hex falls back to the stylesheet's chip, which is held at AA over every card fill. */
-          const palette = chip.color === null ? null : chipPalette(chip.color)
+          const palette = chip.color === null ? null : chipPalette(chip.color);
           return (
             <span
-              key={`${chip.namespace ?? ''}:${chip.text}`}
-              className={`chip${chip.empty ? ' chip--empty' : ''}${palette ? ' chip--painted' : ''}`}
+              key={`${chip.namespace ?? ""}:${chip.text}`}
+              className={`chip${chip.empty ? " chip--empty" : ""}${palette ? " chip--painted" : ""}`}
               style={
                 palette
                   ? {
@@ -149,11 +155,11 @@ function CardBody({
             >
               {chip.text}
             </span>
-          )
+          );
         })}
       </span>
     </button>
-  )
+  );
 }
 
 /** The two controls that act on the issue itself rather than on the selection. */
@@ -163,7 +169,9 @@ function CardActions({
   dimmed,
   onToggleDimmed,
   onOpen,
-}: Pick<IssueCardData, 'node' | 'dimmed' | 'onToggleDimmed' | 'onOpen'> & { label: string }) {
+}: Pick<IssueCardData, "node" | "dimmed" | "onToggleDimmed" | "onOpen"> & {
+  label: string;
+}) {
   return (
     <span className="card__actions nodrag nopan">
       <button
@@ -180,13 +188,13 @@ function CardActions({
         className="iconbutton"
         aria-label={dimmed ? `Restore ${label}` : `Dim ${label}`}
         aria-pressed={dimmed}
-        data-tip={dimmed ? 'Restore this issue · R' : 'Dim this issue · D'}
+        data-tip={dimmed ? "Restore this issue · R" : "Dim this issue · D"}
         onClick={() => onToggleDimmed(node.id)}
       >
-        <Icon name={dimmed ? 'eye-off' : 'eye'} size={12} />
+        <Icon name={dimmed ? "eye-off" : "eye"} size={12} />
       </button>
     </span>
-  )
+  );
 }
 
 /**
@@ -195,9 +203,19 @@ function CardActions({
  * rebuilds, and this is what turns that identity into a skipped render rather than an identical
  * one recomputed.
  */
-export const IssueCard = memo(function IssueCard({ data }: NodeProps<IssueNode>) {
-  const { node, selected, dimmed, description, onSelect, onToggleDimmed, onOpen } = data
-  const label = issueRef(node)
+export const IssueCard = memo(function IssueCard({
+  data,
+}: NodeProps<IssueNode>) {
+  const {
+    node,
+    selected,
+    dimmed,
+    description,
+    onSelect,
+    onToggleDimmed,
+    onOpen,
+  } = data;
+  const label = issueRef(node);
   /**
    * React's own per-instance id rather than one spelled out of `node.id`.
    *
@@ -207,7 +225,7 @@ export const IssueCard = memo(function IssueCard({ data }: NodeProps<IssueNode>)
    * `aria-describedby` resolves to whichever came first, so one card would be described by the
    * other card's blockers.
    */
-  const descriptionId = useId()
+  const descriptionId = useId();
 
   return (
     <div className={cardClasses(data)}>
@@ -237,7 +255,11 @@ export const IssueCard = memo(function IssueCard({ data }: NodeProps<IssueNode>)
         onOpen={onOpen}
       />
 
-      <Handle type="source" position={Position.Bottom} className="card__handle" />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        className="card__handle"
+      />
     </div>
-  )
-})
+  );
+});

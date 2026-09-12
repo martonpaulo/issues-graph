@@ -1,23 +1,24 @@
 import {
+  type KeyboardEvent,
   useCallback,
   useEffect,
   useId,
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent,
-} from 'react'
+} from "react";
 
-import { searchRepositories } from './github'
-import { Icon } from './icons'
-import { parseTargetInput, type RepoTarget } from './route'
-import { mergeSuggestions } from './suggestions'
+import { searchRepositories } from "./github";
+import { Icon } from "./icons";
+import { parseTargetInput, type RepoTarget } from "./route";
+import { mergeSuggestions } from "./suggestions";
 
 /** Long enough that a word typed at speed costs one search, not one per keystroke. */
-const DEBOUNCE_MS = 350
+const DEBOUNCE_MS = 350;
 
 /** The one wording of the failure, so the message and the test that reads it cannot drift apart. */
-export const INVALID_TARGET = 'Name the repository as owner/repo — the owner is never assumed.'
+export const INVALID_TARGET =
+  "Name the repository as owner/repo — the owner is never assumed.";
 
 /**
  * What a validation failure adds to the input: the invalid state, and the description that says
@@ -27,8 +28,8 @@ export const INVALID_TARGET = 'Name the repository as owner/repo — the owner i
 export function describeValidation(
   error: string | null,
   errorId: string,
-): { 'aria-invalid'?: true; 'aria-describedby'?: string } {
-  return error ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
+): { "aria-invalid"?: true; "aria-describedby"?: string } {
+  return error ? { "aria-invalid": true, "aria-describedby": errorId } : {};
 }
 
 /**
@@ -38,28 +39,33 @@ export function describeValidation(
 function useRepoSuggestions(typed: string, token: string): string[] {
   // Keyed by the query it answered, so a stale result is simply not used and nothing has to be
   // cleared on every keystroke.
-  const [found, setFound] = useState<{ query: string; slugs: string[] }>({ query: '', slugs: [] })
+  const [found, setFound] = useState<{ query: string; slugs: string[] }>({
+    query: "",
+    slugs: [],
+  });
 
   useEffect(() => {
-    if (typed.length < 2) return
+    if (typed.length < 2) return;
 
-    const controller = new AbortController()
+    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void searchRepositories(typed, { signal: controller.signal, token }).then((slugs) => {
-        if (!controller.signal.aborted) setFound({ query: typed, slugs })
-      })
-    }, DEBOUNCE_MS)
+      void searchRepositories(typed, { signal: controller.signal, token }).then(
+        (slugs) => {
+          if (!controller.signal.aborted) setFound({ query: typed, slugs });
+        },
+      );
+    }, DEBOUNCE_MS);
 
     return () => {
-      controller.abort()
-      window.clearTimeout(timer)
-    }
-  }, [typed, token])
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [typed, token]);
 
   return useMemo(
     () => mergeSuggestions(typed, found.query === typed ? found.slugs : []),
     [typed, found],
-  )
+  );
 }
 
 /**
@@ -72,11 +78,11 @@ export function nextActiveOption(
   active: number,
   count: number,
 ): number | null {
-  if (key === 'Escape') return -1
-  if (count === 0) return null
-  if (key === 'ArrowDown') return (active + 1) % count
-  if (key === 'ArrowUp') return active <= 0 ? count - 1 : active - 1
-  return null
+  if (key === "Escape") return -1;
+  if (count === 0) return null;
+  if (key === "ArrowDown") return (active + 1) % count;
+  if (key === "ArrowUp") return active <= 0 ? count - 1 : active - 1;
+  return null;
 }
 
 /**
@@ -88,8 +94,12 @@ export function nextActiveOption(
  * it, is no choice either. What keeps the `Open` button from destroying the choice it is meant to
  * act on is that pressing it never blurs the input; see the button's `onMouseDown`.
  */
-export function chosenSuggestion(active: number, count: number, visible: boolean): number {
-  return visible && active >= 0 && active < count ? active : -1
+export function chosenSuggestion(
+  active: number,
+  count: number,
+  visible: boolean,
+): number {
+  return visible && active >= 0 && active < count ? active : -1;
 }
 
 /**
@@ -98,35 +108,35 @@ export function chosenSuggestion(active: number, count: number, visible: boolean
  * leaves the input for a press on an option, so the popup cannot close before that click lands.
  */
 function useComboboxNavigation(count: number) {
-  const [open, setOpen] = useState(false)
-  const [active, setActive] = useState(-1)
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
-      const next = nextActiveOption(event.key, active, count)
-      if (next === null) return
+      const next = nextActiveOption(event.key, active, count);
+      if (next === null) return;
 
-      if (event.key === 'Escape') {
-        setOpen(false)
+      if (event.key === "Escape") {
+        setOpen(false);
       } else {
-        event.preventDefault()
-        setOpen(true)
+        event.preventDefault();
+        setOpen(true);
       }
-      setActive(next)
+      setActive(next);
     },
     [active, count],
-  )
+  );
 
-  const show = useCallback(() => setOpen(true), [])
-  const close = useCallback(() => setOpen(false), [])
-  const reset = useCallback(() => setActive(-1), [])
+  const show = useCallback(() => setOpen(true), []);
+  const close = useCallback(() => setOpen(false), []);
+  const reset = useCallback(() => setActive(-1), []);
   /** Leaving the field abandons the popup and the highlight together, so neither goes stale. */
   const dismiss = useCallback(() => {
-    setOpen(false)
-    setActive(-1)
-  }, [])
+    setOpen(false);
+    setActive(-1);
+  }, []);
 
-  const visible = open && count > 0
+  const visible = open && count > 0;
 
   return {
     active,
@@ -138,7 +148,7 @@ function useComboboxNavigation(count: number) {
     reset,
     dismiss,
     onKeyDown,
-  }
+  };
 }
 
 export function SuggestionList({
@@ -148,14 +158,19 @@ export function SuggestionList({
   onHover,
   onChoose,
 }: {
-  listId: string
-  suggestions: string[]
-  active: number
-  onHover: (index: number) => void
-  onChoose: (slug: string) => void
+  listId: string;
+  suggestions: string[];
+  active: number;
+  onHover: (index: number) => void;
+  onChoose: (slug: string) => void;
 }) {
   return (
-    <ul className="repoinput__list" id={listId} role="listbox" aria-label="Repository suggestions">
+    <ul
+      className="repoinput__list"
+      id={listId}
+      role="listbox"
+      aria-label="Repository suggestions"
+    >
       {suggestions.map((slug, index) => (
         // The option is the whole list item: a focusable descendant would be a second widget
         // inside a role the listbox pattern reserves for one.
@@ -165,7 +180,7 @@ export function SuggestionList({
           id={`${listId}-${index}`}
           role="option"
           aria-selected={index === active}
-          className={`repoinput__option${index === active ? ' is-active' : ''}`}
+          className={`repoinput__option${index === active ? " is-active" : ""}`}
           // Keeping the press from reaching the document is what keeps focus on the input, so the
           // option is still mounted when the click arrives and no timer has to outlive a blur.
           onMouseDown={(event) => event.preventDefault()}
@@ -176,7 +191,7 @@ export function SuggestionList({
         </li>
       ))}
     </ul>
-  )
+  );
 }
 
 /**
@@ -184,44 +199,45 @@ export function SuggestionList({
  * GitHub search. Typed text always wins — a suggestion is never required to submit.
  */
 export function RepoInput({
-  initial = '',
+  initial = "",
   onOpen,
-  token = '',
+  token = "",
 }: {
-  initial?: string
-  onOpen: (target: RepoTarget) => void
+  initial?: string;
+  onOpen: (target: RepoTarget) => void;
   /** Search has its own budget, and a token raises that one too. */
-  token?: string
+  token?: string;
 }) {
-  const [value, setValue] = useState(initial)
-  const [error, setError] = useState<string | null>(null)
-  const listId = useId()
-  const errorId = `${listId}-error`
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [value, setValue] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
+  const listId = useId();
+  const errorId = `${listId}-error`;
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  const typed = value.trim()
+  const typed = value.trim();
   // Opening the repository already open does nothing, so the control that would do it is off.
-  const unchanged = initial.length > 0 && typed.toLowerCase() === initial.toLowerCase()
+  const unchanged =
+    initial.length > 0 && typed.toLowerCase() === initial.toLowerCase();
 
-  const suggestions = useRepoSuggestions(typed, token)
-  const list = useComboboxNavigation(suggestions.length)
+  const suggestions = useRepoSuggestions(typed, token);
+  const list = useComboboxNavigation(suggestions.length);
 
   const submit = useCallback(
     (raw: string) => {
-      const target = parseTargetInput(raw)
+      const target = parseTargetInput(raw);
       if (!target) {
-        setError(INVALID_TARGET)
+        setError(INVALID_TARGET);
         // The message describes the input, so the input is where the reading has to be, whether
         // the submit came from the button or from Enter.
-        inputRef.current?.focus()
-        return
+        inputRef.current?.focus();
+        return;
       }
-      setError(null)
-      list.close()
-      onOpen(target)
+      setError(null);
+      list.close();
+      onOpen(target);
     },
     [list, onOpen],
-  )
+  );
 
   return (
     <div className="repoinput">
@@ -229,9 +245,9 @@ export function RepoInput({
         className="repoinput__form"
         role="search"
         onSubmit={(event) => {
-          event.preventDefault()
-          if (unchanged && list.chosen < 0) return
-          submit(list.chosen >= 0 ? suggestions[list.chosen] : value)
+          event.preventDefault();
+          if (unchanged && list.chosen < 0) return;
+          submit(list.chosen >= 0 ? suggestions[list.chosen] : value);
         }}
       >
         <label className="repoinput__field">
@@ -250,17 +266,23 @@ export function RepoInput({
             // can still act on it, but an id that is no longer rendered is not something to point
             // a screen reader at.
             aria-activedescendant={
-              list.visible && list.active >= 0 ? `${listId}-${list.active}` : undefined
+              list.visible && list.active >= 0
+                ? `${listId}-${list.active}`
+                : undefined
             }
             {...describeValidation(error, errorId)}
             autoComplete="off"
             spellCheck={false}
+            // The landing page is this one field; with nothing typed yet there
+            // is nothing else focus could usefully rest on. A visit that
+            // already carries a repository does not steal it.
+            // biome-ignore lint/a11y/noAutofocus: the empty landing page is one input.
             autoFocus={initial.length === 0}
             onChange={(event) => {
-              setValue(event.target.value)
-              setError(null)
-              list.reset()
-              list.show()
+              setValue(event.target.value);
+              setError(null);
+              list.reset();
+              list.show();
             }}
             onFocus={list.show}
             onBlur={list.dismiss}
@@ -288,8 +310,8 @@ export function RepoInput({
           active={list.active}
           onHover={list.setActive}
           onChoose={(slug) => {
-            setValue(slug)
-            submit(slug)
+            setValue(slug);
+            submit(slug);
           }}
         />
       )}
@@ -300,5 +322,5 @@ export function RepoInput({
         </p>
       )}
     </div>
-  )
+  );
 }

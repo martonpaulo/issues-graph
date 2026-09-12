@@ -13,23 +13,23 @@
  */
 
 /** Returns the decoded value, or `undefined` when the stored value is not this schema. */
-export type Decoder<T> = (value: unknown) => T | undefined
+export type Decoder<T> = (value: unknown) => T | undefined;
 
 export function readStored<T>(key: string, decode: Decoder<T>, fallback: T): T {
-  let parsed: unknown
+  let parsed: unknown;
   try {
-    const raw = window.localStorage.getItem(key)
-    if (raw === null) return fallback
-    parsed = JSON.parse(raw)
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return fallback;
+    parsed = JSON.parse(raw);
   } catch {
-    return fallback
+    return fallback;
   }
 
   // Outside the try on purpose: a decoder that throws is a defect in the decoder, not a storage
   // failure, and swallowing it here would hide it behind a fallback that looks like normal
   // behaviour.
-  const decoded = decode(parsed)
-  return decoded === undefined ? fallback : decoded
+  const decoded = decode(parsed);
+  return decoded === undefined ? fallback : decoded;
 }
 
 /**
@@ -45,9 +45,9 @@ export function readStored<T>(key: string, decode: Decoder<T>, fallback: T): T {
  */
 export type StorageWriteResult =
   | { ok: true }
-  | { ok: false; reason: 'quota' | 'unavailable'; message: string }
+  | { ok: false; reason: "quota" | "unavailable"; message: string };
 
-const WROTE: StorageWriteResult = { ok: true }
+const WROTE: StorageWriteResult = { ok: true };
 
 /**
  * Whether a thrown value is the browser saying the quota is full.
@@ -58,27 +58,31 @@ const WROTE: StorageWriteResult = { ok: true }
  * https://developer.mozilla.org/en-US/docs/Web/API/Storage/setItem#exceptions
  */
 function isQuotaFailure(error: unknown): boolean {
-  if (!(error instanceof DOMException)) return false
+  if (!(error instanceof DOMException)) return false;
   return (
-    error.name === 'QuotaExceededError' ||
-    error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
+    error.name === "QuotaExceededError" ||
+    error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
     error.code === 22 ||
     error.code === 1014
-  )
+  );
 }
 
 function failureOf(error: unknown): StorageWriteResult {
   return isQuotaFailure(error)
-    ? { ok: false, reason: 'quota', message: 'This browser\u2019s storage is full.' }
+    ? {
+        ok: false,
+        reason: "quota",
+        message: "This browser\u2019s storage is full.",
+      }
     : {
         ok: false,
-        reason: 'unavailable',
-        message: 'This browser is not letting the page save anything.',
-      }
+        reason: "unavailable",
+        message: "This browser is not letting the page save anything.",
+      };
 }
 
 export function writeStored(key: string, value: unknown): StorageWriteResult {
-  return writeStoredText(key, JSON.stringify(value))
+  return writeStoredText(key, JSON.stringify(value));
 }
 
 /**
@@ -91,10 +95,10 @@ export function writeStored(key: string, value: unknown): StorageWriteResult {
  */
 export function writeStoredText(key: string, text: string): StorageWriteResult {
   try {
-    window.localStorage.setItem(key, text)
-    return WROTE
+    window.localStorage.setItem(key, text);
+    return WROTE;
   } catch (error) {
-    return failureOf(error)
+    return failureOf(error);
   }
 }
 
@@ -107,15 +111,15 @@ export function writeStoredText(key: string, text: string): StorageWriteResult {
  */
 export function readStoredText(key: string): string | null {
   try {
-    return window.localStorage.getItem(key)
+    return window.localStorage.getItem(key);
   } catch {
-    return null
+    return null;
   }
 }
 
 /** Whether a key currently holds anything, without paying to parse what it holds. */
 export function hasStored(key: string): boolean {
-  return readStoredText(key) !== null
+  return readStoredText(key) !== null;
 }
 
 /**
@@ -130,26 +134,27 @@ export function hasStored(key: string): boolean {
  */
 export function storedKeys(): string[] {
   try {
-    const storage = window.localStorage
-    if (typeof storage.key !== 'function' || typeof storage.length !== 'number') return []
+    const storage = window.localStorage;
+    if (typeof storage.key !== "function" || typeof storage.length !== "number")
+      return [];
 
-    const keys: string[] = []
+    const keys: string[] = [];
     for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index)
-      if (key !== null) keys.push(key)
+      const key = storage.key(index);
+      if (key !== null) keys.push(key);
     }
-    return keys
+    return keys;
   } catch {
-    return []
+    return [];
   }
 }
 
 export function clearStored(key: string): StorageWriteResult {
   try {
-    window.localStorage.removeItem(key)
-    return WROTE
+    window.localStorage.removeItem(key);
+    return WROTE;
   } catch (error) {
-    return failureOf(error)
+    return failureOf(error);
   }
 }
 
@@ -157,14 +162,18 @@ export function clearStored(key: string): StorageWriteResult {
    the feature that writes it. */
 
 export function asBoolean(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined
+  return typeof value === "boolean" ? value : undefined;
 }
 
 export function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined
+  return typeof value === "string" ? value : undefined;
 }
 
 export function asStringArray(value: unknown): string[] | undefined {
-  if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) return undefined
-  return value as string[]
+  if (
+    !Array.isArray(value) ||
+    !value.every((entry) => typeof entry === "string")
+  )
+    return undefined;
+  return value as string[];
 }
