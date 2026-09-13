@@ -194,6 +194,7 @@ For any command, process, browser action, integration, or delegated task likely 
 - Prefer native platform components and established product patterns. Custom UI must provide clear product or domain value.
 - Define layout, hierarchy, controls, loading, content, empty, error, retry, disabled, cancellation, and destructive states when applicable.
 - Include keyboard navigation, focus, screen-reader labels, scalable text, contrast, safe areas, reduced motion, and non-color status cues in the same change.
+- Screen-reader passes are not run, and that is accepted debt: accessibility evidence is automated — semantic markup, accessibility-tree inspection, focus and live-region assertions, `axe` — and reports say it is weaker than a real pass. Do not add or block on a criterion that asks a person to run VoiceOver or NVDA. Decided by the owner on 2026-09-13 (martonpaulo/skill-deck#266); the gap it closes out was #144, split from #119 after PR #141.
 - Keep visible copy centralized, localized, and consistent with the product language strategy.
 - Keep expensive work out of render paths, hot loops, and latency-sensitive request paths. Prefer event-driven, on-demand, bounded, incremental, lazy, paginated, and cancelable work.
 - Measure before claiming a performance problem and optimize measured user-visible bottlenecks.
