@@ -54,6 +54,8 @@ describe("what each route costs to open", () => {
     expect(html).toContain("owner/repo");
     // React Flow renders this wrapper around every canvas, and nothing else in the page does.
     expect(html).not.toContain("react-flow");
+    // The fleet footer belongs to the landing page only.
+    expect(html).toContain("MIT licensed · © 2026 Issues Graph contributors.");
   });
 
   it("keeps the shell on screen while the graph chunk is still arriving", () => {
@@ -67,6 +69,7 @@ describe("what each route costs to open", () => {
     // The heading and the repository field never move, so the page continues rather than blanks.
     expect(html).toContain("Issues Graph");
     expect(html).toContain("acme/app");
+    expect(html).not.toContain("site-footer");
   });
 });
 

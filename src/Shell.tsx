@@ -516,16 +516,19 @@ export function Start({
   onOpen,
   message,
   children,
+  footer = false,
 }: {
   initial?: string;
   onOpen: (target: RepoTarget) => void;
   message?: string;
   children?: React.ReactNode;
+  /** Only the landing page carries the site footer; a repository route never does. */
+  footer?: boolean;
 }) {
   const { token } = useTokenState();
 
   return (
-    <div className="centre">
+    <div className={footer ? "centre centre--footed" : "centre"}>
       <div className="start">
         <h1 className="start__title">
           <Icon name="graph" size={20} /> {PRODUCT}
@@ -556,6 +559,55 @@ export function Start({
           </p>
         )}
       </div>
+      {footer && <SiteFooter />}
     </div>
+  );
+}
+
+/** The fleet's mark for a link that leaves the site (windowhop/docs). */
+function ExternalIcon() {
+  return (
+    <svg
+      className="external-icon"
+      viewBox="0 0 12 12"
+      width="12"
+      height="12"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M3.6 8.4 8.4 3.6M4.8 3.6h3.6v3.6"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * The fleet footer: external links only, and the credit with its licence. The year is literal so
+ * the credit never depends on the clock of the reader's machine.
+ */
+export function SiteFooter() {
+  return (
+    <footer className="site-footer">
+      <p>
+        Developed by Marton Paulo · MIT licensed · © 2026 {PRODUCT}{" "}
+        contributors.
+      </p>
+      <nav aria-label="Project links">
+        <a href="https://github.com/martonpaulo/issues-graph" rel="noopener">
+          Source
+          <ExternalIcon />
+        </a>
+        <a href="https://martonpaulo.com/" rel="noopener">
+          martonpaulo.com
+          <ExternalIcon />
+        </a>
+      </nav>
+    </footer>
   );
 }
