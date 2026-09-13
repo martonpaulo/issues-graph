@@ -173,3 +173,33 @@ describe("RepoInput", () => {
     expect(markup).not.toContain(INVALID_TARGET);
   });
 });
+
+describe("Open on the repository already on screen", () => {
+  const render = (props: Partial<Parameters<typeof RepoInput>[0]>) =>
+    renderToStaticMarkup(
+      createElement(RepoInput, {
+        initial: "acme/app",
+        onOpen: () => {},
+        ...props,
+      }),
+    );
+  const openButton = (html: string) =>
+    html.match(
+      /<button class="button button--primary" type="submit"[^>]*>/,
+    )?.[0] ?? "";
+
+  it("is off when it would do nothing", () => {
+    expect(openButton(render({}))).toContain('disabled=""');
+  });
+
+  it("is the page's action when the page has one, and off while that action cannot run", () => {
+    expect(openButton(render({ onOpenCurrent: () => {} }))).not.toContain(
+      "disabled",
+    );
+    expect(
+      openButton(
+        render({ onOpenCurrent: () => {}, openCurrentDisabled: true }),
+      ),
+    ).toContain('disabled=""');
+  });
+});

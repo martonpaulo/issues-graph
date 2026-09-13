@@ -59,6 +59,9 @@ export async function chunkOrUnavailable(
   }
 }
 
+/** The history entry an Open press leaves behind; see `readOpenIntent` in `GraphView.tsx`. */
+const OPEN_INTENT = { intent: "open" };
+
 const GraphView = lazy(() => chunkOrUnavailable(import("./GraphView")));
 
 /**
@@ -143,8 +146,8 @@ export function App() {
     };
   }, []);
 
-  const navigate = useCallback((next: string) => {
-    window.history.pushState(null, "", next);
+  const navigate = useCallback((next: string, state: unknown = null) => {
+    window.history.pushState(state, "", next);
     setPathname(next);
   }, []);
 
@@ -157,7 +160,9 @@ export function App() {
   }, [route]);
 
   const openTarget = useCallback(
-    (target: RepoTarget) => navigate(pathForTarget(target, BASE)),
+    // Pressing Open is the reader asking for the graph, which a saved copy can answer for free.
+    // The repository page reads this once, so a reload or a pasted link still stops to ask.
+    (target: RepoTarget) => navigate(pathForTarget(target, BASE), OPEN_INTENT),
     [navigate],
   );
   const openExternal = useCallback(

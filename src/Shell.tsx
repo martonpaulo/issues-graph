@@ -417,26 +417,51 @@ export function ExternalConfirm({
   );
 }
 
+/** What the GitHub access disclosure says in its summary line, and what it offers inside. */
+export type AccessInfo = {
+  /** The budget in one line, when the page has read it; the ceiling is quoted otherwise. */
+  summary?: string;
+  /** Offered only where this browser holds something for the repository on screen. */
+  onClearSavedData?: () => void;
+  /** What came of clearing, once it was asked for. */
+  cleared?: string | null;
+};
+
 /**
- * Where a viewer supplies their own GitHub token.
+ * Everything about the viewer's access to GitHub, folded into one line that carries the budget.
  *
- * Closed by default: the page works without one, so this is an answer to a limit somebody has hit
- * rather than a step on the way in. The value is theirs — it stays in their browser, goes only to
- * api.github.com, and is never shown in plain text.
+ * Closed by default: the page works without a token, so this is an answer to a limit somebody has
+ * hit rather than a step on the way in. The token is theirs: it stays in their browser, goes only
+ * to api.github.com, and is never shown in plain text. It is saved on Enter or when the field is
+ * left, so the screen has no second primary button. Removing what this browser saved lives here
+ * too, as a quiet action that asks before it acts.
  */
-function TokenField() {
+function GitHubAccess({ summary, onClearSavedData, cleared }: AccessInfo) {
   const { token, setToken } = useTokenState();
   const [draft, setDraft] = useState(token);
   const [said, setSaid] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const fieldId = useId();
+
+  const save = () => {
+    const stored = draft.trim();
+    if (stored === token) return;
+    setToken(stored);
+    // The field shows what was actually stored, which is the trimmed value.
+    setDraft(stored);
+    setSaid(
+      stored ? "Token saved. Requests from now on use it." : "Token removed.",
+    );
+  };
+
+  const ceiling = token
+    ? `token set · ${AUTHENTICATED_HOURLY_LIMIT} requests an hour`
+    : `${UNAUTHENTICATED_HOURLY_LIMIT} requests an hour · a token raises it to ${AUTHENTICATED_HOURLY_LIMIT}`;
 
   return (
     <details className="token">
       <summary className="token__summary">
-        GitHub token ·{" "}
-        {token
-          ? "set"
-          : `raises the limit from ${UNAUTHENTICATED_HOURLY_LIMIT} to ${AUTHENTICATED_HOURLY_LIMIT} an hour`}
+        GitHub access · {summary ?? ceiling}
       </summary>
       <div className="token__body">
         <p className="token__note">
@@ -444,7 +469,13 @@ function TokenField() {
           enough. It is kept in this browser only, sent only to api.github.com,
           and never leaves with anything else.
         </p>
-        <div className="token__row">
+        <form
+          className="token__row"
+          onSubmit={(event) => {
+            event.preventDefault();
+            save();
+          }}
+        >
           <label className="token__label" htmlFor={fieldId}>
             Token
           </label>
@@ -456,34 +487,16 @@ function TokenField() {
             placeholder={token ? "••••••••" : "github_pat_…"}
             autoComplete="off"
             spellCheck={false}
+            enterKeyHint="done"
             onChange={(event) => {
               setDraft(event.target.value);
               setSaid(null);
             }}
+            onBlur={save}
           />
-        </div>
-        <div className="stage__actions">
-          <button
-            className="button button--primary"
-            type="button"
-            disabled={draft.trim() === token}
-            onClick={() => {
-              const stored = draft.trim();
-              setToken(stored);
-              // The field shows what was actually stored, which is the trimmed value.
-              setDraft(stored);
-              setSaid(
-                stored
-                  ? "Token saved. Requests from now on use it."
-                  : "Token removed.",
-              );
-            }}
-          >
-            Save
-          </button>
           {token && (
             <button
-              className="button"
+              className="textbutton"
               type="button"
               onClick={() => {
                 setToken("");
@@ -494,10 +507,49 @@ function TokenField() {
               Remove
             </button>
           )}
-        </div>
+        </form>
         {said && (
           <p className="token__said" role="status">
             {said}
+          </p>
+        )}
+        {onClearSavedData &&
+          (confirming ? (
+            <p className="token__danger">
+              Remove everything this browser saved for this repository?{" "}
+              <button
+                className="textbutton textbutton--danger"
+                type="button"
+                onClick={() => {
+                  setConfirming(false);
+                  onClearSavedData();
+                }}
+              >
+                Clear saved data
+              </button>{" "}
+              ·{" "}
+              <button
+                className="textbutton"
+                type="button"
+                onClick={() => setConfirming(false)}
+              >
+                Keep it
+              </button>
+            </p>
+          ) : (
+            <p className="token__danger">
+              <button
+                className="textbutton textbutton--danger"
+                type="button"
+                onClick={() => setConfirming(true)}
+              >
+                <Icon name="trash" size={12} /> Clear saved data
+              </button>
+            </p>
+          ))}
+        {cleared && (
+          <p className="token__said" role="status">
+            {cleared}
           </p>
         )}
       </div>
@@ -514,11 +566,18 @@ function TokenField() {
 export function Start({
   initial,
   onOpen,
+  onOpenCurrent,
+  openCurrentDisabled,
+  access,
   message,
   children,
 }: {
   initial?: string;
   onOpen: (target: RepoTarget) => void;
+  /** Open's action for the repository already on screen; see `RepoInput`. */
+  onOpenCurrent?: () => void;
+  openCurrentDisabled?: boolean;
+  access?: AccessInfo;
   message?: string;
   children?: React.ReactNode;
 }) {
@@ -538,20 +597,20 @@ export function Start({
 
           {message && <p className="notice notice--error">{message}</p>}
 
-          <RepoInput initial={initial} onOpen={onOpen} token={token} />
+          <RepoInput
+            initial={initial}
+            onOpen={onOpen}
+            onOpenCurrent={onOpenCurrent}
+            openCurrentDisabled={openCurrentDisabled}
+            token={token}
+          />
 
-          <TokenField />
+          {/* What Open will do for the repository on screen, and what it needs first. */}
+          {children && <section className="stage">{children}</section>}
 
-          {children ? (
-            <section className="stage">
-              {/* Every fact below is about the repository the page is on, which is not necessarily
-                the one being typed into the field above it. */}
-              <p className="stage__for">
-                <code>{initial}</code>
-              </p>
-              {children}
-            </section>
-          ) : (
+          <GitHubAccess {...access} />
+
+          {children ? null : (
             <p className="start__url">
               <code>{BASE}dependencies/owner/repo</code>
             </p>

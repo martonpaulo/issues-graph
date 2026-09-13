@@ -17,6 +17,7 @@ import {
   issueRef,
 } from "./dependencies";
 import {
+  accessSummary,
   blockerStateText,
   budgetParts,
   CAPTURING_FOCUS,
@@ -120,7 +121,7 @@ describe("nextIssueSelection", () => {
 });
 
 describe("saved copy entry", () => {
-  it("keeps initial and refreshed visits at the choice gate when a copy exists", () => {
+  it("keeps initial and refreshed visits at the gate, with Open set to draw the saved copy", () => {
     withBrowserStorage(() => {
       writeCache("acme/app", narrowData);
 
@@ -128,12 +129,37 @@ describe("saved copy entry", () => {
         const html = renderToStaticMarkup(
           createElement(GraphView, { target: TARGET, onOpen: () => {} }),
         );
-        expect(html, `visit ${visit}`).toContain("Fetch now");
-        expect(html, `visit ${visit}`).toContain("Open saved copy");
+        // One line says what Open does here; the fresh read is a quiet alternative, not a button.
+        expect(html, `visit ${visit}`).toContain("will open");
+        expect(html, `visit ${visit}`).toContain("Fetch fresh instead");
+        expect(html, `visit ${visit}`).not.toContain("Fetch now");
+        expect(html, `visit ${visit}`).not.toContain("Open saved copy");
         expect(html, `visit ${visit}`).not.toContain(
           "Issue dependency graph for acme/app",
         );
       }
+    });
+  });
+
+  it("gives the gate one task and one primary button", () => {
+    withBrowserStorage(() => {
+      writeCache("acme/app", narrowData);
+      const html = renderToStaticMarkup(
+        createElement(GraphView, { target: TARGET, onOpen: () => {} }),
+      );
+
+      expect(html.match(/button--primary/g)).toHaveLength(1);
+      expect(html).toMatch(
+        /<button class="button button--primary" type="submit"[^>]*>Open</,
+      );
+      // Account details and options are folded away, and the repository is not named twice.
+      expect(html).toContain(
+        '<summary class="token__summary">GitHub access · ',
+      );
+      expect(html).toContain(
+        '<summary class="token__summary">Options</summary>',
+      );
+      expect(html).not.toContain("stage__for");
     });
   });
 
@@ -153,12 +179,11 @@ describe("saved copy entry", () => {
       const html = renderToStaticMarkup(
         createElement(GraphView, { target: TARGET, onOpen: () => {} }),
       );
+      // Open reads GitHub instead, and says why the copy is not what it draws.
       expect(html).toContain(
-        'type="button" disabled="" aria-describedby="saved-copy-unavailable"',
+        "A wider GitHub read is required to include closed blockers. Open reads it fresh.",
       );
-      expect(html).toContain(
-        "A wider GitHub read is required to include closed blockers.",
-      );
+      expect(html).not.toContain("will open");
       expect(html).not.toContain("Issue dependency graph for acme/app");
       expect(
         decideSavedCopyOpen(
@@ -226,8 +251,8 @@ describe("saved copy entry", () => {
           createElement(GraphView, { target: TARGET, onOpen: () => {} }),
         );
 
-        expect(html).not.toContain("Fetch now");
-        expect(html).not.toContain("Open saved copy");
+        expect(html).not.toContain("Fetch fresh instead");
+        expect(html).not.toContain("will open");
         expect(html).not.toContain("Reading costs GitHub requests");
       },
       link.url.slice(link.url.indexOf("#")),
@@ -1232,5 +1257,33 @@ describe("what a local interaction rebuilds", () => {
         was.get(node.id),
       );
     }
+  });
+});
+
+describe("the GitHub access summary line", () => {
+  const reset = new Date(Date.now() + 43 * 60_000);
+
+  it("carries the budget, and says when it is checking or unknown", () => {
+    expect(accessSummary(null, true, false)).toBe("checking the budget…");
+    expect(accessSummary(null, false, false)).toBe(
+      "60 requests an hour, current use unknown",
+    );
+    expect(
+      accessSummary({ remaining: 49, limit: 60, reset }, false, false),
+    ).toMatch(/^49 of 60 requests left, refills in /);
+  });
+
+  it("warns when the budget is low or gone, and points at a token only without one", () => {
+    expect(
+      accessSummary({ remaining: 3, limit: 60, reset }, false, false),
+    ).toMatch(
+      /^only 3 of 60 requests left, refills .* · add a token for 5000 an hour$/,
+    );
+    expect(
+      accessSummary({ remaining: 0, limit: 60, reset }, false, false),
+    ).toMatch(/^no requests left, refills .* · add a token for 5000 an hour$/);
+    expect(
+      accessSummary({ remaining: 0, limit: 5000, reset }, false, true),
+    ).not.toContain("add a token");
   });
 });

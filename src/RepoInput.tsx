@@ -201,10 +201,18 @@ export function SuggestionList({
 export function RepoInput({
   initial = "",
   onOpen,
+  onOpenCurrent,
+  openCurrentDisabled = false,
   token = "",
 }: {
   initial?: string;
   onOpen: (target: RepoTarget) => void;
+  /**
+   * What Open does for the repository the page is already on, when the page has something to do
+   * for it (its gate). Without it, Open is off for an unchanged name, because it would do nothing.
+   */
+  onOpenCurrent?: () => void;
+  openCurrentDisabled?: boolean;
   /** Search has its own budget, and a token raises that one too. */
   token?: string;
 }) {
@@ -215,9 +223,11 @@ export function RepoInput({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const typed = value.trim();
-  // Opening the repository already open does nothing, so the control that would do it is off.
+  // Opening the repository already open does nothing, so the control that would do it is off —
+  // unless the page has an action for it, in which case Open is that action.
   const unchanged =
     initial.length > 0 && typed.toLowerCase() === initial.toLowerCase();
+  const opensCurrent = unchanged && onOpenCurrent !== undefined;
 
   const suggestions = useRepoSuggestions(typed, token);
   const list = useComboboxNavigation(suggestions.length);
@@ -246,7 +256,10 @@ export function RepoInput({
         role="search"
         onSubmit={(event) => {
           event.preventDefault();
-          if (unchanged && list.chosen < 0) return;
+          if (unchanged && list.chosen < 0) {
+            if (opensCurrent && !openCurrentDisabled) onOpenCurrent?.();
+            return;
+          }
           submit(list.chosen >= 0 ? suggestions[list.chosen] : value);
         }}
       >
@@ -297,7 +310,10 @@ export function RepoInput({
           // remedy as the options use, for the same reason — the input stays the focus owner, so
           // there is no ordering between a close and a submit to get wrong.
           onMouseDown={(event) => event.preventDefault()}
-          disabled={typed.length === 0 || unchanged}
+          disabled={
+            typed.length === 0 ||
+            (unchanged && (!opensCurrent || openCurrentDisabled))
+          }
         >
           Open
         </button>

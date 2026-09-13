@@ -184,6 +184,45 @@ export function budgetParts(
   };
 }
 
+/** Below this many requests the summary line warns, because one more read may not fit. */
+const LOW_BUDGET = 10;
+
+/**
+ * The budget as the one line the GitHub access disclosure shows. Low and empty budgets say so, and
+ * point at the token that raises them.
+ */
+export function accessSummary(
+  status: RateLimitStatus | null,
+  checking: boolean,
+  authenticated: boolean,
+): string {
+  if (checking) return "checking the budget…";
+  const ceiling = authenticated
+    ? AUTHENTICATED_HOURLY_LIMIT
+    : UNAUTHENTICATED_HOURLY_LIMIT;
+  const tokenHint = authenticated
+    ? ""
+    : ` · add a token for ${AUTHENTICATED_HOURLY_LIMIT} an hour`;
+  if (!status) return `${ceiling} requests an hour, current use unknown`;
+  const refill = `refills ${describeUntil(status.reset)}`;
+  if (status.remaining === 0) return `no requests left, ${refill}${tokenHint}`;
+  const left = `${status.remaining} of ${status.limit} requests left, ${refill}`;
+  return status.remaining < LOW_BUDGET ? `only ${left}${tokenHint}` : left;
+}
+
+/**
+ * Whether this page was reached by pressing Open, read once and then cleared, so a reload or a
+ * pasted link to the same address still stops at the gate.
+ */
+function readOpenIntent(): boolean {
+  if (typeof window === "undefined" || !window.history) return false;
+  const state = window.history.state as { intent?: string } | null;
+  if (state?.intent !== "open") return false;
+  const { pathname, search, hash } = window.location;
+  window.history.replaceState(null, "", `${pathname}${search}${hash}`);
+  return true;
+}
+
 /** A right-aligned fact: a label, its value, and a smaller note under it. */
 function Fact({
   label,
@@ -1695,6 +1734,16 @@ function GraphLoad({
   // takes the control away once there is nothing left to take.
   const hasStoredData = holdsData(identity);
 
+  // An Open press from another page: a saved copy that covers the view opens without a second
+  // press. This runs after the session's own effect has begun it (effects run in declaration order).
+  const [openIntent] = useState(readOpenIntent);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per session, on the intent read at mount.
+  useEffect(() => {
+    if (!openIntent || !cached) return;
+    if (decideSavedCopyOpen(cached, showClosed).kind === "open")
+      session.openSavedCopy(showClosed);
+  }, [session]);
+
   const clearSavedData = () => {
     const result = session.forgetSavedCopy();
     setCleared(describeClear(result, slug));
@@ -1721,9 +1770,30 @@ function GraphLoad({
     );
   }
 
+  // What Open does on the gate: the saved copy when it covers the view, because it costs nothing and
+  // the graph header offers a fresh read beside its age; otherwise a read of GitHub, which still
+  // quotes the dependency cost before spending it.
+  const opensCopy = savedCopyDecision?.kind === "open";
+  const proceed = () =>
+    opensCopy ? session.openSavedCopy(showClosed) : session.start(showClosed);
+  const gate = phase.kind === "gate" ? phase : null;
+  const exhausted = gate?.status?.remaining === 0;
+
   // Everything short of a drawn graph stays on the page the repository was chosen from.
   return (
-    <Start initial={slug} onOpen={onOpen}>
+    <Start
+      initial={slug}
+      onOpen={onOpen}
+      onOpenCurrent={gate ? proceed : undefined}
+      openCurrentDisabled={gate ? gate.checking && !opensCopy : false}
+      access={{
+        summary: gate
+          ? accessSummary(gate.status, gate.checking, token !== "")
+          : undefined,
+        onClearSavedData: hasStoredData ? clearSavedData : undefined,
+        cleared,
+      }}
+    >
       {phase.kind === "gate" && (
         <>
           {note && <p className="notice">{note}</p>}
@@ -1737,91 +1807,59 @@ function GraphLoad({
               {stopped}
             </p>
           )}
-          <dl className="facts">
-            <Fact
-              label="Budget"
-              value={
-                phase.checking
-                  ? "…"
-                  : budgetParts(phase.status, token !== "").main
-              }
-              note={
-                phase.checking
-                  ? undefined
-                  : budgetParts(phase.status, token !== "").sub
-              }
-            />
-            {cached && (
-              <Fact
-                label="Saved copy"
-                value={describeAge(cached.savedAt)}
-                note={savedCopyCoverage(cached.data.includedClosed)}
-              />
+          <p className="stage__plan">
+            {opensCopy && cached ? (
+              <>
+                Saved copy from {describeAge(cached.savedAt)} will open ·{" "}
+                {savedCopyCoverage(cached.data.includedClosed)} ·{" "}
+                <button
+                  className="textbutton"
+                  type="button"
+                  disabled={phase.checking}
+                  onClick={() => session.start(showClosed)}
+                >
+                  Fetch fresh instead
+                </button>
+              </>
+            ) : (
+              <>
+                Open reads {slug} from GitHub, and asks before reading blockers.
+              </>
             )}
-          </dl>
-          <p className="stage__note">
-            Reading costs GitHub requests: 1 per 100 issues, then 1 per 100
-            blockers of each blocked issue.
           </p>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={showClosed}
-              onChange={(event) => onShowClosed(event.target.checked)}
-            />
-            include closed blockers · costs more requests
-          </label>
-          <div className="stage__actions">
-            {/* Sits apart from the two buttons that open the graph, because it is the one that
-                takes something away. Offered only where there is something to take away, which
-                is also the only place the reader can see what they are removing. */}
-            {hasStoredData && (
-              <button
-                className="button button--small button--aside"
-                type="button"
-                onClick={clearSavedData}
-              >
-                <Icon name="trash" size={12} /> Clear saved data
-              </button>
-            )}
-            <button
-              className={
-                savedCopyDecision?.kind === "open"
-                  ? "button"
-                  : "button button--primary"
-              }
-              type="button"
-              disabled={phase.checking}
-              onClick={() => session.start(showClosed)}
-            >
-              <Icon name="reload" size={12} /> Fetch now
-            </button>
-            {cached && (
-              <button
-                className="button button--primary"
-                type="button"
-                disabled={savedCopyDecision?.kind === "requires-latest"}
-                aria-describedby={
-                  savedCopyDecision?.kind === "requires-latest"
-                    ? "saved-copy-unavailable"
-                    : undefined
-                }
-                onClick={() => session.openSavedCopy(showClosed)}
-              >
-                <Icon name="clock" size={12} /> Open saved copy
-              </button>
-            )}
-          </div>
           {savedCopyDecision?.kind === "requires-latest" && (
-            <p className="notice" id="saved-copy-unavailable" role="status">
-              {savedCopyDecision.reason}
-            </p>
-          )}
-          {cleared && (
             <p className="notice" role="status">
-              {cleared}
+              {savedCopyDecision.reason} Open reads it fresh.
             </p>
           )}
+          {exhausted && gate?.status && (
+            <p className="notice notice--error" role="status">
+              No GitHub requests are left; the budget refills{" "}
+              {describeUntil(gate.status.reset)}.{" "}
+              {opensCopy
+                ? "The saved copy still opens."
+                : token
+                  ? "A read now would come back incomplete."
+                  : "Add a token under GitHub access to keep reading."}
+            </p>
+          )}
+          <details className="token">
+            <summary className="token__summary">Options</summary>
+            <div className="token__body">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={showClosed}
+                  onChange={(event) => onShowClosed(event.target.checked)}
+                />
+                include closed blockers · costs more requests
+              </label>
+              <p className="stage__note">
+                Reading costs GitHub requests: 1 per 100 issues, then 1 per 100
+                blockers of each blocked issue.
+              </p>
+            </div>
+          </details>
         </>
       )}
 

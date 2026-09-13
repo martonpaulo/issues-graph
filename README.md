@@ -96,9 +96,11 @@ Unauthenticated GitHub requests share 60 per hour per IP address, and reading a 
 one request per 100 issues plus one per issue that has blockers. The page tells you what a read
 will cost before it spends anything.
 
-If that is not enough, open **GitHub token** on the start screen and paste your own
-[fine-grained personal access token](https://github.com/settings/personal-access-tokens); read
-access to public repositories is all it needs. The limit becomes 5000 per hour.
+If that is not enough, open **GitHub access** on the start screen (its summary line shows how many
+requests are left) and paste your own
+[fine-grained personal access token](https://github.com/settings/personal-access-tokens); it is
+saved when you press Enter or leave the field. Read access to public repositories is all it needs.
+The limit becomes 5000 per hour.
 
 The token is yours, not this page's:
 
@@ -115,15 +117,16 @@ token scoped to public reads and revoke it when you are done.
 ## Saved copies
 
 Reading a repository saves its graph in your browser, so opening it again costs no GitHub
-requests. The page always says how old a saved copy is and what it covers, and **Fetch now** reads
-the repository live instead.
+requests. The page always says how old a saved copy is and what it covers. **Open** draws the saved copy
+when it covers the view; **Fetch fresh instead**, on the start screen, and **Read latest from
+GitHub**, in the graph's header, read the repository live.
 
 Six repositories are kept, most recently used first, and no more than about a megabyte between
 them. Whichever falls off the end loses its saved graph and its dimmed cards together; nothing
 else in the browser is touched, and nothing is lost that reading GitHub again cannot rebuild.
 
-**Clear saved data**, on the screen that offers the saved copy, removes everything held for that
-one repository straight away. Other repositories and your token are left alone; the token has its
+**Clear saved data**, inside **GitHub access** on the screen that offers the saved copy, asks once
+and then removes everything held for that one repository. Other repositories and your token are left alone; the token has its
 own **Remove**.
 
 <br />
