@@ -151,9 +151,9 @@ const pairs: ReadonlyArray<readonly [string, string, string]> = [
     declaration(".iconbutton.is-highlighting", "color"),
     token("highlight-soft"),
   ],
-  // The info panel's warning paints both halves itself rather than inheriting the panel's, so the
+  // The header's data warning paints both halves itself rather than inheriting the header's, so the
   // pair is read off the rule instead of assembled from the tokens it happens to name.
-  ["the canvas warning", ...painted(".info__warn")],
+  ["the data warning", ...painted(".graphbar__warn")],
 ];
 
 describe("token pairs", () => {

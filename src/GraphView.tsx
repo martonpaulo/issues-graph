@@ -880,12 +880,18 @@ function TopLeftBar({
         <span className="bar__slugtext">{slug}</span>
         <Icon name="external" size={11} />
       </button>
-      <span className="bar__divider" />
-      <span className="bar__counts">
+      <span className="bar__divider bar__divider--counts" />
+      {/* Two spellings of the same three numbers; the header shows the one its width has room for
+          (measured in styles.css), so only one is ever rendered visibly or read out. */}
+      <span className="bar__counts bar__counts--full">
         <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong>{" "}
         depend on others · <strong>{blockingCount}</strong> block others
       </span>
-      <span className="bar__divider" />
+      <span className="bar__counts bar__counts--short">
+        <strong>{nodeCount}</strong> issues · <strong>{dependentCount}</strong>{" "}
+        blocked · <strong>{blockingCount}</strong> blocking
+      </span>
+      <span className="bar__divider bar__divider--legend" />
       <span className="bar__legend">{DIRECTION_LEGEND}</span>
     </div>
   );
@@ -904,6 +910,7 @@ type TopRightBarProps = {
 };
 
 function TopRightBar({
+  freshness,
   graph,
   labelCounts,
   highlight,
@@ -913,7 +920,10 @@ function TopRightBar({
   onShare,
   sharing,
   onAskAgain,
-}: TopRightBarProps) {
+}: TopRightBarProps & {
+  /** Where the drawing came from and how old it is; absent for a graph read live just now. */
+  freshness: string | null;
+}) {
   return (
     <div className="bar bar--tools">
       <DependencyList graph={graph} />
@@ -943,36 +953,66 @@ function TopRightBar({
       >
         <Icon name="link" />
       </button>
+      <span className="bar__divider" />
+      {freshness && <span className="bar__fresh">{freshness}</span>}
       <button
-        className="button button--small"
+        className="button button--small bar__refresh"
         type="button"
+        aria-label="Read latest from GitHub"
         onClick={onAskAgain}
       >
-        <Icon name="reload" size={12} /> Read latest from GitHub
+        <Icon name="reload" size={12} />
+        <span className="bar__refreshlabel"> Read latest from GitHub</span>
       </button>
     </div>
   );
 }
 
 /**
- * Both top bars in one panel, because two panels pinned to opposite corners cannot see each other:
- * a repository name long enough, or a window narrow enough, and the tools slide underneath the
- * identity. Laid out in ordinary flex flow they push each other along the line and wrap when the
- * line runs out, which no breakpoint offset can promise. The strip itself lets gestures through;
- * only the bars catch them.
+ * The graph page's one header: a full-width `<header>` above the canvas, framing it with the footer
+ * below. Identity and counts on the left; the tools on the right, with the freshness of what is
+ * drawn beside the action that refreshes it. Anything wrong with the data sits in a row of its own
+ * underneath, present only while there is something to say. Nothing floats over the canvas, so a
+ * drag anywhere on it pans.
  */
 export function TopChrome({
   identity,
   tools,
+  status,
 }: {
   identity: TopLeftBarProps;
   tools: TopRightBarProps;
+  status: GraphStatusProps;
 }) {
+  const { graph, savedCopy, saveProblem } = status;
   return (
-    <Panel position="top-left" className="topbar">
-      <TopLeftBar {...identity} />
-      <TopRightBar {...tools} />
-    </Panel>
+    <header className="graphbar">
+      <div className="graphbar__row">
+        <TopLeftBar {...identity} />
+        <TopRightBar
+          {...tools}
+          freshness={savedCopy ? describeSavedCopy(savedCopy) : null}
+        />
+      </div>
+      {(saveProblem || !graph.complete) && (
+        <div className="graphbar__warns">
+          {saveProblem && (
+            <p className="graphbar__warn" role="status">
+              {saveProblem}
+            </p>
+          )}
+          {!graph.complete && (
+            /* One live region holding one complete sentence, so the whole gap is announced once
+               rather than a fragment at a time. */
+            <p className="graphbar__warn" role="status">
+              {describeUnresolved(graph.unresolved)}
+              {graph.rateLimited &&
+                ` The budget ran out; it refills ${describeUntil(graph.rateLimitReset)}.`}
+            </p>
+          )}
+        </div>
+      )}
+    </header>
   );
 }
 
@@ -1035,46 +1075,11 @@ export function SelectionBar({
   );
 }
 
-/**
- * The only two things the canvas says about the drawing itself: where it came from, and what it
- * could not reach. Neither is worth a panel on its own, and nothing floats here when both are
- * absent — every card already names its own state.
- */
-function GraphStatus({
-  graph,
-  savedCopy,
-  saveProblem,
-}: {
+type GraphStatusProps = {
   graph: IssueGraph;
   savedCopy: SavedCopyProvenance | null;
   saveProblem: string | null;
-}) {
-  if (!savedCopy && !saveProblem && graph.complete) return null;
-
-  return (
-    <Panel position="bottom-right" className="info">
-      {savedCopy && (
-        <div className="info__row info__row--muted">
-          {describeSavedCopy(savedCopy)}
-        </div>
-      )}
-      {saveProblem && (
-        <div className="info__warn" role="status">
-          {saveProblem}
-        </div>
-      )}
-      {!graph.complete && (
-        /* One live region holding one complete sentence, so the whole gap is announced once
-           rather than a fragment at a time. */
-        <div className="info__warn" role="status">
-          {describeUnresolved(graph.unresolved)}
-          {graph.rateLimited &&
-            ` The budget ran out; it refills ${describeUntil(graph.rateLimitReset)}.`}
-        </div>
-      )}
-    </Panel>
-  );
-}
+};
 
 /**
  * What came of pressing share.
@@ -1468,35 +1473,7 @@ function Canvas({
   const canRestore = [...selected].some((id) => dimmed.has(id));
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={NODE_TYPES}
-      edgeTypes={EDGE_TYPES}
-      fitView
-      minZoom={minZoom}
-      maxZoom={2}
-      translateExtent={translateExtent}
-      // Layout is automatic; dragging a card would only fight the controls it carries.
-      nodesDraggable={false}
-      nodesConnectable={false}
-      edgesFocusable={false}
-      /* Each node wrapper would otherwise be a `role="group" tabindex="0"` stop wrapping the
-         controls it already contains: a tab stop that looks like nothing and does nothing. The
-         card's own button and its two icons are the intentional stops. */
-      nodesFocusable={false}
-      // The React Flow watermark is not part of this page's chrome; the credit is in the README.
-      proOptions={{ hideAttribution: true }}
-      onPaneClick={() => setSelected(new Set())}
-      aria-label={`Issue dependency graph for ${slug}`}
-    >
-      <Background
-        variant={BackgroundVariant.Dots}
-        gap={24}
-        size={1}
-        className="dots"
-      />
-
+    <>
       <TopChrome
         identity={{
           slug,
@@ -1516,38 +1493,64 @@ function Canvas({
           sharing,
           onAskAgain,
         }}
+        status={{ graph, savedCopy, saveProblem }}
       />
+      <div className="page__main">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          edgeTypes={EDGE_TYPES}
+          fitView
+          minZoom={minZoom}
+          maxZoom={2}
+          translateExtent={translateExtent}
+          // Layout is automatic; dragging a card would only fight the controls it carries.
+          nodesDraggable={false}
+          nodesConnectable={false}
+          edgesFocusable={false}
+          /* Each node wrapper would otherwise be a `role="group" tabindex="0"` stop wrapping the
+         controls it already contains: a tab stop that looks like nothing and does nothing. The
+         card's own button and its two icons are the intentional stops. */
+          nodesFocusable={false}
+          // The React Flow watermark is not part of this page's chrome; the credit is in the README.
+          proOptions={{ hideAttribution: true }}
+          onPaneClick={() => setSelected(new Set())}
+          aria-label={`Issue dependency graph for ${slug}`}
+        >
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={24}
+            size={1}
+            className="dots"
+          />
 
-      <SelectionBar
-        selectedCount={selectedCount}
-        canDim={canDim}
-        canRestore={canRestore}
-        onDimSelected={dimSelected}
-        onRestoreSelected={restoreSelected}
-        onClearSelection={() => setSelected(new Set())}
-      />
+          <SelectionBar
+            selectedCount={selectedCount}
+            canDim={canDim}
+            canRestore={canRestore}
+            onDimSelected={dimSelected}
+            onRestoreSelected={restoreSelected}
+            onClearSelection={() => setSelected(new Set())}
+          />
 
-      <GraphStatus
-        graph={graph}
-        savedCopy={savedCopy}
-        saveProblem={saveProblem}
-      />
-
-      {/* Mounted before there is anything to say, because a live region added at the same moment
+          {/* Mounted before there is anything to say, because a live region added at the same moment
           as its text is not reliably announced. It carries no chrome while it is empty. */}
-      <Panel
-        position="bottom-left"
-        className={shared?.kind === "copied" ? "said" : "said said--quiet"}
-      >
-        <p role="status">
-          {shared?.kind === "copied" ? describeShare(shared) : ""}
-        </p>
-      </Panel>
+          <Panel
+            position="bottom-left"
+            className={shared?.kind === "copied" ? "said" : "said said--quiet"}
+          >
+            <p role="status">
+              {shared?.kind === "copied" ? describeShare(shared) : ""}
+            </p>
+          </Panel>
 
-      {shared && shared.kind !== "copied" && (
-        <ShareResult outcome={shared} onClose={() => setShared(null)} />
-      )}
-    </ReactFlow>
+          {shared && shared.kind !== "copied" && (
+            <ShareResult outcome={shared} onClose={() => setShared(null)} />
+          )}
+        </ReactFlow>
+      </div>
+    </>
   );
 }
 
@@ -1699,24 +1702,22 @@ function GraphLoad({
 
   if (phase.kind === "ready" && phase.graph.nodes.length > 0) {
     return (
-      // The same page frame as every other page: the canvas is the main area, and the footer sits
-      // under it in the flow rather than over it.
-      <div className="page">
-        <div className="page__main">
-          <ReactFlowProvider>
-            <Canvas
-              key={`${identity}:${showClosed}`}
-              graph={phase.graph}
-              slug={slug}
-              savedCopy={phase.savedCopy}
-              saveProblem={saveProblem}
-              snapshot={phase.snapshot}
-              onAskAgain={() => onReload()}
-            />
-          </ReactFlowProvider>
+      // The same page frame as every other page: the header, the canvas as the main area, and the
+      // footer, each in the flow, so nothing sits over the graph.
+      <ReactFlowProvider>
+        <div className="page">
+          <Canvas
+            key={`${identity}:${showClosed}`}
+            graph={phase.graph}
+            slug={slug}
+            savedCopy={phase.savedCopy}
+            saveProblem={saveProblem}
+            snapshot={phase.snapshot}
+            onAskAgain={() => onReload()}
+          />
+          <SiteFooter />
         </div>
-        <SiteFooter />
-      </div>
+      </ReactFlowProvider>
     );
   }
 

@@ -785,7 +785,7 @@ describe("the selection actions", () => {
   });
 });
 
-describe("top chrome layout", () => {
+describe("the graph header", () => {
   const styles = readFileSync(new URL("./styles.css", import.meta.url), "utf8");
 
   /** The declarations of the first rule with exactly this selector list. */
@@ -810,7 +810,20 @@ describe("top chrome layout", () => {
     requestCount: 0,
   };
 
-  function chrome(slug: string) {
+  const savedCopy = {
+    source: "saved" as const,
+    savedAt: new Date(),
+    includedClosed: false,
+  };
+
+  function chrome(
+    slug: string,
+    status: {
+      graph?: IssueGraph;
+      savedCopy?: typeof savedCopy | null;
+      saveProblem?: string | null;
+    } = {},
+  ) {
     return renderToStaticMarkup(
       createElement(TopChrome, {
         identity: {
@@ -831,17 +844,53 @@ describe("top chrome layout", () => {
           sharing: false,
           onAskAgain: () => {},
         },
+        status: {
+          graph: status.graph ?? emptyGraph,
+          savedCopy: status.savedCopy ?? null,
+          saveProblem: status.saveProblem ?? null,
+        },
       }),
     );
   }
 
-  it("puts both bars in one panel, in order, so neither can be positioned over the other", () => {
+  it("is one header landmark above the canvas, identity first, not a panel over it", () => {
     const html = chrome("martonpaulo/issues-graph");
 
-    // One panel: two would be independently positioned again, which is the bug.
-    expect(html.match(/react-flow__panel/g)).toHaveLength(1);
-    expect(html).toContain("react-flow__panel topbar top left");
+    expect(html).toMatch(/^<header class="graphbar">/);
+    expect(html).not.toContain("react-flow__panel");
+    expect(html.match(/<header/g)).toHaveLength(1);
+    // Identity, then the tools: the reading order and the keyboard order are the same.
     expect(html.indexOf("bar bar--identity")).toBeLessThan(
+      html.indexOf("bar bar--tools"),
+    );
+  });
+
+  it("says how fresh the drawing is beside the action that refreshes it", () => {
+    const html = chrome("acme/app", { savedCopy });
+
+    const fresh = html.indexOf('<span class="bar__fresh">Saved copy · ');
+    expect(fresh).toBeGreaterThan(html.indexOf("bar bar--tools"));
+    expect(html.indexOf("Read latest from GitHub")).toBeGreaterThan(fresh);
+    // Nothing between them: the line is followed directly by the refresh button it describes.
+    expect(html.slice(fresh)).toMatch(
+      /^<span class="bar__fresh">[^<]*<\/span><button class="button button--small bar__refresh"/,
+    );
+    expect(html).toContain("open blockers only");
+
+    // A graph read live just now has no saved-copy line to show.
+    expect(chrome("acme/app")).not.toContain("bar__fresh");
+  });
+
+  it("puts a gap in the data under the row, and only when there is one", () => {
+    expect(chrome("acme/app")).not.toContain("graphbar__warns");
+
+    const html = chrome("acme/app", {
+      saveProblem: "This browser refused to keep the graph.",
+    });
+    expect(html).toContain(
+      '<p class="graphbar__warn" role="status">This browser refused to keep the graph.</p>',
+    );
+    expect(html.indexOf("graphbar__warns")).toBeGreaterThan(
       html.indexOf("bar bar--tools"),
     );
   });
@@ -865,28 +914,27 @@ describe("top chrome layout", () => {
     expect(html).toContain(`data-tip="${longestSlug}"`);
   });
 
-  it("declares a strip that wraps, shrinks and lets the canvas be dragged through it", () => {
-    const topbar = ruleFor(".react-flow__panel.topbar");
-    expect(topbar).toContain("right: 0");
-    expect(topbar).toContain("flex-wrap: wrap");
-    expect(topbar).toContain("pointer-events: none");
-    expect(ruleFor(".topbar > .bar")).toContain("pointer-events: auto");
+  it("declares one row in which only the slug gives way, above the canvas", () => {
+    const header = ruleFor(".graphbar");
+    expect(header).toContain("border-bottom: 1px solid var(--line)");
+    expect(header).toContain("z-index: 10");
+    expect(ruleFor(".graphbar__row")).toContain("flex-wrap: nowrap");
 
-    const bar = ruleFor(".bar");
-    expect(bar).toContain("flex-wrap: wrap");
-    expect(bar).toContain("min-width: 0");
-    expect(bar).toContain("max-width: 100%");
+    expect(ruleFor(".bar--tools")).toContain("flex: none");
+    const identity = ruleFor(".bar--identity");
+    expect(identity).toContain("flex: 0 1 auto");
+    expect(ruleFor(".bar")).toContain("min-width: 0");
 
     // Only the slug text is clipped, so no focus outline is drawn inside a clipped box.
     expect(ruleFor(".bar__slugtext")).toContain("text-overflow: ellipsis");
     for (const rule of styles.split("}")) {
-      if (!/\.(bar|topbar)\b/.test(rule) || /__slugtext/.test(rule)) continue;
+      if (!/\.(bar|graphbar)\b/.test(rule) || /__slugtext/.test(rule)) continue;
       expect(rule, rule).not.toContain("overflow: hidden");
     }
   });
 
   it("keeps the full-slug hint inside the window and lets an unbroken name wrap", () => {
-    const hint = ruleFor(".react-flow__panel .bar__slug[data-tip]::after");
+    const hint = ruleFor(".graphbar .bar__slug[data-tip]::after");
 
     // A repository name has no space to break at, so the hint must break mid-word...
     expect(hint).toContain("overflow-wrap: anywhere");
@@ -902,12 +950,12 @@ describe("top chrome layout", () => {
     // The button opts out of being the hint's containing block, so the bar becomes it.
     expect(styles).toMatch(/\.bar__slug \{[^}]*position: static/);
 
-    // The panel-side alignment rule matches this hint too and sets the same three properties at
-    // the same weight, so only source order decides which of them wins.
+    // The side alignment rule matches this hint too and sets the same three properties at the same
+    // weight, so only source order decides which of them wins.
     expect(
-      styles.indexOf(".react-flow__panel .bar__slug[data-tip]::after"),
+      styles.indexOf(".graphbar .bar__slug[data-tip]::after"),
     ).toBeGreaterThan(
-      styles.indexOf(".react-flow__panel.left [data-tip]::after"),
+      styles.indexOf(".graphbar .bar--identity [data-tip]::after"),
     );
   });
 
