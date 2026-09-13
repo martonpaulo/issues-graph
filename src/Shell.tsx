@@ -516,50 +516,49 @@ export function Start({
   onOpen,
   message,
   children,
-  footer = false,
 }: {
   initial?: string;
   onOpen: (target: RepoTarget) => void;
   message?: string;
   children?: React.ReactNode;
-  /** Only the landing page carries the site footer; a repository route never does. */
-  footer?: boolean;
 }) {
   const { token } = useTokenState();
 
   return (
-    <div className={footer ? "centre centre--footed" : "centre"}>
-      <div className="start">
-        <h1 className="start__title">
-          <Icon name="graph" size={20} /> {PRODUCT}
-        </h1>
-        <p className="start__lead">
-          Any public repository, from native GitHub issue relationships. Nothing
-          is installed.
-        </p>
-
-        {message && <p className="notice notice--error">{message}</p>}
-
-        <RepoInput initial={initial} onOpen={onOpen} token={token} />
-
-        <TokenField />
-
-        {children ? (
-          <section className="stage">
-            {/* Every fact below is about the repository the page is on, which is not necessarily
-                the one being typed into the field above it. */}
-            <p className="stage__for">
-              <code>{initial}</code>
-            </p>
-            {children}
-          </section>
-        ) : (
-          <p className="start__url">
-            <code>{BASE}dependencies/owner/repo</code>
+    <div className="page">
+      <div className="page__main centre">
+        <div className="start">
+          <h1 className="start__title">
+            <Icon name="graph" size={20} /> {PRODUCT}
+          </h1>
+          <p className="start__lead">
+            Any public repository, from native GitHub issue relationships.
+            Nothing is installed.
           </p>
-        )}
+
+          {message && <p className="notice notice--error">{message}</p>}
+
+          <RepoInput initial={initial} onOpen={onOpen} token={token} />
+
+          <TokenField />
+
+          {children ? (
+            <section className="stage">
+              {/* Every fact below is about the repository the page is on, which is not necessarily
+                the one being typed into the field above it. */}
+              <p className="stage__for">
+                <code>{initial}</code>
+              </p>
+              {children}
+            </section>
+          ) : (
+            <p className="start__url">
+              <code>{BASE}dependencies/owner/repo</code>
+            </p>
+          )}
+        </div>
       </div>
-      {footer && <SiteFooter />}
+      <SiteFooter />
     </div>
   );
 }
@@ -588,8 +587,9 @@ function ExternalIcon() {
 }
 
 /**
- * The fleet footer: external links only, and the credit with its licence. The year is literal so
- * the credit never depends on the clock of the reader's machine.
+ * The fleet footer, the same on every page: one full-width row under the page's main area, the
+ * credit on the left and external links only on the right. The year is literal so the credit never
+ * depends on the clock of the reader's machine.
  */
 export function SiteFooter() {
   return (

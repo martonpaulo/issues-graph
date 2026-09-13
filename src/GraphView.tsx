@@ -67,6 +67,7 @@ import { canonicalSlugOf, type RepoTarget, slugOf } from "./route";
 import {
   BASE,
   popupTriggerProps,
+  SiteFooter,
   Start,
   useModalDialog,
   useOpenExternal,
@@ -1698,17 +1699,24 @@ function GraphLoad({
 
   if (phase.kind === "ready" && phase.graph.nodes.length > 0) {
     return (
-      <ReactFlowProvider>
-        <Canvas
-          key={`${identity}:${showClosed}`}
-          graph={phase.graph}
-          slug={slug}
-          savedCopy={phase.savedCopy}
-          saveProblem={saveProblem}
-          snapshot={phase.snapshot}
-          onAskAgain={() => onReload()}
-        />
-      </ReactFlowProvider>
+      // The same page frame as every other page: the canvas is the main area, and the footer sits
+      // under it in the flow rather than over it.
+      <div className="page">
+        <div className="page__main">
+          <ReactFlowProvider>
+            <Canvas
+              key={`${identity}:${showClosed}`}
+              graph={phase.graph}
+              slug={slug}
+              savedCopy={phase.savedCopy}
+              saveProblem={saveProblem}
+              snapshot={phase.snapshot}
+              onAskAgain={() => onReload()}
+            />
+          </ReactFlowProvider>
+        </div>
+        <SiteFooter />
+      </div>
     );
   }
 

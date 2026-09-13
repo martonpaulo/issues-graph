@@ -182,7 +182,6 @@ export function App() {
           </Suspense>
         ) : (
           <Start
-            footer
             onOpen={openTarget}
             message={route.kind === "invalid" ? route.reason : undefined}
           />

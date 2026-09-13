@@ -54,7 +54,6 @@ describe("what each route costs to open", () => {
     expect(html).toContain("owner/repo");
     // React Flow renders this wrapper around every canvas, and nothing else in the page does.
     expect(html).not.toContain("react-flow");
-    // The fleet footer belongs to the landing page only.
     expect(html).toContain("MIT licensed · © 2026 Issues Graph contributors.");
   });
 
@@ -69,7 +68,24 @@ describe("what each route costs to open", () => {
     // The heading and the repository field never move, so the page continues rather than blanks.
     expect(html).toContain("Issues Graph");
     expect(html).toContain("acme/app");
-    expect(html).not.toContain("site-footer");
+  });
+
+  it("closes every page with the same footer, in the same page frame", () => {
+    const footerOf = (path: string) => {
+      const html = atPath(path, () => renderToStaticMarkup(createElement(App)));
+      expect(html, path).toMatch(/^<div class="page">/);
+      const footer = html.match(
+        /<footer class="site-footer">.*<\/footer>/,
+      )?.[0];
+      expect(footer, path).toBeDefined();
+      return footer;
+    };
+
+    // The landing page and a repository route (here, while the graph chunk is still arriving)
+    // render one footer, byte for byte: there is no page-specific variant to drift.
+    const home = footerOf("/");
+    expect(home).toContain("MIT licensed · © 2026 Issues Graph contributors.");
+    expect(footerOf("/dependencies/acme/app")).toBe(home);
   });
 });
 

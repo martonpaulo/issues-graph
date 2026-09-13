@@ -1002,34 +1002,44 @@ code {
   overflow: auto;
 }
 
-/* The landing page with the fleet footer (windowhop/docs): the form stays centred in the height
-   that is left and the footer closes the column, in the flow, so it never covers the form. */
-.centre--footed {
+/* Every page is one frame: the main area takes the height that is left, and the fleet footer
+   (windowhop/docs) closes it in the flow, so it never covers the form or the graph. */
+.page {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding-bottom: 0;
+  height: 100%;
 }
 
-.centre--footed > .start {
-  margin-block: auto;
+.page__main {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
 }
 
+/* One row the width of the page: the credit on the left, the links on the right. */
 .site-footer {
   display: flex;
   flex: none;
-  flex-wrap: wrap;
-  gap: 6px 24px;
+  gap: 4px 24px;
   align-items: center;
   justify-content: space-between;
-  width: min(580px, 100%);
-  margin-top: 24px;
-  padding: 12px 0 16px;
+  padding: 6px 16px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: var(--text-xs);
+  white-space: nowrap;
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* Measured: the credit (423px), the links (180px), the gap and the padding need 659px on one
+   line. Only below that does the row stack, credit above links, both starting at the left edge. */
+@media (max-width: 659.98px) {
+  .site-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    white-space: normal;
+  }
 }
 
 .site-footer p {
