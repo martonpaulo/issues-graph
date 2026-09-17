@@ -1,10 +1,7 @@
 # Validates every pull request before it can merge, and every push to main.
 #
 # The push run is what the Deploy workflow waits for: Deploy publishes only after Validate passes on
-# main, and never repeats these checks. The pull request run is
-# what makes the orchestrated lane's CI states reachable: without a check run on the pull request
-# head, Agent Orchestrator reports CI as unknown, never drives its own CI-fixing loop, and
-# auto-merge stays disarmed because there is no required status check to gate it.
+# main, and never repeats these checks.
 name: Validate
 
 on:

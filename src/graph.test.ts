@@ -233,11 +233,11 @@ describe("deriveState", () => {
     expect(
       deriveState(issue({ labels: [{ name: "in-review", color: "8B949E" }] })),
     ).toBe("in-review");
-    // Matched against the whole name, case-insensitively, exactly as the orchestrator matches it.
+    // Matched against the whole name, case-insensitively.
     expect(
       deriveState(issue({ labels: [{ name: "In-Review", color: "8B949E" }] })),
     ).toBe("in-review");
-    // The prefixed name is not the orchestrator's bare label and never becomes `in-review`. It is
+    // The prefixed name is not the bare hold label and never becomes `in-review`. It is
     // not one of the two `status:` values this convention defines either, so it says nothing at
     // all rather than standing in for a state.
     expect(

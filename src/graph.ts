@@ -314,10 +314,8 @@ export function isOpen(issue: IssuePayload): boolean {
 }
 
 /**
- * The two bare label names the orchestrator matches, case-insensitively, against the whole label
- * name. Neither carries a `:`, so neither reaches a card slot and neither can be found by asking
- * for a namespace.
- * https://github.com/martonpaulo/skills — `.ao/worker-rules.md` documents both.
+ * The two bare hold labels, matched case-insensitively against the whole label name. Neither
+ * carries a `:`, so neither reaches a card slot and neither can be found by asking for a namespace.
  */
 const IN_PROGRESS_LABEL = "in-progress";
 const IN_REVIEW_LABEL = "in-review";

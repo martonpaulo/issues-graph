@@ -16,21 +16,14 @@
 - Commit policy: Automatic. Commit each completed concern without waiting to be asked.
 - Push policy: Automatic. Push `main`, or the pull request's branch when one is used, after committing validated work.
 - Product versioning: None. This is a continuously deployed page: `main` is what is live, and no consumer pins anything, so there is no compatibility contract for a version number to describe. Git history is the record. Do not add tags, a `CHANGELOG.md`, or release ceremony without an explicit decision to start versioning.
-- Agent automation: `enabled`
-- Implementation agent: `claude`
-- Review agent: `codex`
-- Orchestration agent: `codex`
 - Merge policy: merge commit, `gh pr merge <number> --merge --delete-branch`, so every branch
-  commit reaches `main`. Squash was adopted on 2026-09-04 only because Agent Orchestrator's merge
-  action was squash-only; that integration was removed (martonpaulo/skill-deck#271), and the owner
-  restored the preference for keeping branch commits (martonpaulo/skill-deck#277).
+  commit reaches `main` (martonpaulo/skill-deck#277).
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
-- Review policy: none required. Ruleset `21918709` no longer exists, and since 2026-09-11 validated work goes straight to `main`. A pull request, when used, merges after `Validate` passes; orchestrated lanes may still record an approval through `marton-agent-approver` and `skd merge`.
+- Review policy: none required. Ruleset `21918709` no longer exists, and since 2026-09-11 validated work goes straight to `main`. A pull request, when used, merges after `Validate` passes.
 - Release and signing policy: Not applicable. Nothing is packaged or signed; deployment is a GitHub Pages build from `main`.
-- Secret-storage policy: the product has no credential and every product read is unauthenticated. Agent-automation credentials, when provisioned, live only as GitHub Actions repository secrets and never in the repository or agent transcripts.
+- Secret-storage policy: the product has no credential and every product read is unauthenticated. Any future credential lives only in GitHub Actions repository secrets, never in the repository or agent transcripts.
 - Client guidance: Gemini CLI (`unavailable`) uses `GEMINI.md -> AGENTS.md`; Antigravity CLI (`unavailable`) uses root `AGENTS.md`. Functional verification is pending for both clients.
-- Agent orchestration: Enabled for Agent Orchestrator local workers. `main` now carries the required status check (`Validate`), so auto-merge is armable under the predicates recorded in `.ao/worker-rules.md`; `skd merge` remains the path for a verdict the orchestrator recorded.
 - Skills baseline revision: `10d02773253766a032f490f1a5ec27d2157f3281`
 - Skills baseline applied: `2026-08-31`
 
@@ -65,25 +58,6 @@ content — no empty files or directories.
 
 No domain glossary. The vocabulary on screen is GitHub's own — issue, `blocked by`, `blocking`,
 label — and inventing a second name for any of it would be the drift a glossary exists to prevent.
-
-## Agent execution
-
-Rules for any executor working from a clone of this repository, including cloud executors that
-read only committed files.
-
-- Run the full gate with `pnpm validate` (`typecheck`, `lint`, `test`, `build`); `lint` is Biome,
-  which checks formatting and import order alongside the rules, and `pnpm format` applies what it
-  can fix. During iteration run the smallest relevant piece, `pnpm test` or `pnpm lint`. A change is not done while the gate
-  fails on the exact current head.
-- Branch as `<type>/<agent>/issue-<n>/<short-slug>`; commit with Conventional Commits, subject
-  ending in `(#<n>)`.
-- Never push to `main` and never merge: open a pull request and stop. Merge belongs to the owner,
-  or to GitHub auto-merge under the predicates recorded in `.ao/worker-rules.md`.
-- Start the PR body with one `Closes #<n>` line per resolved issue, then the problem, the
-  implementation, the tests run with results, and the residual risk.
-- Do not touch: `AGENTS.md`, `.ao/`, or `.github/workflows/`.
-- When a needed decision is not written in the issue: comment exactly what is missing, apply
-  `status: needs-decision`, and stop cleanly instead of guessing.
 
 ## Patterns
 
@@ -281,13 +255,13 @@ copy.
 ### Raise the card through the question tool
 
 A card written only as Markdown is a message, and a message ends the turn. The agent stops, the
-orchestrator marks the session idle, and a decision that was genuinely blocking looks answered.
+client shows the session as finished, and a decision that was genuinely blocking looks answered.
 The card is the record; it is not the asking.
 
 So whenever the client offers a native structured-question facility — `AskUserQuestion` in Claude
 Code, the equivalent elicitation or form input in other agents — put the question through it. The
-tool call is what actually holds the turn open, and it is what makes an orchestrated session
-report **Blocked** rather than looking finished. Map the card onto it directly: the card's heading becomes the question, each row of the
+tool call is what actually holds the turn open and what puts the session in the *needs you*
+column. Map the card onto it directly: the card's heading becomes the question, each row of the
 options table becomes one option with its tradeoffs as the description, and the recommended option
 goes first, marked as recommended.
 
@@ -307,10 +281,6 @@ research note or other repository artifact does not replace this visible proposa
 issues for incidental observations, speculative ideas without enough evidence, already tracked
 work, or changes completed within the current task. The card proposes backlog capture; it never
 authorizes creating or publishing the issue.
-
-This card assumes a reader. An unattended run has none, so it does not write the card: it invokes
-`issue-capture` and opens the issue directly, against the same bar. The unattended rules in
-`.ao/worker-rules.md` are authoritative for that lane.
 
 ```markdown
 ---
@@ -483,7 +453,7 @@ unblocking action, and the observable condition for resumption.
 - Use Conventional Commits in English. Make one commit per concern: a small task usually has one; a large task may have several independent concerns. Do not split mechanically or combine unrelated changes.
 - End a commit subject with its issue number when the commit belongs to one: `feat: add the export button (#54)`. Use the issue number, never the pull request's, and leave the suffix off when there is no issue.
 - Merge a branch with `gh pr merge <number> --merge --delete-branch`. The repository allows no
-  other method, and `skd merge` lets Agent Orchestrator perform it.
+  other method.
 - Inspect the exact payload before publishing it: the staged diff before a commit, the outgoing
   commit range before a push, the final text before an issue, pull request, comment, or review, and
   the artifact set before a release upload. Never commit secrets, caches, generated logs, temporary
