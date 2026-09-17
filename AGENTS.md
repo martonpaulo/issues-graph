@@ -20,11 +20,10 @@
 - Implementation agent: `claude`
 - Review agent: `codex`
 - Orchestration agent: `codex`
-- Merge policy: squash. Adopted 2026-09-04: Agent Orchestrator's merge endpoint squash-merges and
-  only squash-merges, so the previous merge-commit policy made the orchestrated lane stop at its
-  last step — an approved pull request was refused with `PR_NOT_MERGEABLE` while GitHub and AO both
-  reported it mergeable. The accepted cost is that per-concern branch commits do not reach `main`;
-  the complete issue set survives in the pull request title and its closing block.
+- Merge policy: merge commit, `gh pr merge <number> --merge --delete-branch`, so every branch
+  commit reaches `main`. Squash was adopted on 2026-09-04 only because Agent Orchestrator's merge
+  action was squash-only; that integration was removed (martonpaulo/skill-deck#271), and the owner
+  restored the preference for keeping branch commits (martonpaulo/skill-deck#277).
 - Commit subject: a commit made for an issue ends with `(#<issue number>)`.
 - Delete branches after merge: Enabled.
 - Review policy: none required. Ruleset `21918709` no longer exists, and since 2026-09-11 validated work goes straight to `main`. A pull request, when used, merges after `Validate` passes; orchestrated lanes may still record an approval through `marton-agent-approver` and `skd merge`.
@@ -483,7 +482,7 @@ unblocking action, and the observable condition for resumption.
 - Check status and branch before editing and before the final report. Work only on task files and leave unrelated changes untouched.
 - Use Conventional Commits in English. Make one commit per concern: a small task usually has one; a large task may have several independent concerns. Do not split mechanically or combine unrelated changes.
 - End a commit subject with its issue number when the commit belongs to one: `feat: add the export button (#54)`. Use the issue number, never the pull request's, and leave the suffix off when there is no issue.
-- Merge a branch with `gh pr merge <number> --squash --delete-branch`. The repository allows no
+- Merge a branch with `gh pr merge <number> --merge --delete-branch`. The repository allows no
   other method, and `skd merge` lets Agent Orchestrator perform it.
 - Inspect the exact payload before publishing it: the staged diff before a commit, the outgoing
   commit range before a push, the final text before an issue, pull request, comment, or review, and
