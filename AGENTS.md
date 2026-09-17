@@ -3,7 +3,7 @@
 ## Project identity and policy
 
 - Project name: `issues-graph`
-- Public name: `issues-graph`
+- Public name: `Issues Graph`
 - Benefit-first description: See the blocking order of a GitHub backlog as a graph, in a browser, with nothing installed in the repository being read.
 - Repository: `martonpaulo/issues-graph` (public)
 - Public identifiers: none published. The hosted page is the only public surface; there is no package, module, or executable identifier, and nothing consumes this repository as a dependency.
