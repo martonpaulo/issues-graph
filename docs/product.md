@@ -87,3 +87,7 @@ the only job it has.
 - **Static hosting only**, on GitHub Pages. No server, no build-time data, no scheduled job.
 - **The browser is the whole runtime.** Everything the page knows, it fetched itself, in the session
   the reader is looking at or an earlier session that produced the explicitly identified saved copy.
+
+## Accepted evidence gaps
+
+- Manual screen-reader passes: not run; accepted by the owner on 2026-09-13 (martonpaulo/skill-deck#266). Accessibility is verified through semantics, roles, accessible names, focus order, contrast and automated audits. The former verification issue, martonpaulo/issues-graph#144, was closed as not planned.
