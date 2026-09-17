@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import arbaroBlockedBy from "./__fixtures__/arbaro.blocked-by.json";
-import arbaroIssues from "./__fixtures__/arbaro.issues.json";
-import tabeloBlockedBy from "./__fixtures__/tabelo.blocked-by.json";
-import tabeloIssues from "./__fixtures__/tabelo.issues.json";
+import arbaroBlockedBy from "../tests/fixtures/arbaro.blocked-by.json";
+import arbaroIssues from "../tests/fixtures/arbaro.issues.json";
+import tabeloBlockedBy from "../tests/fixtures/tabelo.blocked-by.json";
+import tabeloIssues from "../tests/fixtures/tabelo.issues.json";
 import type { IssuePayload, RepositoryGraphData } from "./github";
 import { buildGraph } from "./graph";
 import { buildSnapshotUrl, readSnapshot, SNAPSHOT_URL_LIMIT } from "./snapshot";

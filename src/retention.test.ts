@@ -90,7 +90,7 @@ describe("retained", () => {
   });
 
   it("adopts the names an earlier build saved, so recent repositories survive the change", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one", "b/two"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one", "b/two"]));
 
     expect(slugs()).toEqual(["a/one", "b/two"]);
     // The older build kept no record of what it saved, so no entry claims a size until one is
@@ -99,9 +99,9 @@ describe("retained", () => {
   });
 
   it("falls back to those names when the index itself is not readable", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one"]));
     store.set(
-      "issue-graph:retention",
+      "issues-graph.retention",
       JSON.stringify({ version: 2, entries: [] }),
     );
 
@@ -117,7 +117,7 @@ describe("retained", () => {
 
 describe("adopting a browser that predates the index", () => {
   it("discovers the repositories no list ever recorded", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one"]));
     store.set(cacheKey("old/forgotten"), '"x"');
     store.set(dimmedKey("old/dimmed"), '["issue-1"]');
 
@@ -125,7 +125,7 @@ describe("adopting a browser that predates the index", () => {
   });
 
   it("orders the reader\u2019s own repositories ahead of what it found", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one", "b/two"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one", "b/two"]));
     store.set(cacheKey("old/forgotten"), '"x"');
 
     expect(retained().map((entry) => entry.opened)).toEqual([
@@ -136,7 +136,7 @@ describe("adopting a browser that predates the index", () => {
   });
 
   it("does not put a repository the reader lost long ago back in the suggestions", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one"]));
     store.set(cacheKey("old/forgotten"), '"x"');
 
     expect(openedSlugs()).toEqual(["a/one"]);
@@ -156,7 +156,7 @@ describe("adopting a browser that predates the index", () => {
   });
 
   it("evicts what it discovered on the first write, ending the unbounded growth", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one"]));
     for (let index = 1; index <= MAX_ENTRIES + 2; index += 1) {
       store.set(cacheKey(`old/r${index}`), '"x"');
       store.set(dimmedKey(`old/r${index}`), '["issue-1"]');
@@ -170,14 +170,14 @@ describe("adopting a browser that predates the index", () => {
   });
 
   it("leaves keys that are not a repository\u2019s alone while doing it", () => {
-    store.set("issue-graph:token", '"ghp_example"');
-    store.set("issue-graph:show-closed", "true");
+    store.set("issues-graph.token", '"ghp_example"');
+    store.set("issues-graph.show-closed", "true");
     store.set(cacheKey("old/forgotten"), '"x"');
 
     rememberRepository("new/opened");
 
-    expect(store.get("issue-graph:token")).toBe('"ghp_example"');
-    expect(store.get("issue-graph:show-closed")).toBe("true");
+    expect(store.get("issues-graph.token")).toBe('"ghp_example"');
+    expect(store.get("issues-graph.show-closed")).toBe("true");
   });
 });
 
@@ -275,7 +275,7 @@ describe("a browser already at its quota before the index existed", () => {
 
     rememberRepository("new/opened");
 
-    expect(store.has("issue-graph:retention")).toBe(true);
+    expect(store.has("issues-graph.retention")).toBe(true);
     expect(slugs()[0]).toBe("new/opened");
     expect(retained().length).toBeLessThanOrEqual(MAX_ENTRIES);
   });
@@ -306,7 +306,7 @@ describe("a browser already at its quota before the index existed", () => {
     // The budgets evict down to MAX_ENTRIES regardless; what matters is that the escape stopped
     // as soon as the write landed rather than emptying the store to be sure.
     const remaining = [...store.keys()].filter((key) =>
-      key.startsWith("issue-graph:cache:"),
+      key.startsWith("issues-graph.cache:"),
     );
     expect(remaining.length).toBe(MAX_ENTRIES - 1);
   });
@@ -315,7 +315,7 @@ describe("a browser already at its quota before the index existed", () => {
     store = fillWithUnindexedCaches(ORPHANS * (PAYLOAD + 40));
 
     expect(rememberRepository("new/opened")).toBeUndefined();
-    expect(store.has("issue-graph:retention")).toBe(true);
+    expect(store.has("issues-graph.retention")).toBe(true);
   });
 });
 
@@ -330,7 +330,7 @@ describe("a refused index write destroys nothing", () => {
     installStorage(
       {
         setItem: (key: string, value: string) => {
-          if (key === "issue-graph:retention") {
+          if (key === "issues-graph.retention") {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
           store.set(key, value);
@@ -400,7 +400,7 @@ describe("saveDimmed holds its two halves together", () => {
     installStorage(
       {
         setItem: (key: string, value: string) => {
-          if (key === "issue-graph:retention") {
+          if (key === "issues-graph.retention") {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
           store.set(key, value);
@@ -441,7 +441,7 @@ describe("saveDimmed holds its two halves together", () => {
     installStorage(
       {
         setItem: (key: string, value: string) => {
-          if (key === "issue-graph:retention") {
+          if (key === "issues-graph.retention") {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
           store.set(key, value);
@@ -451,7 +451,7 @@ describe("saveDimmed holds its two halves together", () => {
     );
     // A second repository, so the one being written is not already the index's own head.
     store.set(
-      "issue-graph:retention",
+      "issues-graph.retention",
       JSON.stringify({ version: 1, entries: [] }),
     );
 
@@ -471,7 +471,7 @@ describe("saveDimmed holds its two halves together", () => {
     installStorage(
       {
         setItem: (key: string, value: string) => {
-          if (key === "issue-graph:retention") {
+          if (key === "issues-graph.retention") {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
           store.set(key, value);
@@ -578,15 +578,15 @@ describe("the entry budget", () => {
   });
 
   it("leaves every other key in the browser alone", () => {
-    store.set("issue-graph:token", '"ghp_example"');
-    store.set("issue-graph:show-closed", "true");
+    store.set("issues-graph.token", '"ghp_example"');
+    store.set("issues-graph.show-closed", "true");
     store.set("unrelated", "kept");
 
     for (let index = 1; index <= MAX_ENTRIES + 1; index += 1)
       hold(`o/r${index}`);
 
-    expect(store.get("issue-graph:token")).toBe('"ghp_example"');
-    expect(store.get("issue-graph:show-closed")).toBe("true");
+    expect(store.get("issues-graph.token")).toBe('"ghp_example"');
+    expect(store.get("issues-graph.show-closed")).toBe("true");
     expect(store.get("unrelated")).toBe("kept");
     expect(store.has(cacheKey("o/r2"))).toBe(true);
   });

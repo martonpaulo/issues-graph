@@ -153,7 +153,7 @@ repository live.
 
 ## Tests and fixtures
 
-Tests run against fixtures in `src/__fixtures__/`, captured from the live API rather than written by
+Tests run against fixtures in `tests/fixtures/`, captured from the live API rather than written by
 hand — a hand-written payload asserts what somebody assumed the API returns. Recapture them with an
 authenticated `gh` CLI:
 

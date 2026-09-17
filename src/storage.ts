@@ -149,6 +149,28 @@ export function storedKeys(): string[] {
   }
 }
 
+/**
+ * The prefix every key this page writes starts with: the project slug.
+ *
+ * Builds before 2026-09-17 wrote under `issue-graph:`. `migrateLegacyKeys` moves those values
+ * once, on start, so a viewer keeps their token, their recent repositories and their cached
+ * graphs across the rename. A value already present under the new name wins over the old one.
+ */
+export const STORAGE_PREFIX = "issues-graph.";
+export const LEGACY_STORAGE_PREFIX = "issue-graph:";
+
+export function migrateLegacyKeys(): void {
+  for (const key of storedKeys()) {
+    if (!key.startsWith(LEGACY_STORAGE_PREFIX)) continue;
+
+    const text = readStoredText(key);
+    const renamed = `${STORAGE_PREFIX}${key.slice(LEGACY_STORAGE_PREFIX.length)}`;
+    if (text === null) continue;
+    if (!hasStored(renamed) && !writeStoredText(renamed, text).ok) continue;
+    clearStored(key);
+  }
+}
+
 export function clearStored(key: string): StorageWriteResult {
   try {
     window.localStorage.removeItem(key);

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import tabeloBlockedBy from "./__fixtures__/tabelo.blocked-by.json";
-import tabeloIssues from "./__fixtures__/tabelo.issues.json";
+import tabeloBlockedBy from "../tests/fixtures/tabelo.blocked-by.json";
+import tabeloIssues from "../tests/fixtures/tabelo.issues.json";
 import { readCache, writeCache } from "./cache";
 import type { IssuePayload, RepositoryGraphData } from "./github";
 import { cacheKey, dimmedKey, retained } from "./retention";
@@ -152,7 +152,7 @@ describe("readCache", () => {
 
   function corrupt(change: (stored: Record<string, unknown>) => void): void {
     writeCache("martonpaulo/tabelo", graph());
-    const key = "issue-graph:cache:martonpaulo/tabelo";
+    const key = "issues-graph.cache:martonpaulo/tabelo";
     const stored = JSON.parse(entries.get(key) as string) as Record<
       string,
       unknown
@@ -294,7 +294,7 @@ describe("readCache", () => {
   // deleted: removing a value this build merely fails to understand would destroy one another
   // build still reads, and nothing here touches a key it did not read.
   it("leaves the copy it refused, and every other key, in place", () => {
-    entries.set("issue-graph:unrelated", '"kept"');
+    entries.set("issues-graph.unrelated", '"kept"');
     corrupt((stored) => {
       stored.version = 2;
     });
@@ -393,7 +393,7 @@ describe("writeCache", () => {
       graph({ issues: withExtra, blockers: new Map() }),
     );
 
-    expect(entries.get("issue-graph:cache:martonpaulo/tabelo")).not.toContain(
+    expect(entries.get("issues-graph.cache:martonpaulo/tabelo")).not.toContain(
       "pull_request",
     );
     expect(readCache("martonpaulo/tabelo")?.data.issues[0].number).toBe(
@@ -410,8 +410,10 @@ describe("writeCache", () => {
 
     // The retention index is the only other key: one saved copy, not two.
     expect(
-      [...entries.keys()].filter((key) => key.startsWith("issue-graph:cache:")),
-    ).toEqual(["issue-graph:cache:martonpaulo/tabelo"]);
+      [...entries.keys()].filter((key) =>
+        key.startsWith("issues-graph.cache:"),
+      ),
+    ).toEqual(["issues-graph.cache:martonpaulo/tabelo"]);
     expect(readCache("martonpaulo/tabelo")?.data.issues).toHaveLength(1);
   });
 
@@ -439,7 +441,7 @@ describe("writeCache", () => {
       {
         setItem: (key: string, value: string) => {
           if (
-            key.startsWith("issue-graph:cache:") &&
+            key.startsWith("issues-graph.cache:") &&
             entries.has(cacheKey("o/old"))
           ) {
             throw new DOMException("exceeded", "QuotaExceededError");
@@ -495,7 +497,7 @@ describe("writeCache", () => {
     installStorage(
       {
         setItem: (key: string, value: string) => {
-          if (key === "issue-graph:retention") {
+          if (key === "issues-graph.retention") {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
           entries.set(key, value);
@@ -514,7 +516,7 @@ describe("writeCache", () => {
     installStorage(
       {
         setItem: (key: string, value: string) => {
-          if (key === "issue-graph:retention") {
+          if (key === "issues-graph.retention") {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
           entries.set(key, value);
@@ -534,7 +536,7 @@ describe("writeCache", () => {
     installStorage(
       {
         setItem: (key: string) => {
-          if (key.startsWith("issue-graph:cache:")) {
+          if (key.startsWith("issues-graph.cache:")) {
             throw new DOMException("exceeded", "QuotaExceededError");
           }
         },

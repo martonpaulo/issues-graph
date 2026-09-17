@@ -102,7 +102,7 @@ const ZOOM_OUT_ALLOWANCE = 0.75;
 /** A floor under the floor: a graph too large to fit still has to be openable. */
 const ABSOLUTE_MIN_ZOOM = 0.05;
 
-const SHOW_CLOSED_KEY = "issue-graph:show-closed";
+const SHOW_CLOSED_KEY = "issues-graph.show-closed";
 
 // Re-exported because the key belongs to `retention.ts`, which owns every key one repository owns
 // and is what removes them together; the canvas is only one of the two things that writes one.

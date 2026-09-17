@@ -5,6 +5,7 @@ import {
   asString,
   asStringArray,
   clearStored,
+  migrateLegacyKeys,
   readStored,
   writeStored,
   writeStoredText,
@@ -235,7 +236,7 @@ describe("writeStored", () => {
   it("reports rather than throws when there is no window at all", () => {
     removeWindow();
 
-    expect(writeStored("issue-graph:theme", "dark")).toMatchObject({
+    expect(writeStored("issues-graph.theme", "dark")).toMatchObject({
       reason: "unavailable",
     });
   });
@@ -270,5 +271,56 @@ describe("clearStored", () => {
     expect(clearStored("graph:layout")).toMatchObject({
       reason: "unavailable",
     });
+  });
+});
+
+describe("migrateLegacyKeys", () => {
+  it("moves every key written under the old prefix to the slug prefix", () => {
+    entries.set("issue-graph:token", '"ghp_example"');
+    entries.set("issue-graph:cache:owner/app", "{}");
+    entries.set("unrelated", "kept");
+
+    migrateLegacyKeys();
+
+    expect([...entries.entries()].sort()).toEqual([
+      ["issues-graph.cache:owner/app", "{}"],
+      ["issues-graph.token", '"ghp_example"'],
+      ["unrelated", "kept"],
+    ]);
+  });
+
+  it("keeps a value already stored under the new name", () => {
+    entries.set("issue-graph:show-closed", "false");
+    entries.set("issues-graph.show-closed", "true");
+
+    migrateLegacyKeys();
+
+    expect(entries.get("issues-graph.show-closed")).toBe("true");
+    expect(entries.has("issue-graph:show-closed")).toBe(false);
+  });
+
+  it("leaves the old key in place when the new one cannot be written", () => {
+    const stored = new Map([["issue-graph:token", '"ghp_example"']]);
+    installStorage({
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: () => {
+        throw new DOMException("exceeded", "QuotaExceededError");
+      },
+      removeItem: (key: string) => void stored.delete(key),
+      key: (index: number) => [...stored.keys()][index] ?? null,
+      get length() {
+        return stored.size;
+      },
+    });
+
+    migrateLegacyKeys();
+
+    expect(stored.get("issue-graph:token")).toBe('"ghp_example"');
+  });
+
+  it("does nothing when there is no window at all", () => {
+    removeWindow();
+
+    expect(() => migrateLegacyKeys()).not.toThrow();
   });
 });

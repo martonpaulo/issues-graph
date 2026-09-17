@@ -14,7 +14,7 @@ import { asString, clearStored, readStored, writeStored } from "./storage";
  * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api
  */
 
-const TOKEN_KEY = "issue-graph:token";
+const TOKEN_KEY = "issues-graph.token";
 
 /** The stored token, or an empty string when none is set or storage cannot be read. */
 export function readToken(): string {

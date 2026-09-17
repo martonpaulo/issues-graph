@@ -95,7 +95,7 @@ captured payloads with no network, and what keeps request policy — budget quot
 pagination — in one place instead of spread through the rendering code.
 
 **Fixtures are captured, never hand-written.** `scripts/capture-fixtures.mjs` records real API
-payloads into `src/__fixtures__/`. A hand-written payload asserts what somebody assumed the API
+payloads into `tests/fixtures/`. A hand-written payload asserts what somebody assumed the API
 returns, which is exactly the assumption a test should be catching. Capture a new one rather than
 editing an existing one to fit.
 

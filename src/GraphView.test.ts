@@ -5,10 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import arbaroBlockedBy from "./__fixtures__/arbaro.blocked-by.json";
-import arbaroIssues from "./__fixtures__/arbaro.issues.json";
-import tabeloBlockedBy from "./__fixtures__/tabelo.blocked-by.json";
-import tabeloIssues from "./__fixtures__/tabelo.issues.json";
+import arbaroBlockedBy from "../tests/fixtures/arbaro.blocked-by.json";
+import arbaroIssues from "../tests/fixtures/arbaro.issues.json";
+import tabeloBlockedBy from "../tests/fixtures/tabelo.blocked-by.json";
+import tabeloIssues from "../tests/fixtures/tabelo.issues.json";
 import { readCache, writeCache } from "./cache";
 import {
   adjacencyOf,
@@ -175,7 +175,7 @@ describe("saved copy entry", () => {
         kind: "requires-latest",
         reason: "A wider GitHub read is required to include closed blockers.",
       });
-      window.localStorage.setItem("issue-graph:show-closed", "true");
+      window.localStorage.setItem("issues-graph.show-closed", "true");
       const html = renderToStaticMarkup(
         createElement(GraphView, { target: TARGET, onOpen: () => {} }),
       );
@@ -751,7 +751,7 @@ describe("what a dimmed set is stored under", () => {
   it("keeps the key the rename to dimming inherited, so a saved set survives the new copy", () => {
     // Renaming the control renamed nothing on disk: every reader who dimmed cards before the
     // rename still finds them dimmed after it.
-    expect(dimmedKey("owner/app")).toBe("issue-graph:hidden:owner/app");
+    expect(dimmedKey("owner/app")).toBe("issues-graph.hidden:owner/app");
   });
 });
 

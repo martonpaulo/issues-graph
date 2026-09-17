@@ -30,19 +30,19 @@ import {
  * Recency is the only ordering, and both a read and a write count as a use.
  */
 
-const INDEX_KEY = "issue-graph:retention";
+const INDEX_KEY = "issues-graph.retention";
 
 /**
  * The list of names written before this index existed. It is read once, when no index is present,
  * so a reader's recent repositories survive the change; it is never written again. The key itself
  * is left in place rather than removed, because a build without this module still reads it.
  */
-const LEGACY_RECENT_KEY = "issue-graph:recent";
+const LEGACY_RECENT_KEY = "issues-graph.recent";
 
-const CACHE_PREFIX = "issue-graph:cache:";
+const CACHE_PREFIX = "issues-graph.cache:";
 // The stored key still says "hidden": it predates the rename to dimming, and the copy change is
 // not worth stranding every reader's saved set. The value is a list of node IDs either way.
-const DIMMED_PREFIX = "issue-graph:hidden:";
+const DIMMED_PREFIX = "issues-graph.hidden:";
 
 /** Every key one repository owns. Eviction and clearing both remove exactly this set. */
 export const cacheKey = (identity: string) => `${CACHE_PREFIX}${identity}`;

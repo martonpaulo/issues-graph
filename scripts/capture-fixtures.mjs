@@ -15,9 +15,7 @@ import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const FIXTURES = fileURLToPath(
-  new URL("../src/__fixtures__/", import.meta.url),
-);
+const FIXTURES = fileURLToPath(new URL("../tests/fixtures/", import.meta.url));
 
 /** Mirrors the client: every page, 100 at a time. */
 const paginate = (path) =>

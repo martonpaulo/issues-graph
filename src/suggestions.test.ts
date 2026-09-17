@@ -80,7 +80,7 @@ describe("recentTargets", () => {
 
   it("collapses a stored list that already holds both spellings on the next write", () => {
     store.set(
-      "issue-graph:recent",
+      "issues-graph.recent",
       JSON.stringify(["Acme/App", "b/two", "acme/app"]),
     );
     remember("c/three");
@@ -89,7 +89,7 @@ describe("recentTargets", () => {
   });
 
   it("drops stored entries that are no longer a valid owner/repo slug", () => {
-    store.set("issue-graph:recent", JSON.stringify(["a/one", "not a slug"]));
+    store.set("issues-graph.recent", JSON.stringify(["a/one", "not a slug"]));
     expect(recentTargets()).toEqual(["a/one"]);
   });
 
@@ -98,25 +98,25 @@ describe("recentTargets", () => {
      what comes back. */
 
   it("offers nothing when the stored list is not an array", () => {
-    store.set("issue-graph:recent", JSON.stringify({ 0: "a/one" }));
+    store.set("issues-graph.recent", JSON.stringify({ 0: "a/one" }));
     expect(recentTargets()).toEqual([]);
   });
 
   it("offers nothing when the stored array holds something other than strings", () => {
     store.set(
-      "issue-graph:recent",
+      "issues-graph.recent",
       JSON.stringify(["a/one", { owner: "b", repo: "two" }]),
     );
     expect(recentTargets()).toEqual([]);
   });
 
   it("offers nothing rather than throwing on stored text that is not JSON", () => {
-    store.set("issue-graph:recent", "a/one");
+    store.set("issues-graph.recent", "a/one");
     expect(recentTargets()).toEqual([]);
   });
 
   it("replaces a list of the wrong shape on the next write instead of failing", () => {
-    store.set("issue-graph:recent", JSON.stringify("a/one"));
+    store.set("issues-graph.recent", JSON.stringify("a/one"));
     remember("b/two");
 
     expect(recentTargets()).toEqual(["b/two"]);

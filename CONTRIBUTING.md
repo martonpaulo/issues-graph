@@ -50,7 +50,7 @@ pnpm validate
 That is `typecheck`, `lint`, `test` and `build`. During iteration run the smallest relevant piece
 instead — `pnpm lint`, `pnpm test`.
 
-`pnpm test` runs Vitest against the captured fixtures in `src/__fixtures__/`, so no network access and
+`pnpm test` runs Vitest against the captured fixtures in `tests/fixtures/`, so no network access and
 no GitHub token are needed.
 
 ## Code of conduct

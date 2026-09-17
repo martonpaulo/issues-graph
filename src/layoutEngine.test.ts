@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import arbaroBlockedBy from "./__fixtures__/arbaro.blocked-by.json";
-import arbaroIssues from "./__fixtures__/arbaro.issues.json";
+import arbaroBlockedBy from "../tests/fixtures/arbaro.blocked-by.json";
+import arbaroIssues from "../tests/fixtures/arbaro.issues.json";
 import type { IssuePayload, RepositoryGraphData } from "./github";
 
 /**
