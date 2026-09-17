@@ -2,8 +2,10 @@
 
 ## Project identity and policy
 
-- Project name: `issues-graph`
-- Public name: `Issues Graph`
+- Display name: `Issues Graph`
+- Code name: `IssuesGraph`
+- Slug: `issues-graph`
+- Identifier name: `issuesgraph`
 - Benefit-first description: See the blocking order of a GitHub backlog as a graph, in a browser, with nothing installed in the repository being read.
 - Repository: `martonpaulo/issues-graph` (public)
 - Public identifiers: none published. The hosted page is the only public surface; there is no package, module, or executable identifier, and nothing consumes this repository as a dependency.
@@ -182,9 +184,9 @@ For any command, process, browser action, integration, or delegated task likely 
 - Durable documentation describes responsibilities, contracts, invariants, commands, and decisions. Audits cite exact evidence. Manuals use exact filenames only when users must act on them and the names are stable contracts.
 - Update the smallest canonical documentation section when a durable contract changes. Do not create empty documentation for possible future use.
 - Keep the README easy to scan. Cover benefit, behavior, requirements, setup, usage, validation, security, privacy, limitations, landing page, and download where applicable.
-- When creating a README or materially updating one, use the recorded `Public name` above as the H1
+- When creating a README or materially updating one, use the recorded `Display name` above as the H1
   and preserve an existing approved H1, including its branding and casing. Humanize the raw
-  repository slug only when the public name is unresolved; never mechanically title-case an
+  repository slug only when the display name is unresolved; never mechanically title-case an
   approved name or sweep unrelated README content.
 - Every fenced code block you create or materially edit has an explicit language identifier. Use
   the real language for code or configuration and `text` for plain commands or output; leave
